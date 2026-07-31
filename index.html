@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+.wc-note{font-size:11.5px;color:var(--muted);margin-top:6px}
+
+/* ---- welcome page: scrollable + short-screen (landscape) safe ---- */
+.welcome{place-items:start center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px 20px}
+.wc-inner{margin:auto 0}
+@media (max-height:560px){
+  .welcome{padding:16px}
+  .wc-inner{gap:8px}
+  .wc-inner .mark{width:44px;height:44px;gap:3px}
+  .wc-inner .mark span{border-radius:4px}
+  .wc-title{font-size:26px}
+  .wc-by{font-size:12px}
+  .wc-desc{font-size:12.5px;margin:0 0 4px}
+  .wc-btn{padding:10px;font-size:13px}
+  .wc-btns{gap:8px}
+  .wc-note{font-size:10.5px;margin-top:2px}
+}
+
+/* ---- mobile header: stop items merging ---- */
+@media (max-width:640px){
+  .top{padding:8px 10px;gap:6px;flex-wrap:nowrap}
+  .brand{gap:7px;min-width:0;flex:1}
+  .brand h1{font-size:16px}
+  .brand .by,.status{display:none}
+  .brand .mark{width:24px;height:24px;gap:1.5px}
+  .brand .mark span{border-radius:2.5px}
+  .controls{gap:5px;flex:none}
+  .quota{display:none}
+  .icon-btn{width:32px;height:32px;border-radius:9px}
+  .icon-btn svg{width:15px;height:15px}
+  .menu-btn{width:32px;height:32px;margin-right:0}
+  .signin-btn{padding:6px 9px;gap:5px;border-radius:9px}
+  .signin-btn #signinLbl{display:none}
+  .langs button{padding:4px 7px;font-size:11px}
+  .langs{padding:1px}
+}
+@media (max-width:460px){
+  .langs{display:none}
+  .brand h1{font-size:15px}
+}
+
+/* ---- mobile body spacing ---- */
+@media (max-width:640px){
+  .wrap{padding:18px 12px 14px}
+  .hero{padding:22px 6px 6px}
+  .chip{padding:9px 13px;font-size:12.5px}
+  .ticker{height:34px}
+  .tk{font-size:12px}
+  .composer-wrap{padding:8px 10px 10px}
+  .composer{padding:7px 8px 7px 14px;border-radius:18px}
+  .sidebar{width:min(85vw,300px)}
+  .live-text{font-size:13.5px;padding:0 14px}
+  .orb{width:120px;height:120px}
+  .orb-wrap{width:150px;height:150px}
+}
+</style>
+</head>
+<body>
+
+<script>
+function compressImage(file, cb){
+  var rd = new FileReader();
+  rd.onload = function(){
+    var img = new Image();
+    img.onload = function(){
+      var MAX = 1600;
+      var w = img.width, h = img.height;
+      if(w > MAX || h > MAX){
+        if(w > h){ h = Math.round(h * (MAX / w)); w = MAX; }
+        else { w = Math.round(w * (MAX / h)); h = MAX; }
+      }
+      var cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h);
+      ctx.drawImage(img, 0, 0, w, h);
+      var q = 0.82, out = cv.toDataURL('image/jpeg', q);
+      while(out.length > 3600000 && q > 0.4){ q -= 0.12; out = cv.toDataURL('image/jpeg', q); }
+      cb(out);
+    };
+    img.onerror = function(){ cb(null); };
+    img.src = rd.result;
+  };
+  rd.onerror = function(){ cb(null); };
+  rd.readAsDataURL(file);
+}
+
+document.getElementById('photoInput').addEventListener('change', function(e){
+  var f = e.target.files[0];
+  if(!f) return;
+  if(f.type.indexOf('image/') !== 0){
+    addMessage('bot', '<p>Please choose an image file.</p>', { err:true }); clearImage(); return;
+  }
+  document.getElementById('imgName').textContent = 'Preparing photo…';
+  document.getElementById('imgChip').classList.add('show');
+  compressImage(f, function(dataUrl){
+    if(!dataUrl){
+      addMessage('bot', '<p>Could not read that image. Try a different photo.</p>', { err:true });
+      clearImage(); return;
+    }
+    pendingImage = { dataUrl: dataUrl, name: f.name };
+    document.getElementById('imgThumb').src = dataUrl;
+    document.getElementById('imgName').textContent = f.name;
+    $input.placeholder = 'Ask about this photo…';
+    $input.focus();
+  });
+});
+</script>
+
+</body>
+</html>
