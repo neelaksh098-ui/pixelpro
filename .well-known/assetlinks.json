@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.netlify.pixelpro7.twa",
+      "sha256_cert_fingerprints": [
+        "1F:47:0C:B6:BC:18:1B:AF:B0:BE:1B:7D:7C:5B:CA:77:32:B3:9D:B0:EE:A4:CE:73:18:36:EB:97:F2:E8:0A:A9"
+      ]
+    }
+  }
+]
