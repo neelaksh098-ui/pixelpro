@@ -435,3 +435,34 @@ time-to-first-word, and it no longer grows with the length of the answer.
 Sentence detection ignores decimals ("3.5"), abbreviations ("e.g.", "Dr.") and
 initialisms, and hard-breaks any run of 160 characters with no punctuation so a
 chunk cannot grow without bound.
+
+
+## Going faster still — what changed and what did not
+
+Three more changes squeeze latency without leaving Netlify Functions:
+
+1. **Voice always uses the small Groq model** (`openai/gpt-oss-20b`), regardless
+   of the text tier selected. A 1-3 sentence spoken answer does not need the
+   120b model's extra depth, and the smaller model starts generating sooner —
+   the one delay a voice turn cannot hide behind streaming text on screen.
+2. **The audio buffer wait dropped from 900ms/`canplaythrough` to
+   450ms/`canplay`.** `canplaythrough` waits for enough data to play the
+   *entire* clip without stalling; for a 1-4 second voice clip that is far
+   more caution than needed. `canplay` (enough to start smoothly) fires
+   meaningfully earlier, and the 900ms guard only existed to bound a slow
+   decode, not to be the normal path.
+3. **The first sentence of a reply can now start speaking on a comma**, not
+   only a full stop. A reply's opening sentence is often its longest — "Fusion
+   power is not yet commercially viable, though researchers have made real
+   progress" — and waiting for the whole thing before saying a word threw
+   away most of what sentence-pipelining bought. Only the first fragment of a
+   turn gets this (60+ characters in, breaks on the nearest comma or a plain
+   word boundary); every fragment after that still waits for real sentence
+   ends, so mid-reply speech does not sound chopped.
+
+What this does **not** touch: the round trip is still browser → Netlify
+Function → Cartesia → Netlify Function → browser for every sentence. That
+network hop, not model choice or buffering, is the largest remaining cost,
+and removing it needs the WebSocket architecture described above — a
+long-lived host holding both the Groq stream and the Cartesia socket open at
+once, which Netlify Functions structurally cannot do.

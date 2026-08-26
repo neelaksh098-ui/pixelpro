@@ -3458,12 +3458,12 @@ async function speakAloud(text, done){
       var settled = false;
       function go(){ if(settled) return; settled = true; cleanup(); resolve(); }
       function cleanup(){
-        audio.removeEventListener('canplaythrough', go);
+        audio.removeEventListener('canplay', go);
         audio.removeEventListener('loadeddata', go);
         clearTimeout(guard);
       }
-      var guard = setTimeout(go, 900);
-      audio.addEventListener('canplaythrough', go, { once:true });
+      var guard = setTimeout(go, 450);
+      audio.addEventListener('canplay', go, { once:true });
       audio.addEventListener('loadeddata', go, { once:true });
       try{ audio.load(); }catch(e){ go(); }
     });
@@ -4029,8 +4029,8 @@ async function ttsClip(text, signal){
   await new Promise(function(resolve){
     var settled = false;
     function go(){ if(settled) return; settled = true; clearTimeout(guard); resolve(); }
-    var guard = setTimeout(go, 900);
-    audio.addEventListener('canplaythrough', go, { once:true });
+    var guard = setTimeout(go, 450);
+    audio.addEventListener('canplay', go, { once:true });
     audio.addEventListener('loadeddata', go, { once:true });
     try{ audio.load(); }catch(err){ go(); }
   });
@@ -4041,9 +4041,22 @@ async function ttsClip(text, signal){
    A full stop only ends a sentence when whitespace follows it, so "3.5"
    and "e.g." stay whole. A long stretch with no punctuation at all is
    broken at a comma rather than being allowed to grow unbounded. */
-function splitSpeakable(text, from, atEnd){
+function splitSpeakable(text, from, atEnd, isFirst){
   var chunks = [], i = from;
-  for(var p = from; p < text.length; p++){
+  if(isFirst && text.length - from >= 60){
+    var head = text.slice(from, from + 90);
+    var brk = head.search(/[,;:] /);
+    if(brk === -1) brk = head.lastIndexOf(' ', 60);
+    if(brk > 20){
+      var piece0 = text.slice(from, from + brk + 1).trim();
+      var lastTok0 = piece0.split(/\s+/).pop() || '';
+      if(!/^([A-Za-z]\.){1,3}$/.test(lastTok0)){
+        chunks.push(piece0);
+        i = from + brk + 1;
+      }
+    }
+  }
+  for(var p = i; p < text.length; p++){
     var c = text.charAt(p);
     if(c === '.' || c === '!' || c === '?' || c === '।' || c === '\n'){
       var nx = text.charAt(p + 1);
@@ -4148,13 +4161,13 @@ function makeSpeechQueue(sid, opts){
     /* called with the cumulative text as it grows */
     feed: function(full){
       if(stale() || ended) return;
-      var r = splitSpeakable(full, consumed, false);
+      var r = splitSpeakable(full, consumed, false, items.length === 0);
       consumed = r.next;
       r.chunks.forEach(enqueue);
     },
     end: function(full){
       if(stale() || ended) return;
-      var r = splitSpeakable(full, consumed, true);
+      var r = splitSpeakable(full, consumed, true, items.length === 0);
       consumed = r.next;
       r.chunks.forEach(enqueue);
       ended = true;
@@ -4213,6 +4226,11 @@ async function liveAsk(question){
         ' This is voice mode: keep the spoken answer to 1–3 short sentences, plain speech, no markdown, no lists, no headings.' +
         ' You are mid-conversation. Read short or vague replies as answers to what you just asked, resolve "it", "that" and "there" against the turns above, and never restart the topic unless the user does.' }
     ].concat(history).concat([{ role:'user', content: question }]);
+    /* pin the light Groq model for voice specifically, whatever text tier is
+       selected -- a 1-3 sentence spoken answer does not need the 120b
+       model's extra depth, and the smaller model starts generating sooner,
+       which is the one delay a voice turn cannot hide behind streaming text */
+    var voiceLite = true;
 
     var reply, lc = '';
     var decision = routeDecide(question);
@@ -4257,7 +4275,7 @@ async function liveAsk(question){
       if(sid !== live.sessionId) return;
       liveCaption(full, 'bot');
       queue.feed(full);
-    });
+    }, { lite: voiceLite });
 
     if(signal.aborted || sid !== live.sessionId){ queue.cancel(); live.locked = false; return; }
     if(!state.user) bumpUsage();
@@ -5716,7 +5734,7 @@ async function streamAI(messages, signal, liveContext, onDelta, opts){
   var body = JSON.stringify({
     messages: messages,
     liveContext: liveContext || '',
-    lite: (typeof currentTier !== 'undefined' && currentTier === 'lite') && !opts.report,
+    lite: opts.lite || ((typeof currentTier !== 'undefined' && currentTier === 'lite') && !opts.report),
     deep: !!thinkOn || !!opts.report,
     /* a deep-research report gets a much larger evidence window and far more
        room to write than an ordinary grounded answer */
