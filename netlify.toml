@@ -2,6 +2,19 @@
   publish = "."
   functions = "netlify/functions"
 
+  [build.environment]
+    # Netlify's secret scanner flags ANY environment variable whose value also
+    # appears in the repo or build output. That is the right default for keys,
+    # and wrong for these five: a model name, a public voice id, an audio
+    # format, a sample rate and an API date are configuration, not credentials.
+    # They appear in the code as defaults so the app still works if a variable
+    # is unset, and in the docs so the options are discoverable.
+    #
+    # CARTESIA_API_KEY, GROQ_KEY, TAVILY_API_KEY, STABILITY_API_KEY and
+    # BREVO_API_KEY are deliberately NOT listed here — those are real secrets
+    # and must keep failing the build if they ever appear in a file.
+    SECRETS_SCAN_OMIT_KEYS = "CARTESIA_MODEL,CARTESIA_VOICE_ID,CARTESIA_VOICE_ID_MALE,CARTESIA_VOICE_ID_FEMALE,CARTESIA_FORMAT,CARTESIA_SAMPLE_RATE,CARTESIA_SPEED,CARTESIA_VERSION,STABILITY_MODEL,BREVO_FROM,RESEND_FROM"
+
 [functions]
   [functions."*"]
     node_bundler = "esbuild"

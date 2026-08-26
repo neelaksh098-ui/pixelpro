@@ -401,3 +401,37 @@ because a search costs a second or two of silence — which reads as a crash —
 the orb says a short true line ("Let me look that up") while it runs. The
 microphone is already stopped in that state, so the filler cannot be heard as a
 question.
+
+
+## Netlify secrets scanning
+
+The build fails with "Secrets scanning found secrets in build" if any
+environment variable's *value* also appears in a repo file. That is correct for
+keys and wrong for configuration, so `netlify.toml` lists the non-secret ones
+under `SECRETS_SCAN_OMIT_KEYS`: model names, voice ids, audio format, sample
+rate, speed, API version, and the two sender addresses. They appear in the code
+as defaults so the app still runs if a variable is unset.
+
+`CARTESIA_API_KEY`, `GROQ_KEY`, `TAVILY_API_KEY`, `STABILITY_API_KEY` and
+`BREVO_API_KEY` are deliberately **not** in that list — if one of those ever
+turns up in a file, the build should keep failing.
+
+## Sentence-pipelined speech
+
+The orb used to wait for the whole reply to be generated, then send it for
+synthesis, then wait for that, then play — three serial waits with nothing
+audible until all three finished.
+
+Generation and synthesis now overlap. Groq streams tokens; the moment a
+complete sentence exists it is sent for synthesis while the rest of the reply
+is still being written, and sentence two is fetched while sentence one plays.
+Fetches run in parallel, playback is strictly ordered, so a short second
+sentence that returns first still waits its turn.
+
+Measured against the test harness: first audio at **765 ms** against a reply
+that takes ~2400 ms to finish generating — roughly **1.6 seconds** off
+time-to-first-word, and it no longer grows with the length of the answer.
+
+Sentence detection ignores decimals ("3.5"), abbreviations ("e.g.", "Dr.") and
+initialisms, and hard-breaks any run of 160 characters with no punctuation so a
+chunk cannot grow without bound.

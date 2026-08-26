@@ -3613,7 +3613,7 @@ var live = {
   locked:false,          /* command submission lock -- set synchronously */
   lastCommand:'', lastCommandAt:0,
   errorStreak:0, quietStreak:0,
-  fillerToken:0,
+  fillerToken:0, queue:null,
   transcript:[], startedAt:0,
   abort:null,
   level:0, targetLevel:0,
@@ -3994,6 +3994,182 @@ function speakFiller(){
   return token;
 }
 
+
+/* ================================================================
+   SENTENCE-PIPELINED SPEECH
+
+   The orb used to wait for the entire reply to be generated, then send
+   it for synthesis, then wait for that, then play. Three serial waits,
+   and nothing audible until all three finished.
+
+   This overlaps them. Groq streams tokens; the moment a complete
+   sentence exists it is sent for synthesis immediately, while the rest
+   of the reply is still being written. Sentence two is fetched while
+   sentence one is playing. Time-to-first-word stops depending on the
+   length of the answer and starts depending only on how long the first
+   sentence takes -- which on a 1-3 sentence voice reply is most of the
+   wait, removed.
+
+   Fetches run in parallel but playback is strictly ordered, so a short
+   second sentence that returns first still waits its turn.
+   ================================================================ */
+
+/* Fetch one clip. Resolves to a ready-to-play <audio>, or null. */
+async function ttsClip(text, signal){
+  var r = await fetch('/.netlify/functions/tts', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ text:text, gender:voiceGender, lang: state.lang || 'hi' }),
+    signal: signal
+  });
+  var d = await r.json();
+  if(!r.ok || !d.audio){ var e = new Error(d.error || 'No audio returned'); e.serverSide = true; throw e; }
+  var audio = new Audio('data:' + (d.mime || 'audio/mpeg') + ';base64,' + d.audio);
+  audio.preload = 'auto';
+  await new Promise(function(resolve){
+    var settled = false;
+    function go(){ if(settled) return; settled = true; clearTimeout(guard); resolve(); }
+    var guard = setTimeout(go, 900);
+    audio.addEventListener('canplaythrough', go, { once:true });
+    audio.addEventListener('loadeddata', go, { once:true });
+    try{ audio.load(); }catch(err){ go(); }
+  });
+  return audio;
+}
+
+/* Pull every complete sentence out of the text produced so far.
+   A full stop only ends a sentence when whitespace follows it, so "3.5"
+   and "e.g." stay whole. A long stretch with no punctuation at all is
+   broken at a comma rather than being allowed to grow unbounded. */
+function splitSpeakable(text, from, atEnd){
+  var chunks = [], i = from;
+  for(var p = from; p < text.length; p++){
+    var c = text.charAt(p);
+    if(c === '.' || c === '!' || c === '?' || c === '।' || c === '\n'){
+      var nx = text.charAt(p + 1);
+      if(nx === '' || nx === ' ' || nx === '\n'){
+        var piece = text.slice(i, p + 1).trim();
+        /* "Use e.g. this" must not become "Use e.g." + "this": an
+           abbreviation ends in a dot without ending the sentence. Reject a
+           break whose final token is a single letter, a dotted initialism,
+           or a common title. */
+        var lastTok = piece.split(/\s+/).pop() || '';
+        var isAbbrev = /^([A-Za-z]\.){1,3}$/.test(lastTok) ||
+                       /^(mr|mrs|ms|dr|prof|st|jr|sr|vs|etc|approx|no|fig|vol|est)\.$/i.test(lastTok) ||
+                       /^[A-Za-z]\.$/.test(lastTok);
+        if(piece.length >= 8 && !isAbbrev){ chunks.push(piece); i = p + 1; }
+      }
+    }
+  }
+  if(atEnd){
+    var tail = text.slice(i).trim();
+    if(tail){ chunks.push(tail); i = text.length; }
+  } else if(text.length - i > 160){
+    var slice = text.slice(i, i + 160);
+    var cut = Math.max(slice.lastIndexOf(', '), slice.lastIndexOf(' '));
+    /* No comma and no space in 160 characters is not prose, but it still has
+       to be broken or the chunk grows without bound. */
+    if(cut <= 40) cut = 159;
+    chunks.push(text.slice(i, i + cut + 1).trim());
+    i = i + cut + 1;
+  }
+  return { chunks: chunks, next: i };
+}
+
+function makeSpeechQueue(sid, opts){
+  opts = opts || {};
+  var items = [], consumed = 0, playIdx = 0;
+  var ended = false, cancelled = false, started = false, running = false;
+
+  function stale(){ return cancelled || sid !== live.sessionId; }
+
+  function enqueue(text){
+    var item = { text:text, audio:null, failed:false, ready:null };
+    item.ready = ttsClip(text).then(function(a){ item.audio = a; })
+                              .catch(function(){ item.failed = true; });
+    items.push(item);
+    pump();
+  }
+
+  async function pump(){
+    if(running) return;
+    running = true;
+    try{
+      while(playIdx < items.length){
+        if(stale()) return;
+        var item = items[playIdx];
+        await item.ready;
+        if(stale()) return;
+        playIdx++;
+        if(item.failed || !item.audio) continue;
+        if(!started){
+          started = true;
+          /* the filler, if one is playing, has served its purpose */
+          liveStopSpeaking();
+          liveGo('responding');
+          haptic('start');
+          if(opts.onFirst) opts.onFirst();
+        }
+        await playClip(item.audio);
+      }
+    } finally {
+      running = false;
+    }
+    if(ended && playIdx >= items.length && !stale() && opts.onDone) opts.onDone();
+  }
+
+  function playClip(audio){
+    return new Promise(function(resolve){
+      ttsAudio = audio;
+      var done = false;
+      function finish(){ if(done) return; done = true; if(ttsAudio === audio) ttsAudio = null; resolve(); }
+      audio.onended = finish;
+      audio.onerror = finish;
+      audio.volume = 0;
+      audio.play().then(function(){
+        var steps = 7, n = 0;
+        var fade = setInterval(function(){
+          n++;
+          if(ttsAudio !== audio){ clearInterval(fade); return; }
+          audio.volume = Math.min(1, n / steps);
+          if(n >= steps) clearInterval(fade);
+        }, 9);
+      }).catch(function(err){
+        if(err && (err.name === 'NotAllowedError' || /gesture|interact/i.test(err.message || ''))){
+          pendingTtsAudio = audio;
+          reportVoiceIssue('Tap anywhere to hear the reply — your browser blocked autoplay.', true);
+        }
+        finish();
+      });
+    });
+  }
+
+  return {
+    /* called with the cumulative text as it grows */
+    feed: function(full){
+      if(stale() || ended) return;
+      var r = splitSpeakable(full, consumed, false);
+      consumed = r.next;
+      r.chunks.forEach(enqueue);
+    },
+    end: function(full){
+      if(stale() || ended) return;
+      var r = splitSpeakable(full, consumed, true);
+      consumed = r.next;
+      r.chunks.forEach(enqueue);
+      ended = true;
+      if(!items.length && opts.onDone) opts.onDone();
+      else pump();
+    },
+    cancel: function(){
+      cancelled = true;
+      items.forEach(function(it){ if(it.audio){ try{ it.audio.pause(); }catch(e){} } });
+      items = [];
+    },
+    spoke: function(){ return started; }
+  };
+}
+
 /* ================= asking ================= */
 async function liveAsk(question){
   question = String(question || '').trim();
@@ -4038,7 +4214,7 @@ async function liveAsk(question){
         ' You are mid-conversation. Read short or vague replies as answers to what you just asked, resolve "it", "that" and "there" against the turns above, and never restart the topic unless the user does.' }
     ].concat(history).concat([{ role:'user', content: question }]);
 
-    var reply;
+    var reply, lc = '';
     var decision = routeDecide(question);
     /* Strictly greater, not >=: a genuinely neutral question ("who is
        Ada Lovelace") should stay on the fast path rather than paying for a
@@ -4058,24 +4234,38 @@ async function liveAsk(question){
         timeRange: /\b(today|tonight|now|currently|current|latest|breaking|live)\b/i.test(question) ? 'day' : undefined,
         maxResults: 6, searchDepth: 'basic', timeout: 14000, signal: signal
       });
-      var lc = (liveWeb.answer ? 'TAVILY ANSWER:\n' + String(liveWeb.answer).slice(0,1800) + '\n\n' : '') +
+      lc = (liveWeb.answer ? 'TAVILY ANSWER:\n' + String(liveWeb.answer).slice(0,1800) + '\n\n' : '') +
         (liveWeb.results || []).slice(0,5).map(function(it,i){
           return '['+(i+1)+'] '+(it.title||'')+'\nURL: '+(it.url||'')+'\nPublished: '+(it.published_date||'unknown')+'\nSnippet: '+String(it.content||'').slice(0,1200);
         }).join('\n\n');
       if(sid !== live.sessionId) return;
       liveGo('processing');
-      reply = await callAI(msgs, false, signal, lc);
-    } else {
-      reply = await callAI(msgs, false, signal);
     }
-    if(signal.aborted || sid !== live.sessionId){ live.locked = false; return; }
+
+    /* Generation and synthesis overlap from here. The first finished
+       sentence is sent to be spoken while the rest of the answer is still
+       being written, so how long you wait for the first word no longer
+       depends on how long the whole answer turns out to be. */
+    live.fillerToken++;
+    var spokenAll = false;
+    var queue = makeSpeechQueue(sid, {
+      onDone: function(){ if(!spokenAll){ spokenAll = true; finish(); } }
+    });
+    live.queue = queue;
+
+    reply = await streamAI(msgs, signal, lc, function(piece, full){
+      if(sid !== live.sessionId) return;
+      liveCaption(full, 'bot');
+      queue.feed(full);
+    });
+
+    if(signal.aborted || sid !== live.sessionId){ queue.cancel(); live.locked = false; return; }
     if(!state.user) bumpUsage();
-    live.fillerToken++;             /* whatever the filler was doing, it is over */
-    liveStopSpeaking();
     live.transcript.push({ role:'assistant', content:reply });
     liveCaption(reply, 'bot');
-    liveSpeak(reply, finish);
+    queue.end(reply);
   }catch(e){
+    if(live.queue){ live.queue.cancel(); live.queue = null; }
     if(e && e.name === 'AbortError'){ live.locked = false; return; }
     liveSpeak('Sorry, I could not reach the server just then.', finish);
   }
@@ -4164,6 +4354,7 @@ function closeLive(){
   live.locked = false;
   liveClearAllTimers();
   recStop();
+  if(live.queue){ live.queue.cancel(); live.queue = null; }
   liveStopSpeaking();
   if(live.abort){ try{ live.abort.abort(); }catch(e){} live.abort = null; }
   orbStop();
@@ -4189,9 +4380,14 @@ function closeLive(){
   function tap(){
     if(!live.on || live.muted) return;
     haptic('tap');
-    if(live.state === 'responding'){
+    /* Cancel from anywhere it is busy, not only while it is speaking --
+       changing your mind while it is still thinking is the same gesture and
+       used to do nothing at all. */
+    if(live.state === 'responding' || live.state === 'processing' || live.state === 'searching'){
+      if(live.queue){ live.queue.cancel(); live.queue = null; }
       liveStopSpeaking();
-      live.sessionId++;              /* orphan the finished-speaking callback */
+      if(live.abort){ try{ live.abort.abort(); }catch(e){} live.abort = null; }
+      live.sessionId++;              /* orphan every callback from that turn */
       live.locked = false;
       liveGo('listening');
       return;
