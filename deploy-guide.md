@@ -298,11 +298,24 @@ sheet with Pin, Rename, Share and Delete. Desktop behaviour is unchanged.
 No new environment variables — it uses the same Groq, Tavily and ElevenLabs
 keys as the rest of the app.
 
-- **The microphone never closes.** Recognition runs continuously and restarts
-  itself, so there is no "your turn" window to wait for.
-- **Barge-in.** Speech that arrives while Pixel is talking cuts the audio off
-  and becomes the next question.
-- **A 420ms end-of-speech gap** (was 700ms) ends your turn.
+Voice mode is a strict state machine:
+
+    IDLE -> LISTENING -> USER -> PROCESSING/SEARCHING -> RESPONDING -> LISTENING
+
+Recognition runs in LISTENING and USER only. In every other state it is
+**stopped** — not muted, not ignored — which is what makes it impossible for
+Pixel to hear its own reply and answer itself. Interrupting is a deliberate
+**tap on the orb**, not the microphone: letting speech interrupt speech is
+exactly how it used to interrupt itself.
+
+- `continuous:false` — one utterance, one `end` event, one command.
+- Every callback carries the session id it was created under and returns early
+  if that id is stale, so a late result from a dead engine can never act.
+- Commands pass through one door with a lock set synchronously, plus a 2.5s
+  duplicate window, so the same utterance cannot be submitted twice.
+- Errors back off (400/800/1600ms) and give up after three, with a message.
+  A blocked microphone stops immediately rather than retrying.
+- A 380ms settle after playback lets the room's reverb die before listening.
 - **The orb is a canvas** — ~1450 jittered points on a Fibonacci sphere.
   Neutral when idle, **blue while you speak**, **amber while Pixel speaks**.
 - **Two controls only**: end session and mute. The text box is gone.
@@ -326,3 +339,24 @@ comparison squeezed into 360px is unreadable however neatly it is drawn.
 renaming silently did nothing in the Android app. Both the display name and
 chat rename now use an in-app dialog, and the display name updates the sidebar,
 the greeting, the settings row and cloud sync together.
+
+
+## Landing page tap hint
+
+Haptics stay silent until the page has been touched once — no browser on any
+platform allows feedback before the first interaction. So the landing page
+shows a hand with expanding ripples asking for that first tap, and stops for
+good after four (`pp-tap-hint` in localStorage). It never intercepts a tap:
+the listener is passive and in the capture phase.
+
+## Mobile composer touch boundaries
+
+Dragging inside the text box used to scroll the whole conversation away — that
+is scroll chaining. `overscroll-behavior` only helps when the element *is*
+scrollable and hits its end; an empty one-line textarea is never scrollable, so
+the gesture went straight to the chat.
+
+`touch-action` is the important part: `pan-y` lets the compositor pan without
+waiting for JavaScript, so `preventDefault()` in a touchmove listener arrives
+too late. The textarea declares `touch-action: none` and only adds
+`.can-scroll` (`pan-y`) once its own content actually overflows.

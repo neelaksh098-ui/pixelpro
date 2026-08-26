@@ -1961,6 +1961,78 @@ body.empty-state .suggests{display:flex}
   .ask-card,.ask-scrim{transition:none;transform:none}
 }
 
+/* Keep every scroll gesture inside the surface it started on.
+
+   touch-action matters more than it looks here. `pan-y` tells the browser
+   the compositor may pan this element, and the compositor does not wait for
+   JavaScript -- so preventDefault() in a touchmove listener arrives after
+   the chat has already moved. The textarea therefore declares `none` by
+   default, and only opts back into panning once its own content actually
+   overflows, which is the only time an internal pan is meaningful. */
+#main{overscroll-behavior:contain}
+.composer-wrap{touch-action:none}
+.pill textarea{overscroll-behavior:contain;touch-action:none}
+.pill textarea.can-scroll{touch-action:pan-y}
+
+/* ================================================================
+   TAP HINT — the landing page's haptics stay silent until the page
+   has been touched once, because no browser on any platform allows
+   feedback before the first interaction. So ask for that first touch
+   instead of leaving people wondering why nothing buzzes. It shows a
+   hand and a couple of expanding rings, and it stops for good after a
+   few taps -- by then the engine is primed and the point is made.
+   ================================================================ */
+.tap-hint{
+  position:absolute;left:50%;bottom:12%;transform:translateX(-50%);
+  z-index:2;pointer-events:none;display:none;
+  flex-direction:column;align-items:center;gap:10px;
+  color:var(--accent);
+}
+.welcome:not(.hide) .tap-hint.show{display:flex;animation:tapIn .5s var(--ease,ease) both}
+.tap-hint.leaving{animation:tapOut .34s var(--ease,ease) both}
+@keyframes tapIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
+@keyframes tapOut{to{opacity:0;transform:translateX(-50%) translateY(6px) scale(.94)}}
+.tap-hand{
+  width:46px;height:46px;position:relative;z-index:1;
+  filter:drop-shadow(0 3px 8px rgba(20,50,110,.22));
+  animation:tapPress 2.1s cubic-bezier(.4,0,.3,1) infinite;
+  will-change:transform;
+}
+@keyframes tapPress{
+  0%,100%{transform:translateY(-7px) scale(1)}
+  22%{transform:translateY(0) scale(.9)}
+  40%{transform:translateY(-7px) scale(1)}
+}
+/* two rings pushing out from under the fingertip on each press */
+.tap-ring{
+  position:absolute;top:34px;left:50%;width:16px;height:16px;margin-left:-8px;
+  border-radius:50%;border:2px solid currentColor;opacity:0;
+  animation:tapRipple 2.1s cubic-bezier(.2,.7,.3,1) infinite;
+  will-change:transform,opacity;
+}
+.tap-ring:nth-child(2){animation-delay:.16s}
+@keyframes tapRipple{
+  0%,18%{transform:scale(.35);opacity:0}
+  26%{opacity:.5}
+  62%,100%{transform:scale(3.1);opacity:0}
+}
+.tap-label{
+  font-size:13px;font-weight:650;letter-spacing:.01em;
+  color:color-mix(in srgb,var(--accent) 78%,var(--ink));
+  background:color-mix(in srgb,#fff 62%,transparent);
+  padding:4px 12px;border-radius:99px;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
+:root[data-theme="dark"] .tap-label{background:color-mix(in srgb,#000 42%,transparent)}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .tap-label{background:color-mix(in srgb,#000 42%,transparent)}
+}
+@media (max-height:640px){ .tap-hint{bottom:6%} .tap-hand{width:40px;height:40px} }
+@media (prefers-reduced-motion:reduce){
+  .tap-hand,.tap-ring{animation:none}
+  .tap-ring{opacity:.28;transform:scale(1.6)}
+}
+
 </style>
 </head>
 <body>
@@ -2175,6 +2247,15 @@ body.empty-state .suggests{display:flex}
     </nav>
     <button class="landing-login-btn" id="landingLoginBtn">Login</button>
   </header>
+  <div class="tap-hint" id="tapHint" aria-hidden="true">
+    <span class="tap-ring"></span><span class="tap-ring"></span>
+    <svg class="tap-hand" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M24 34V16a4 4 0 0 1 8 0v14"/>
+      <path d="M32 30v-6a4 4 0 0 1 8 0v6"/>
+      <path d="M40 30v-2a4 4 0 0 1 8 0v14c0 8-6 14-14 14h-3c-5 0-8-2-11-7l-7-12a4 4 0 0 1 6-4l5 5"/>
+    </svg>
+    <span class="tap-label">Tap anywhere</span>
+  </div>
   <div class="landing-sky" aria-hidden="true">
     <span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span>
     <span class="cloud c4"></span><span class="cloud c5"></span><span class="cloud c6"></span>
@@ -3061,10 +3142,49 @@ function startLandingType(){
   landingTypeTimer = setTimeout(step, 420);
 }
 
+
+/* ---------- the tap hint on the landing page ---------- */
+var TAP_HINT_TARGET = 4;          /* taps after which it has made its point */
+var tapHintCount = 0;
+try{ tapHintCount = parseInt(store('pp-tap-hint') || '0', 10) || 0; }catch(e){}
+var tapHintBound = false;
+
+function tapHintDone(){ return tapHintCount >= TAP_HINT_TARGET; }
+function hideTapHint(){
+  var el = document.getElementById('tapHint');
+  if(!el) return;
+  el.classList.add('leaving');
+  setTimeout(function(){ el.classList.remove('show','leaving'); }, 340);
+}
+function showTapHint(){
+  var el = document.getElementById('tapHint');
+  if(!el || tapHintDone()) return;
+  el.classList.remove('leaving');
+  el.classList.add('show');
+  bindTapHint();
+}
+function bindTapHint(){
+  if(tapHintBound) return;
+  tapHintBound = true;
+  /* Capture phase and passive: this only counts taps, it never swallows
+     one, so the login button and the composer keep working normally. */
+  document.addEventListener('pointerdown', function(e){
+    var w = document.getElementById('welcome');
+    if(!w || w.classList.contains('hide')) return;
+    if(tapHintDone()) return;
+    tapHintCount++;
+    try{ store('pp-tap-hint', String(tapHintCount)); }catch(e2){}
+    /* the whole reason the hint exists: the first real touch arms the
+       haptic engine, so from here on the typing actually buzzes */
+    hapticTick();
+    if(tapHintDone()) hideTapHint();
+  }, { capture:true, passive:true });
+}
+
 function maybeShowWelcome(){
   var w = document.getElementById('welcome');
   if(!w) return;
-  if(state.user){ w.classList.add('hide'); stopLandingType(); return; }
+  if(state.user){ w.classList.add('hide'); stopLandingType(); hideTapHint(); return; }
   /* Until Firebase has genuinely answered, never reveal the landing page:
      a remembered session means this user IS signed in and is just waiting on
      a slow auth restore (routine in the wrapped Android app, where the SDK
@@ -3074,6 +3194,7 @@ function maybeShowWelcome(){
   if(hadUser()){ w.classList.add('hide'); return; }
   w.classList.remove('hide');
   startLandingType();
+  showTapHint();
 }
 document.getElementById('landingLoginBtn').addEventListener('click', function(){ if(typeof openGate === 'function') openGate(); });
 document.getElementById('landingDiscover').addEventListener('click', function(){
@@ -3328,8 +3449,43 @@ async function elevenSpeak(text, done){
     ttsAudio = audio;
     audio.onended = function(){ ttsAudio = null; if(done) done(); };
     audio.onerror = function(){ ttsAudio = null; if(done) done(); };
+    /* Playing the instant the element exists is what made the voice sound
+       like it was buffering: the first syllables start before the decoder
+       has enough data. Wait for a playable buffer (bounded, so a slow
+       decode can never hang the turn), then ease the volume in and out so
+       neither edge clicks. */
+    await new Promise(function(resolve){
+      var settled = false;
+      function go(){ if(settled) return; settled = true; cleanup(); resolve(); }
+      function cleanup(){
+        audio.removeEventListener('canplaythrough', go);
+        audio.removeEventListener('loadeddata', go);
+        clearTimeout(guard);
+      }
+      var guard = setTimeout(go, 900);
+      audio.addEventListener('canplaythrough', go, { once:true });
+      audio.addEventListener('loadeddata', go, { once:true });
+      try{ audio.load(); }catch(e){ go(); }
+    });
+    if(ttsAudio !== audio) return;      /* a newer turn replaced it while loading */
+    audio.volume = 0;
     try{
       await audio.play();
+      /* 90ms fade in; the tail fades over the last 120ms */
+      (function(){
+        var steps = 9, i = 0;
+        var fade = setInterval(function(){
+          i++;
+          if(!ttsAudio || ttsAudio !== audio){ clearInterval(fade); return; }
+          audio.volume = Math.min(1, i / steps);
+          if(i >= steps) clearInterval(fade);
+        }, 10);
+        audio.addEventListener('timeupdate', function(){
+          if(!audio.duration || !isFinite(audio.duration)) return;
+          var left = audio.duration - audio.currentTime;
+          if(left < 0.12) audio.volume = Math.max(0, left / 0.12);
+        });
+      })();
     }catch(playErr){
       /* Autoplay was blocked by the browser -- the ElevenLabs audio is fine,
          so keep it and let the next tap play it rather than dropping to the
@@ -3405,45 +3561,87 @@ if(window.speechSynthesis){ try{ speechSynthesis.onvoiceschanged = function(){};
 /* ================================================================
    PIXEL LIVE — voice mode.
 
-   Three things make this feel like a conversation rather than a
-   walkie-talkie, and all three were missing before:
+   WHY THIS IS A STATE MACHINE
 
-   * The microphone never closes. Recognition runs continuously and
-     restarts itself; there is no "your turn" window to wait for.
-   * Barge-in. Speech that arrives while Pixel is talking cuts the
-     audio off mid-word and becomes the next question, the way
-     interrupting a person does.
-   * A short end-of-speech gap. 420ms of quiet ends your turn instead
-     of the old 700ms, which is the difference between a reply that
-     feels immediate and one that feels like it is thinking about
-     whether you have finished.
+   The previous version produced "Hi Hi Hi Hi" and talked to itself.
+   Six separate causes, all of them structural:
 
-   The orb is a canvas: about a thousand points on a Fibonacci lattice,
-   rotated and projected each frame, breathing with whoever is speaking.
-   Colour carries the state -- blue for you, amber for Pixel.
+   1. openLive() called liveListen() twice -- once on a 220ms timer and
+      once when the greeting finished -- so two recognition engines ran
+      at once and both delivered the same utterance.
+   2. Aborting an engine detached onend but left onresult attached, so
+      the dead engine's queued results still submitted commands.
+   3. continuous:true made results accumulate; a restart re-emitted from
+      a reset resultIndex, so the same final text was appended twice.
+   4. Barge-in treated ANY speech during playback as the user, and the
+      speaker feeds the microphone -- so Pixel heard its own reply,
+      barged in on itself, and asked the question again. Forever.
+   5. onend restarted unconditionally, so a permission or network error
+      became an infinite restart loop.
+   6. commit() had no lock, and liveAsk() only set busy after an await,
+      so two callbacks in the same tick both submitted.
+
+   The fix is not a timeout. It is that exactly one thing owns the
+   microphone at a time, and the state machine decides which:
+
+     IDLE ─tap─> LISTENING ─speech─> USER
+                    ^                  │
+                    │              (utterance ends)
+                    │                  v
+                    └── settle ── RESPONDING <── PROCESSING/SEARCHING
+
+   Recognition runs in LISTENING and USER. It is stopped -- not muted,
+   not ignored, stopped -- in every other state, which is what makes it
+   impossible for Pixel to hear itself. Every callback carries the
+   session id it was created under and returns early if that session is
+   no longer current, so a late callback from a dead engine can never
+   act.
    ================================================================ */
 
+var LIVE_SETTLE_MS = 380;      /* let the speaker's tail die before listening */
+var LIVE_DUP_MS = 2500;        /* the same command inside this window is a repeat */
+var LIVE_FINAL_GRACE_MS = 1100;/* commit anyway if onend never arrives */
+var LIVE_MAX_ERRORS = 3;       /* consecutive hard errors before giving up */
+var LIVE_MAX_QUIET = 4;        /* consecutive silent listens before resting */
+
 var live = {
-  on:false, busy:false, rec:null, muted:false,
-  state:'idle',              /* idle | listening | user | thinking | searching | speaking */
+  on:false,
+  state:'idle',          /* idle | listening | user | processing | searching | responding */
+  sessionId:0,           /* bumps on open, close, and every engine restart */
+  rec:null, recRunning:false,
+  muted:false,
+  locked:false,          /* command submission lock -- set synchronously */
+  lastCommand:'', lastCommandAt:0,
+  errorStreak:0, quietStreak:0,
+  transcript:[], startedAt:0,
+  abort:null,
   level:0, targetLevel:0,
-  transcript:[],             /* the session, for saving into Channels */
-  startedAt:0,
-  farewell:false,
-  restartTimer:null
+  timers:{}
 };
 
-/* ---------- the orb ---------- */
-var orbAnim = { raf:null, pts:null, rot:0, ctx:null, dpr:1 };
+/* ---------- one place that owns every timer ---------- */
+function liveTimer(name, fn, ms){
+  liveClearTimer(name);
+  live.timers[name] = setTimeout(function(){ delete live.timers[name]; fn(); }, ms);
+}
+function liveClearTimer(name){
+  if(live.timers[name]){ clearTimeout(live.timers[name]); delete live.timers[name]; }
+}
+function liveClearAllTimers(){
+  Object.keys(live.timers).forEach(function(k){ clearTimeout(live.timers[k]); });
+  live.timers = {};
+}
+
+/* ================= the orb ================= */
+var orbAnim = { raf:null, pts:null, rot:0, ctx:null, dpr:1, resize:null };
 
 function orbBuildPoints(n){
   /* A Fibonacci lattice spaces points evenly over a sphere without the
      crowding at the poles you get from stepping latitude and longitude. On
      its own it is TOO even -- the eye picks out the spiral and it reads as a
-     woven grid -- so each point is nudged off its slot. Even coverage,
-     no visible pattern. */
+     woven grid -- so each point is nudged off its slot. */
   var pts = [], golden = Math.PI * (3 - Math.sqrt(5));
-  var jitter = 0.55 / Math.sqrt(n);          /* scaled so density stays uniform */
+  var jitter = 0.55 / Math.sqrt(n);
   for(var i = 0; i < n; i++){
     var y = 1 - (i / (n - 1)) * 2;
     var r = Math.sqrt(Math.max(0, 1 - y * y));
@@ -3452,20 +3650,19 @@ function orbBuildPoints(n){
     x += (Math.random() - 0.5) * jitter * 9;
     y += (Math.random() - 0.5) * jitter * 9;
     z += (Math.random() - 0.5) * jitter * 9;
-    var len = Math.sqrt(x*x + y*y + z*z) || 1;   /* push it back onto the shell */
+    var len = Math.sqrt(x*x + y*y + z*z) || 1;
     pts.push({ x:x/len, y:y/len, z:z/len, j: Math.random(), s: 0.72 + Math.random() * 0.6 });
   }
   return pts;
 }
 function orbColour(){
-  /* read the palette so the orb follows the theme instead of hard-coding */
   var cs = getComputedStyle(document.documentElement);
   var accent = (cs.getPropertyValue('--accent') || '#2563EB').trim();
   var gold = (cs.getPropertyValue('--gold-bright') || '#D4A22A').trim();
   var muted = (cs.getPropertyValue('--muted') || '#6B7280').trim();
   if(live.state === 'user') return accent;
-  if(live.state === 'speaking') return gold;
-  if(live.state === 'thinking' || live.state === 'searching') return accent;
+  if(live.state === 'responding') return gold;
+  if(live.state === 'processing' || live.state === 'searching') return accent;
   return muted;
 }
 function orbStart(){
@@ -3489,19 +3686,20 @@ function orbStart(){
 
   var t = 0;
   function frame(){
+    /* Nothing to draw when the screen is closed or the tab is in the
+       background -- a rAF loop nobody can see is pure battery. */
+    if(!live.on || document.hidden){ orbAnim.raf = null; return; }
     var ctx = orbAnim.ctx;
-    if(!ctx){ return; }
+    if(!ctx) return;
     var W = c.width, H = c.height, cx = W/2, cy = H/2;
     ctx.clearRect(0,0,W,H);
 
     t += 0.016;
-    /* ease the level so the orb never snaps between sizes */
     live.level += (live.targetLevel - live.level) * 0.12;
-
-    if(!reduced) orbAnim.rot += (live.state === 'speaking' ? 0.0042 : live.state === 'user' ? 0.0036 : 0.0018);
+    if(!reduced) orbAnim.rot += (live.state === 'responding' ? 0.0042 : live.state === 'user' ? 0.0036 : 0.0018);
 
     var base = Math.min(W,H) * 0.34;
-    var breathe = live.state === 'idle' || live.state === 'listening'
+    var breathe = (live.state === 'idle' || live.state === 'listening')
       ? Math.sin(t * 1.1) * 0.012
       : Math.sin(t * 2.6) * 0.02;
     var radius = base * (1 + breathe + live.level * 0.13);
@@ -3514,21 +3712,14 @@ function orbStart(){
     ctx.fillStyle = col;
     for(var i = 0; i < pts.length; i++){
       var p = pts[i];
-      /* spin around Y, then tip the whole sphere slightly toward the viewer */
       var x1 = p.x * cosR - p.z * sinR;
       var z1 = p.x * sinR + p.z * cosR;
       var y2 = p.y * cosT - z1 * sinT;
       var z2 = p.y * sinT + z1 * cosT;
-
-      /* each point wobbles a little on its own clock, more when there is
-         energy in the room -- this is what stops it reading as a rigid mesh */
       var wob = 1 + (Math.sin(t * (1.4 + p.j) + p.j * 9) * 0.018) * (1 + live.level * 3.2);
-
       var persp = 1 / (1.9 - z2 * 0.55);
       var sx = cx + x1 * radius * wob * persp;
       var sy = cy + y2 * radius * wob * persp;
-
-      /* depth decides both size and opacity, which is the whole illusion */
       var depth = (z2 + 1) / 2;
       var size = (0.34 + depth * 1.12) * p.s * orbAnim.dpr;
       ctx.globalAlpha = 0.09 + depth * 0.74;
@@ -3545,51 +3736,52 @@ function orbStop(){
   if(orbAnim.raf){ cancelAnimationFrame(orbAnim.raf); orbAnim.raf = null; }
   if(orbAnim.resize){ window.removeEventListener('resize', orbAnim.resize); orbAnim.resize = null; }
 }
+/* coming back to the tab restarts the loop that paused itself */
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && live.on && !orbAnim.raf) orbStart();
+});
 
-/* ---------- a small sound for the live-web lookup ---------- */
-var liveAudioCtx = null;
-function liveChime(kind){
-  try{
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if(!AC) return;
-    liveAudioCtx = liveAudioCtx || new AC();
-    if(liveAudioCtx.state === 'suspended') liveAudioCtx.resume();
-    var now = liveAudioCtx.currentTime;
-    /* two soft notes -- rising to go and look, falling to come back */
-    var notes = kind === 'found' ? [880, 660] : [660, 990];
-    notes.forEach(function(f, i){
-      var o = liveAudioCtx.createOscillator();
-      var g = liveAudioCtx.createGain();
-      o.type = 'sine'; o.frequency.value = f;
-      g.gain.setValueAtTime(0, now + i * 0.11);
-      g.gain.linearRampToValueAtTime(0.055, now + i * 0.11 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.11 + 0.20);
-      o.connect(g); g.connect(liveAudioCtx.destination);
-      o.start(now + i * 0.11); o.stop(now + i * 0.11 + 0.22);
-    });
-  }catch(e){}
-}
-
-/* ---------- state ---------- */
+/* ================= state ================= */
 var LIVE_STATUS = {
-  idle:'Say something…',
-  listening:'Say something…',
+  idle:'Tap the orb to speak',
+  listening:'Listening…',
   user:'Listening…',
-  thinking:'Thinking…',
+  processing:'Thinking…',
   searching:'Searching the web…',
-  speaking:'Speaking…'
+  responding:'Speaking…'
 };
-function setOrb(mode){
-  live.state = mode || 'idle';
+function liveStatusText(){
+  if(live.muted) return 'Microphone muted — tap to unmute';
+  return LIVE_STATUS[live.state] || LIVE_STATUS.idle;
+}
+function liveRender(){
   var ov = document.getElementById('liveOverlay');
   if(ov){
     ov.className = ov.className.replace(/\s*state-\S+/g,'');
     ov.classList.add('state-' + live.state);
   }
   var s = document.getElementById('liveStatus');
-  if(s) s.textContent = live.muted ? 'Microphone muted' : (LIVE_STATUS[live.state] || LIVE_STATUS.idle);
-  live.targetLevel = live.state === 'user' ? 0.85 : live.state === 'speaking' ? 0.62 : live.state === 'thinking' || live.state === 'searching' ? 0.3 : 0.1;
+  if(s) s.textContent = liveStatusText();
+  live.targetLevel =
+    live.state === 'user' ? 0.85 :
+    live.state === 'responding' ? 0.62 :
+    (live.state === 'processing' || live.state === 'searching') ? 0.3 : 0.1;
 }
+
+/* THE ONLY WAY THE STATE CHANGES.
+   It also decides who owns the microphone, which is what makes the
+   assistant physically unable to hear itself. */
+function liveGo(next){
+  if(!live.on && next !== 'idle') return;
+  live.state = next;
+  var shouldListen = (next === 'listening' || next === 'user') && !live.muted && live.on;
+  if(shouldListen) recEnsure();
+  else recStop();
+  liveRender();
+}
+/* kept for older call sites and tests */
+function setOrb(mode){ liveGo(mode === 'speaking' ? 'responding' : (mode || 'idle')); }
+
 function liveCaption(text, who){
   var el = document.getElementById('liveText');
   if(!el) return;
@@ -3597,145 +3789,217 @@ function liveCaption(text, who){
   el.classList.toggle('user', who === 'user');
 }
 
-/* ---------- farewells end the session ---------- */
+/* ================= recognition ================= */
+function recSupported(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+
+/* Detaching every handler before aborting is the difference between a
+   stopped engine and a dead engine that is still talking to you. */
+function recStop(){
+  liveClearTimer('recRestart');
+  liveClearTimer('finalGrace');
+  var r = live.rec;
+  live.rec = null;
+  live.recRunning = false;
+  if(!r) return;
+  try{ r.onresult = null; r.onend = null; r.onstart = null; r.onerror = null; r.onspeechend = null; }catch(e){}
+  try{ r.abort(); }catch(e){}
+}
+
+function recEnsure(){
+  if(live.recRunning || !live.on || live.muted) return;
+  if(!recSupported()){
+    var st = document.getElementById('liveStatus');
+    if(st) st.textContent = 'Voice input is not supported in this browser.';
+    return;
+  }
+  recStop();                       /* never two engines at once */
+  var sid = ++live.sessionId;      /* every callback below is stamped with this */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var r = new SR();
+  live.rec = r;
+  live.recRunning = true;
+
+  r.lang = state.lang === 'hi' ? 'hi-IN' : state.lang === 'bn' ? 'bn-IN' : 'en-IN';
+  /* continuous:false is deliberate. One utterance, one `end`, one command.
+     Continuous mode is what let the same final transcript be delivered
+     twice across a restart. */
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+
+  var finalText = '';
+  var current = function(){ return sid === live.sessionId; };
+
+  r.onstart = function(){
+    if(!current()) return;
+    /* Starting is not succeeding. Resetting the streak here meant every
+       restart wiped the evidence, so a permanently failing engine could
+       never reach the give-up threshold -- it just restarted forever. The
+       streak clears when a result actually arrives. */
+    if(live.state !== 'user') liveRender();
+  };
+
+  r.onresult = function(e){
+    if(!current()) return;
+    var interim = '', got = '';
+    /* rebuild from the whole result list rather than appending, so a
+       re-delivered result replaces rather than duplicates */
+    for(var i = 0; i < e.results.length; i++){
+      if(e.results[i].isFinal) got += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    finalText = got;
+    var heard = (got + ' ' + interim).replace(/\s+/g,' ').trim();
+    if(!heard) return;
+    live.quietStreak = 0;
+    live.errorStreak = 0;          /* recognition is genuinely working again */
+    if(live.state !== 'user'){ live.state = 'user'; liveRender(); }
+    live.targetLevel = 0.7 + Math.min(0.5, heard.length / 90);
+    liveCaption(heard, 'user');
+    /* If the engine gives a final but never fires end, commit anyway. */
+    if(got.trim()) liveTimer('finalGrace', function(){ if(current()) recCommit(finalText, sid); }, LIVE_FINAL_GRACE_MS);
+  };
+
+  r.onerror = function(e){
+    if(!current()) return;
+    var err = e && e.error;
+    if(err === 'aborted') return;                    /* we caused it */
+    if(err === 'no-speech'){
+      live.quietStreak++;
+      return;                                        /* handled in onend */
+    }
+    if(err === 'not-allowed' || err === 'service-not-allowed'){
+      live.recRunning = false;
+      live.muted = true;
+      syncLiveMute();
+      var st = document.getElementById('liveStatus');
+      if(st) st.textContent = 'Microphone permission is blocked.';
+      return;
+    }
+    live.errorStreak++;
+  };
+
+  r.onend = function(){
+    if(!current()) return;
+    live.recRunning = false;
+    var text = finalText.trim();
+    if(text){ recCommit(text, sid); return; }        /* one utterance, one command */
+
+    if(live.errorStreak >= LIVE_MAX_ERRORS){
+      liveGo('idle');
+      var st = document.getElementById('liveStatus');
+      if(st) st.textContent = 'Voice input keeps failing. Tap the orb to try again.';
+      return;
+    }
+    if(live.quietStreak >= LIVE_MAX_QUIET){
+      /* Nobody is talking. Resting is correct; hammering the engine is not. */
+      live.quietStreak = 0;
+      liveGo('idle');
+      return;
+    }
+    /* Restart only from a listening state, and back off after errors. */
+    if(live.on && !live.muted && (live.state === 'listening' || live.state === 'user') && !live.locked){
+      var wait = live.errorStreak ? 400 * Math.pow(2, live.errorStreak - 1) : 120;
+      liveTimer('recRestart', function(){
+        if(live.on && !live.muted && !live.locked && (live.state === 'listening' || live.state === 'user')) recEnsure();
+      }, wait);
+    }
+  };
+
+  try{ r.start(); }
+  catch(e){ live.recRunning = false; }
+}
+
+/* The single door a command goes through. Locked synchronously, before
+   any await, so two callbacks in the same tick cannot both pass. */
+function recCommit(text, sid){
+  if(sid !== live.sessionId) return;
+  if(live.locked) return;
+  liveClearTimer('finalGrace');
+  var q = String(text || '').replace(/\s+/g,' ').trim();
+  if(!q) return;
+
+  var now = Date.now();
+  if(q.toLowerCase() === live.lastCommand && (now - live.lastCommandAt) < LIVE_DUP_MS){
+    /* the same utterance arriving twice from two callbacks */
+    return;
+  }
+  live.locked = true;
+  live.lastCommand = q.toLowerCase();
+  live.lastCommandAt = now;
+  live.sessionId++;               /* orphan every callback from the engine that just ended */
+  recStop();
+
+  if(isFarewell(q)){
+    liveCaption(q, 'user');
+    live.transcript.push({ role:'user', content:q });
+    endLiveWithFarewell();
+    return;
+  }
+  liveAsk(q);
+}
+
+function syncLiveMute(){
+  var b = document.getElementById('liveMute');
+  if(b){ b.classList.toggle('muted', live.muted); b.setAttribute('aria-pressed', live.muted ? 'true':'false'); }
+  if(live.muted){ recStop(); liveGo('idle'); }
+  else if(live.on && !live.locked) liveGo('listening');
+  var s = document.getElementById('liveStatus');
+  if(s) s.textContent = liveStatusText();
+}
+
+/* ================= farewells ================= */
 function isFarewell(t){
   var raw = String(t || '').trim();
   t = raw.toLowerCase().replace(/[.!,?]+$/,'');
   if(!t || t.split(/\s+/).length > 6) return false;
-  /* "what does goodbye mean in french" contains a farewell and is not one.
-     Anything shaped like a question, a translation or a definition is asking
-     ABOUT the word, so it must not hang up the call. */
+  /* "what does goodbye mean in french" contains a farewell and is not one. */
   if(/\?$/.test(raw)) return false;
   if(/\b(what|how|why|when|where|which|who|meaning|means|mean|define|definition|translate|translation|spell|spelling|synonym|opposite|say|write|explain|difference)\b/.test(t)) return false;
   return /(^|\b)(bye+|bye bye|goodbye|good bye|see ya|see you( later| soon)?|talk to you later|ttyl|catch you later|that'?s all|that is all|thats all|i'?m done|im done|that'?ll be all|nothing else|no more|stop( now)?|end (the )?(call|session|chat)|hang up|disconnect|exit|quit|alvida|chalta hu|chalta hoon|thik hai bye|ok bye|okay bye|thank you bye|good night)(\b|$)/.test(t);
 }
 
-/* ---------- speaking, interruptible ---------- */
+/* ================= speaking ================= */
 function liveStopSpeaking(){
   if(ttsAudio){ try{ ttsAudio.pause(); ttsAudio.currentTime = 0; }catch(e){} ttsAudio = null; }
   if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
 }
+/* Recognition is already stopped by the transition into 'responding'.
+   The settle delay after playback is not a fix for anything -- it is the
+   room's reverb, which is genuinely still arriving. */
 function liveSpeak(text, done){
-  setOrb('speaking');
-  live.speakToken = (live.speakToken || 0) + 1;
-  var token = live.speakToken;
+  liveGo('responding');
+  var sid = live.sessionId;
   elevenSpeak(text, function(){
-    /* a barge-in bumped the token: this callback belongs to audio that is
-       no longer the current turn, so it must not restart listening */
-    if(token !== live.speakToken) return;
-    if(live.on && !live.busy) setOrb('listening');
+    if(sid !== live.sessionId) return;       /* a newer turn owns the screen */
     if(done) done();
   });
 }
 
-/* ---------- continuous listening ---------- */
-function liveListen(){
-  if(!live.on || live.muted) return;
-  var SR2 = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR2){
-    var st = document.getElementById('liveStatus');
-    if(st) st.textContent = 'Voice input is not supported in this browser.';
-    return;
-  }
-  try{ if(live.rec){ live.rec.onend = null; live.rec.abort(); } }catch(e){}
-
-  var r = new SR2(); live.rec = r;
-  r.lang = state.lang==='hi'?'hi-IN':state.lang==='bn'?'bn-IN':'en-IN';
-  r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
-
-  var pending = '', gapTimer = null;
-
-  function commit(){
-    var q = pending.trim();
-    pending = '';
-    if(gapTimer){ clearTimeout(gapTimer); gapTimer = null; }
-    if(!q) return;
-    if(isFarewell(q)){
-      live.farewell = true;
-      liveCaption(q, 'user');
-      live.transcript.push({ role:'user', content:q });
-      endLiveWithFarewell();
-      return;
-    }
-    liveAsk(q);
-  }
-
-  r.onstart = function(){ if(live.on && !live.busy && !live.muted) setOrb('listening'); };
-  r.onerror = function(e){
-    if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
-      var st = document.getElementById('liveStatus');
-      if(st) st.textContent = 'Microphone permission is blocked.';
-      live.muted = true;
-      syncLiveMute();
-    }
-  };
-  r.onend = function(){
-    /* the engine stops itself every so often -- bring it straight back so the
-       microphone is genuinely always open, rather than open in windows */
-    if(!live.on || live.muted) return;
-    if(live.restartTimer) clearTimeout(live.restartTimer);
-    live.restartTimer = setTimeout(function(){
-      if(live.on && !live.muted){ try{ r.start(); }catch(e){ liveListen(); } }
-    }, 160);
-  };
-  r.onresult = function(e){
-    var interim = '', gotFinal = false;
-    for(var i = e.resultIndex; i < e.results.length; i++){
-      if(e.results[i].isFinal){ pending += e.results[i][0].transcript + ' '; gotFinal = true; }
-      else { interim += e.results[i][0].transcript; }
-    }
-    var heard = (pending + interim).trim();
-    if(!heard) return;
-
-    /* BARGE-IN: speech during Pixel's turn cuts it off and takes over */
-    if(live.state === 'speaking' || live.busy){
-      if(heard.length < 2) return;
-      liveStopSpeaking();
-      live.speakToken = (live.speakToken || 0) + 1;   /* orphan the old callback */
-      if(live.abort){ try{ live.abort.abort(); }catch(e){} live.abort = null; }
-      live.busy = false;
-      haptic('light');
-    }
-
-    setOrb('user');
-    live.targetLevel = 0.7 + Math.min(0.5, heard.length / 90);
-    liveCaption(heard, 'user');
-
-    if(gapTimer) clearTimeout(gapTimer);
-    /* a short gap ends the turn. Final results are trusted sooner than
-       interim ones, which are still being revised. */
-    gapTimer = setTimeout(commit, gotFinal ? 420 : 900);
-  };
-  try{ r.start(); }catch(e){}
-}
-function liveStopListening(){
-  if(live.restartTimer){ clearTimeout(live.restartTimer); live.restartTimer = null; }
-  try{ if(live.rec){ live.rec.onend = null; live.rec.abort(); } }catch(e){}
-  live.rec = null;
-}
-function syncLiveMute(){
-  var b = document.getElementById('liveMute');
-  if(b){ b.classList.toggle('muted', live.muted); b.setAttribute('aria-pressed', live.muted ? 'true':'false'); }
-  if(live.muted){ liveStopListening(); setOrb('idle'); }
-  else { setOrb('listening'); liveListen(); }
-  var s = document.getElementById('liveStatus');
-  if(s && live.muted) s.textContent = 'Microphone muted';
-}
-
-/* ---------- asking ---------- */
+/* ================= asking ================= */
 async function liveAsk(question){
   question = String(question || '').trim();
-  if(!question) return;
+  if(!question){ live.locked = false; return; }
   if(quotaExceeded()){
-    liveSpeak('You have used today’s free questions. Please sign in to continue.', function(){ closeLive(); openGate(); });
+    live.transcript.push({ role:'user', content:question });
+    liveSpeak('You have used today’s free questions. Please sign in to continue.', function(){
+      live.locked = false; closeLive(); openGate();
+    });
     return;
   }
-  live.busy = true;
   live.transcript.push({ role:'user', content:question });
   liveCaption(question, 'user');
-  setOrb('thinking');
+  liveGo('processing');
   live.abort = new AbortController();
   var signal = live.abort.signal;
+  var sid = live.sessionId;
+
+  function finish(){
+    live.locked = false;
+    live.abort = null;
+    if(live.on && sid === live.sessionId && !live.muted) liveTimer('settle', function(){ liveGo('listening'); }, LIVE_SETTLE_MS);
+    else if(live.on && sid === live.sessionId) liveGo('idle');
+  }
 
   try{
     var msgs = [
@@ -3743,15 +4007,12 @@ async function liveAsk(question){
       { role:'user', content: question }
     ];
     var reply;
-    /* the same router the typed composer uses, so voice inherits every bit of
-       its accuracy instead of its own cruder rule */
     var decision = routeDecide(question);
     var needsWeb = decision.decision === 'web' ||
       (decision.decision === 'ask' && (decision.webScore || 0) >= (decision.directScore || 0));
 
     if(needsWeb){
-      setOrb('searching');
-      liveChime('search');          /* the sound replaces the old animation */
+      liveGo('searching');
       var liveWeb = await tavilySearch(question, {
         topic: /\b(news|headlines?|breaking|sports?|match|score|result|election)\b/i.test(question) ? 'news' : 'general',
         timeRange: /\b(today|tonight|now|currently|current|latest|breaking|live)\b/i.test(question) ? 'day' : undefined,
@@ -3761,28 +4022,24 @@ async function liveAsk(question){
         (liveWeb.results || []).slice(0,5).map(function(it,i){
           return '['+(i+1)+'] '+(it.title||'')+'\nURL: '+(it.url||'')+'\nPublished: '+(it.published_date||'unknown')+'\nSnippet: '+String(it.content||'').slice(0,1200);
         }).join('\n\n');
-      liveChime('found');
-      setOrb('thinking');
+      if(sid !== live.sessionId) return;
+      liveGo('processing');
       reply = await callAI(msgs, false, signal, lc);
     } else {
       reply = await callAI(msgs, false, signal);
     }
-    if(signal.aborted) return;      /* interrupted -- the new turn owns the screen */
+    if(signal.aborted || sid !== live.sessionId){ live.locked = false; return; }
     if(!state.user) bumpUsage();
     live.transcript.push({ role:'assistant', content:reply });
     liveCaption(reply, 'bot');
-    live.busy = false;
-    live.abort = null;
-    liveSpeak(reply);
+    liveSpeak(reply, finish);
   }catch(e){
-    live.busy = false;
-    live.abort = null;
-    if(e && e.name === 'AbortError') return;
-    liveSpeak('Sorry, I could not reach the server just then.');
+    if(e && e.name === 'AbortError'){ live.locked = false; return; }
+    liveSpeak('Sorry, I could not reach the server just then.', finish);
   }
 }
 
-/* ---------- saving the session into Channels ---------- */
+/* ================= saving into Channels ================= */
 function liveSessionTitle(){
   var first = null;
   for(var i=0;i<live.transcript.length;i++){
@@ -3792,7 +4049,6 @@ function liveSessionTitle(){
   return cleanTitle(first).slice(0, 46) || 'Voice session';
 }
 function saveLiveSession(){
-  /* a real exchange only -- opening and closing the screen saves nothing */
   var turns = live.transcript.filter(function(m){ return m.role === 'user'; }).length;
   if(turns < 1) return null;
   var chats = loadChats();
@@ -3822,52 +4078,91 @@ function showLiveSaved(){
   }, 2600);
 }
 function endLiveWithFarewell(){
-  live.busy = true;
-  liveStopListening();
+  recStop();
   var name = state.user && state.user.displayName ? state.user.displayName.split(' ')[0] : '';
-  liveSpeak(name ? ('Goodbye ' + name + '. Talk soon.') : 'Goodbye. Talk soon.', function(){
-    closeLive();
-  });
-  /* never leave the screen hanging if the voice never returns */
-  setTimeout(function(){ if(live.on) closeLive(); }, 4200);
+  liveSpeak(name ? ('Goodbye ' + name + '. Talk soon.') : 'Goodbye. Talk soon.', function(){ closeLive(); });
+  liveTimer('farewellNet', function(){ if(live.on) closeLive(); }, 4500);
 }
 
-/* ---------- open / close ---------- */
+/* ================= open / close ================= */
 function openLive(){
-  live.on = true; live.busy = true; live.muted = false;
-  live.transcript = []; live.startedAt = Date.now(); live.farewell = false;
-  live.speakToken = 0; live.abort = null;
+  if(live.on) return;                 /* re-activating must not start a second session */
+  live.on = true;
+  live.muted = false;
+  live.locked = true;                 /* the greeting owns the turn */
+  live.transcript = []; live.startedAt = Date.now();
+  live.lastCommand = ''; live.lastCommandAt = 0;
+  live.errorStreak = 0; live.quietStreak = 0;
+  live.abort = null;
+  live.sessionId++;
+  liveClearAllTimers();
+
   document.getElementById('liveOverlay').classList.add('show');
-  liveCaption('', 'bot');
-  syncLiveMute.skip = true;
   var b = document.getElementById('liveMute');
   if(b){ b.classList.remove('muted'); b.setAttribute('aria-pressed','false'); }
   orbStart();
-  setOrb('speaking');
   haptic('start');
+
   var name = state.user && state.user.displayName ? state.user.displayName.split(' ')[0] : '';
   var hello = name ? ('Hi ' + name + ', I am Pixel. What can I do for you?') : 'Hi, I am Pixel. What can I do for you?';
   liveCaption(hello, 'bot');
+  /* ONE path into listening: when the greeting has finished and the room
+     has settled. The old code also armed a 220ms timer, which is how two
+     engines ended up running at once. */
   liveSpeak(hello, function(){
-    live.busy = false;
-    if(live.on){ setOrb('listening'); liveListen(); }
+    live.locked = false;
+    if(live.on && !live.muted) liveTimer('settle', function(){ liveGo('listening'); }, LIVE_SETTLE_MS);
   });
-  /* start listening straight away too -- you should be able to talk over the
-     greeting, exactly as you can over any other thing Pixel says */
-  setTimeout(function(){ if(live.on && !live.muted) liveListen(); }, 220);
 }
 function closeLive(){
   if(!live.on) return;
-  live.on = false; live.busy = false;
-  liveStopListening();
+  live.on = false;
+  live.sessionId++;                   /* every outstanding callback is now stale */
+  live.locked = false;
+  liveClearAllTimers();
+  recStop();
   liveStopSpeaking();
+  if(live.abort){ try{ live.abort.abort(); }catch(e){} live.abort = null; }
   orbStop();
+  live.state = 'idle';
   document.getElementById('liveOverlay').classList.remove('show');
   var saved = saveLiveSession();
   if(saved){ haptic('done'); showLiveSaved(); }
   live.transcript = [];
 }
 
+
+/* Tapping the orb is the deliberate interruption. The microphone can no
+   longer do it -- letting speech interrupt speech is exactly how Pixel
+   ended up interrupting itself -- so the gesture takes its place: it cuts
+   the reply short, or wakes listening again after it has rested. */
+(function(){
+  var wrap = document.querySelector('.orb-wrap');
+  if(!wrap) return;
+  wrap.style.cursor = 'pointer';
+  wrap.setAttribute('role', 'button');
+  wrap.setAttribute('tabindex', '0');
+  wrap.setAttribute('aria-label', 'Tap to speak, or to stop Pixel talking');
+  function tap(){
+    if(!live.on || live.muted) return;
+    haptic('tap');
+    if(live.state === 'responding'){
+      liveStopSpeaking();
+      live.sessionId++;              /* orphan the finished-speaking callback */
+      live.locked = false;
+      liveGo('listening');
+      return;
+    }
+    if(live.state === 'idle'){
+      live.errorStreak = 0; live.quietStreak = 0;
+      liveGo('listening');
+    }
+  }
+  wrap.addEventListener('click', tap);
+  wrap.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); tap(); }
+  });
+})();
 document.getElementById('liveBtn').addEventListener('click', openLive);
 document.getElementById('liveClose').addEventListener('click', function(){ haptic('tap'); closeLive(); });
 document.getElementById('liveMute').addEventListener('click', function(){
@@ -6369,7 +6664,61 @@ $send.addEventListener('click', function(){ sendMessage(); });
 $input.addEventListener('keydown', function(e){
   if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
 });
-function autoGrow(){ $input.style.height = 'auto'; $input.style.height = Math.min(140, $input.scrollHeight) + 'px'; }
+
+/* ================================================================
+   TOUCH BOUNDARIES AROUND THE COMPOSER
+
+   Dragging a finger inside the text box scrolled the whole
+   conversation away. That is scroll chaining: when the element under
+   the finger cannot scroll any further -- and an empty one-line
+   textarea can never scroll at all -- the browser hands the gesture to
+   the nearest scrollable ancestor, which here is the chat.
+
+   overscroll-behavior fixes the case where the textarea IS scrollable
+   and hits its end. It does nothing when the textarea is not scrollable
+   in the first place, so that case is handled here: if the box has
+   nothing to scroll in the direction of the drag, the gesture stops at
+   the composer instead of travelling up to the chat.
+
+   Scrolling the conversation itself is untouched -- that gesture starts
+   outside the composer and never reaches this handler.
+   ================================================================ */
+(function(){
+  var wrap = document.querySelector('.composer-wrap');
+  var ta = document.getElementById('input');
+  if(!wrap || !ta) return;
+  var startY = 0;
+
+  wrap.addEventListener('touchstart', function(e){
+    if(e.touches && e.touches.length === 1) startY = e.touches[0].clientY;
+  }, { passive:true });
+
+  wrap.addEventListener('touchmove', function(e){
+    if(!e.touches || e.touches.length !== 1) return;
+    var dy = e.touches[0].clientY - startY;
+    var inBox = ta.contains(e.target) || e.target === ta;
+
+    if(!inBox){
+      /* the pill's padding, the icons, the row around the text: none of
+         it scrolls anything, so a drag there should do nothing at all */
+      if(e.cancelable) e.preventDefault();
+      return;
+    }
+    var canScroll = ta.scrollHeight > ta.clientHeight + 1;
+    if(!canScroll){ if(e.cancelable) e.preventDefault(); return; }
+    var atTop = ta.scrollTop <= 0;
+    var atBottom = ta.scrollTop + ta.clientHeight >= ta.scrollHeight - 1;
+    /* only block at the ends, so a long draft still scrolls inside the box */
+    if((dy > 0 && atTop) || (dy < 0 && atBottom)){ if(e.cancelable) e.preventDefault(); }
+  }, { passive:false });
+})();
+
+function autoGrow(){
+  $input.style.height = 'auto';
+  $input.style.height = Math.min(140, $input.scrollHeight) + 'px';
+  /* only a draft long enough to overflow may pan inside the box */
+  $input.classList.toggle('can-scroll', $input.scrollHeight > $input.clientHeight + 1);
+}
 function updateSendVisual(){ if($send) $send.classList.toggle('empty', !$input.value.trim()); }
 $input.addEventListener('input', function(){ autoGrow(); updateSendVisual(); });
 updateSendVisual();
