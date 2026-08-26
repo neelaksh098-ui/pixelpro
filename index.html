@@ -445,7 +445,13 @@ body{ touch-action:manipulation }
 
 /* ============ CHAT ============ */
 main{flex:1;overflow-y:auto;scroll-behavior:smooth}
-.wrap{max-width:768px;margin:0 auto;padding:28px clamp(14px,4vw,24px) 24px;display:flex;flex-direction:column;gap:26px}
+/* Anchor the conversation to the bottom of the scroller. Without this a short
+   chat sits pinned to the top of the screen with several hundred pixels of
+   dead white space between the last answer and the composer, and on a phone
+   that reads as a broken, half-empty page. Messages now grow upward from just
+   above the composer, the way every chat app behaves, and only start scrolling
+   once they genuinely fill the screen. */
+.wrap{max-width:768px;margin:0 auto;padding:28px clamp(14px,4vw,24px) 24px;display:flex;flex-direction:column;gap:26px;min-height:100%;justify-content:flex-end}
 
 .hero{text-align:center;padding:34px 10px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:calc(100dvh - 260px)}
 /* The hero is the one piece of type on the page that gets to be a display
@@ -1527,6 +1533,37 @@ body.empty-state .suggests{display:flex}
   .deepres-bar i{transition:none}
 }
 
+/* Inline citations — a small chip, not raw brackets in the middle of a line. */
+.bubble .cite{
+  display:inline-block;min-width:15px;height:15px;line-height:15px;padding:0 3px;
+  margin:0 0 0 2px;border-radius:5px;vertical-align:2px;
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  color:var(--accent);font-size:10.5px;font-weight:700;text-align:center;
+  font-variant-numeric:tabular-nums;letter-spacing:0;
+}
+
+/* The answer's action row arrives with its controls staggered, so the eye
+   follows them in instead of finding them already there. */
+.feedback{opacity:0}
+.feedback.in{opacity:1}
+.feedback.in button{animation:actIn .34s cubic-bezier(.34,1.4,.5,1) both}
+.feedback.in button:nth-child(1){animation-delay:.02s}
+.feedback.in button:nth-child(2){animation-delay:.07s}
+.feedback.in button:nth-child(3){animation-delay:.12s}
+.feedback.in button:nth-child(4){animation-delay:.17s}
+@keyframes actIn{
+  from{opacity:0;transform:translateY(5px) scale(.82)}
+  to{opacity:1;transform:none}
+}
+/* the entrance rule above is more specific than the .selected pop, so restate
+   the pop at matching specificity or picking a thumb stops animating */
+.feedback.in button.selected{animation:fbPop .34s cubic-bezier(.34,1.4,.5,1)}
+.feedback.in .copy-act.done{animation:fbPop .34s cubic-bezier(.34,1.4,.5,1)}
+@media (prefers-reduced-motion:reduce){
+  .feedback{opacity:1}
+  .feedback.in button{animation:none}
+}
+
 </style>
 </head>
 <body>
@@ -1650,7 +1687,7 @@ body.empty-state .suggests{display:flex}
     </button>
   </div>
   </div>
-    <p class="fineprint">Pixel Pro can make mistakes — verify important info. · <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
+    <p class="fineprint">Pixel Pro can make mistakes — verify important info.</p>
 </div>
 
 
@@ -2484,7 +2521,9 @@ document.getElementById('landingInput').addEventListener('keydown', function(e){
 
 /* ---------- typewriter reveal for fast-feeling answers ---------- */
 function typeInto(el, text, done){
-  text = cleanAnswerText(text);
+  /* this path writes the text out directly rather than through md(), so the
+     citation markers have to be turned back into plain [n] here */
+  text = stripCiteMarks(cleanAnswerText(text));
   var i = 0, chunk = 6;
   function nearBottom(){ return ($main.scrollHeight - $main.scrollTop - $main.clientHeight) < 140; }
   el.innerHTML = '';
@@ -2989,59 +3028,317 @@ setTier(currentTier);
 /* Lightweight heuristic -- with no dedicated "Pixel Art" mode anymore,
    an image-generation request is detected from natural phrasing instead. */
 /* ================================================================
-   SMART ROUTING — deterministic guard rails around the AI router.
-   Some questions must ALWAYS hit the live web, and some must never
-   waste a search. These rules run before and after the classifier so
-   routing does not depend on the model getting it right every time.
+   SMART ROUTING — deciding, per question, whether to search the live
+   web before answering.
+
+   The old version was two ordered regex lists with first-match-wins.
+   That fails in a very specific and very visible way: a question can
+   carry signals from both sides, and whichever list happened to be
+   checked first won. "calculate today's gold rate" matched `calculate`
+   and went straight to the model; "explain what happened in the news
+   today" matched `explain` and did the same. Both produce a confident,
+   stale answer, which is the worst outcome a router can produce.
+
+   This version scores instead of matching. Every signal contributes
+   weighted evidence, the two sides are compared, and only a clear
+   margin decides locally -- anything genuinely close is handed to the
+   model-based classifier, which is what the ambiguous cases actually
+   need. Four layers, in order:
+
+     0. hard rules      absolute, no scoring (arithmetic, greetings,
+                        an explicit "search the web", device facts)
+     1. weighted signals evidence for searching vs answering directly
+     2. dampers         context that weakens a signal -- a past year,
+                        a hypothetical, "in general", a definition
+     3. follow-ups      a short "and the price?" inherits the previous
+                        turn's decision, because it has no signals of
+                        its own to read
+
+   The guiding asymmetry, which every mainstream assistant shares: a
+   needless search costs about a second, a stale answer costs trust. So
+   ties break toward searching, and the direct side needs a clear margin.
    ================================================================ */
-/* Tier 1 — answer instantly, never touch the web. Checked FIRST so basic
-   maths and everyday tasks never pay for a search or even a router call. */
-var DIRECT_NOW = [
-  /^\s*[-+*/().\d\s^%×÷=,]+\s*$/,                                  /* pure arithmetic */
-  /\d\s*[\+\-\*\/×÷^]\s*\d/,                                       /* contains a calculation */
-  /\b\d+(\.\d+)?\s*%\s*(of|off)\b/i,                               /* percentages */
-  /\b(calculate|compute|evaluate|simplify|factorise|factorize|solve|differentiate|integrate)\b/i,
-  /\b(square root|cube root|derivative|integral|logarithm|factorial|hcf|lcm|gcd|average of|sum of|product of)\b/i,
-  /\b(what is|whats|what's)\s+\d/i,                                /* "what is 12 x 8" */
-  /^\s*(hi|hii|hey|hello|yo|namaste|hola|good (morning|evening|afternoon|night)|thanks|thank you|thx|ok|okay|k|bye|byee|see you|nice|cool|great|lol|hmm)\b[\s!.?]*$/i,
-  /\b(translate|rewrite|rephrase|paraphrase|summari[sz]e|proofread|correct the grammar|shorten|expand|make it (shorter|longer|formal|casual))\b/i,
-  /\b(write|compose|draft|generate|create)\b.{0,30}\b(poem|story|essay|email|letter|caption|song|joke|speech|paragraph|script|bio)\b/i,
-  /\b(what does .{1,30} mean|meaning of the word|definition of|synonym|antonym|spelling of|opposite of)\b/i,
-  /\b(who (made|created|developed|built|owns) you|what model are you|your name|about yourself)\b/i,
-  /\b(explain|what is|how does|difference between)\b.{0,50}\b(photosynthesis|gravity|newton|pythagoras|algorithm|recursion|loop|variable|function|array|oop|inheritance|polymorphism|mitosis|osmosis|evolution|democracy|inflation|respiration|electricity|magnetism|dna)\b/i,
-  /\b(convert|how many)\b.{0,30}\b(km|kilometre|kilometer|metre|meter|cm|mm|mile|foot|feet|inch|kg|gram|pound|ounce|litre|liter|ml|celsius|fahrenheit|kelvin|hour|minute|second|day|week|byte|kb|mb|gb)\b/i,
-  /```/,                                                           /* pasted code */
-  /\b(fix|debug|refactor|optimi[sz]e|explain)\b.{0,25}\b(this|my|the following)\b.{0,25}\b(code|function|error|bug|script)\b/i,
-  /\b(what('s| is) the time|current time|what time is it|time (right now|is it)|what('s| is) today'?s date|today'?s date|what('s| is) the date|what day is (it|today)|which day is (it|today)|what year is it)\b/i,
-  /\b(where am i|my (current )?location|what('s| is) my location|which city am i in|what city am i in)\b/i    /* answered from the device's shared location, not a search */
+
+var ROUTE_W = { STRONG: 5, MED: 3, WEAK: 1.5 };
+var ROUTE_MARGIN = 3;          /* evidence gap required to decide locally */
+
+function routeYear(){ return new Date().getFullYear(); }
+
+/* ---------- layer 0: absolutes ---------- */
+var ROUTE_HARD_DIRECT = [
+  /^\s*[-+*/().\d\s^%×÷=,]+\s*$/,                                   /* pure arithmetic */
+  /^\s*(hi+|hey+|hello+|yo|sup|namaste|hola|salaam|good (morning|evening|afternoon|night)|thanks?|thank you|thx|ty|ok|okay|k|kk|cool|nice|great|lol|lmao|hmm+|bye+|goodbye|see you|gn|gm)\b[\s,!.?😊🙂👍]*(there|man|bro|buddy|dude|friend|pixel|so much|a lot|very much|again)?[\s!.?😊🙂👍]*$/i,
+  /^(?!.*\b(in|at|for)\s+[a-z]{3,})[^]*\b(what('s| is) the time|current time|what time is it|time (right now|is it)|what('s| is) today'?s date|today'?s date|what('s| is) the date|what day is (it|today)|which day is (it|today)|what year is it)\b/i,
+  /\b(where am i|my (current )?location|what('s| is) my location|which city am i in|what city am i in)\b/i,
+  /\b(who (made|created|developed|built|owns|trained) you|what model are you|are you (chatgpt|gpt|gemini|claude)|what('s| is) your name|about yourself|who are you)\b/i
 ];
-/* Tier 2 — genuinely needs current information. */
-var ALWAYS_WEB = [
-  /\b(today|tonight|yesterday|tomorrow|right now|currently|current|latest|newest|recent|recently|breaking|live|nowadays|as of now|this (week|month|year|season)|last (week|month|year|night))\b/i,
-  /\b(20(2[5-9]|[3-9]\d))\b/,
-  /\b(who is|who's|name of) (the )?(current |present |new )?(cm|chief minister|pm|prime minister|president|ceo|chairman|captain|coach|governor|mayor|minister|champion|winner)\b/i,
-  /\b(cm|chief minister|prime minister|president|ceo|governor|chief justice|captain|coach)\s+(of|for)\b/i,
-  /\b(price|cost|mrp)\s+(of|in|for)\b/i,
-  /\b(what is the price|how much does .{0,40}(cost|sell for))\b/i,
-  /\b(exchange rate|interest rate|gold rate|silver rate|petrol price|diesel price|fuel price)\b/i,
-  /\b(stock|share price|shares|sensex|nifty|stock market|crypto|bitcoin|ethereum|forex)\b/i,
-  /\b(weather|forecast|temperature outside|rainfall|humidity today|aqi|air quality|cyclone|heatwave|monsoon)\b/i,
-  /\b(score|scores|match result|who won|winner of|fixture|standings|points table|series|tournament|world cup|ipl|olympics)\b/i,
-  /\b(news|headline|headlines|election|elections|poll results|verdict|budget|new policy|launched|launch date|released|release date|announced)\b/i,
-  /\b(best|top|cheapest|fastest)\b.{0,30}\b(under|below|within)\b.{0,20}(\d|rs|₹|\$|inr|lakh|k\b)/i,
-  /\b(iphone|samsung|oneplus|pixel phone|redmi|realme|vivo|oppo|nothing phone|macbook|laptop|smartphone|processor|gpu|graphics card)\b.{0,30}\b(price|latest|newest|best|specs|launch|review|compare|vs)\b/i,
-  /\b(latest version|current version|changelog|newest release)\b/i,
-  /\b(timing|timings|opening hours|flight status|train status|exam date|admit card|result date|cut ?off)\b/i,
-  /\b(search (the )?web|look (it )?up online|google it|find online|check online)\b/i
+var ROUTE_HARD_WEB = [
+  /\b(search (the )?(web|internet|online)|search for\b|look (it|this|that|\w+) up( online)?|google (it|this|that|the|for|a|an|\w+)\b|check online|browse the web|find (it )?online|latest info on)\b/i,
+  /https?:\/\/\S+/i                                                  /* a URL to go and read */
 ];
-/* 'direct' -> answer now, no router call, no search.
-   'web'    -> search now, no router call.
-   null     -> ambiguous, ask the classifier. */
+
+/* ---------- layer 1: evidence ---------- */
+var ROUTE_WEB_SIGNALS = [
+  /* --- time, the single strongest tell --- */
+  { w:'STRONG', re:/\b(today|tonight|right now|as of (now|today)|at the moment|currently|current|present-day|breaking|live|just (now|happened|released|announced))\b/i, why:'explicit now' },
+  { w:'STRONG', re:/\b(latest|newest|recent|most recent|up to date|updated|this (week|month|year|season|quarter)|past (few )?(days?|weeks?|months?)|last (night|week|month))\b/i, why:'recency word' },
+  { w:'STRONG', re:/\b(yesterday|tomorrow|this morning|this evening|next week|coming (week|month|season))\b/i, why:'relative date' },
+  { w:'STRONG', re:/\b(still|already|yet|so far|these days|nowadays|any更新)\b.{0,40}\b(available|out|released|working|alive|running|open|banned|free|supported)\b/i, why:'present status' },
+
+  /* --- who holds a role right now --- */
+  { w:'STRONG', re:/\b(who is|who's|whos|name of|who are)\b.{0,25}\b(the )?(current|present|new)?\s*(cm|chief minister|pm|prime minister|president|vice president|ceo|cfo|cto|chairman|chairperson|captain|coach|manager|governor|mayor|minister|speaker|chief justice|pope|monarch|king|queen|champion|winner|holder|leader|head)\b/i, why:'office holder' },
+  { w:'STRONG', re:/\b(cm|chief minister|prime minister|president|ceo|governor|chief justice|captain|coach|mayor|champion)\s+(of|for)\b/i, why:'office of X' },
+
+  /* --- money --- */
+  { w:'STRONG', re:/\b(price|cost|mrp|rate|fare|fee|tariff|salary|valuation|market cap)\s+(of|in|for|to)\b/i, why:'price of X' },
+  { w:'STRONG', re:/\bhow much\b.{0,40}\b(cost|sell|priced|worth|charge|is|are|for)\b/i, why:'how much' },
+  { w:'MED',    re:/\b(price|prices|pricing|cost|costs|mrp|rate|fare)\b/i, why:'money word' },
+  { w:'STRONG', re:/\bhow (expensive|costly|pricey|cheap)\b/i, why:'how expensive' },
+  { w:'STRONG', re:/\bhow much (has|have|did|is)\b.{0,30}\b(fall|fallen|fell|rise|risen|rose|drop|dropped|gain|gained|increase[d]?|decrease[d]?|grow|grown|climb)\b/i, why:'how much it moved' },
+  { w:'STRONG', re:/\bhow (is|are)\b.{0,30}\b(doing|performing|going|looking|holding up)\b/i, why:'how is it doing' },
+  { w:'STRONG', re:/\b(exchange rate|conversion rate|interest rate|repo rate|inflation rate|gold rate|silver rate|petrol price|diesel price|fuel price|electricity tariff)\b/i, why:'rate' },
+  { w:'STRONG', re:/\b(stock|stocks|share price|shares|sensex|nifty|dow|nasdaq|s&p|ftse|stock market|crypto|bitcoin|btc|ethereum|eth|dogecoin|forex|usd to|inr to|eur to|gbp to)\b/i, why:'markets' },
+
+  /* --- weather and the physical world today --- */
+  { w:'STRONG', re:/\b(weather|forecast|temperature (in|outside|today)|rainfall|humidity|aqi|air quality|cyclone|hurricane|typhoon|earthquake|heatwave|monsoon|snowfall|storm warning)\b/i, why:'weather' },
+  { w:'STRONG', re:/\b(is it|will it be)\b.{0,20}\b(rain(ing|y)?|snow(ing)?|sunny|cloudy|humid|hot|cold|windy|foggy)\b/i, why:'weather right now' },
+
+  /* --- sport --- */
+  { w:'STRONG', re:/\b(scores?|scorecard|matche?s?|results?|fixtures?|standings|points table|leaderboard|tournament|world cup|ipl|t20|odi|olympics|premier league|la liga|champions league|nba|nfl|f1|grand prix|transfer news|winner of|top of the table|league table|table topper)\b/i, why:'sport' },
+
+  /* --- news and public affairs --- */
+  { w:'STRONG', re:/\b(news|headline|headlines|what happened|what'?s happening|election|elections|poll results|exit poll|verdict|court ruling|budget|new (policy|law|rule|bill|scheme)|protest|strike|the war in|war between|ceasefire|invasion of|resigned|sworn in|arrested|died|passed away)\b/i, why:'news' },
+
+  /* --- products and releases --- */
+  { w:'STRONG', re:/\b(launch(ed|es|ing)?|releas(e|ed|ing)|announc(ed|ing)|coming out|out now|in stock|available in|pre-?order|discontinued)\b.{0,20}\b(date|when|yet|soon|india|price)?\b/i, why:'release' },
+  { w:'STRONG', re:/\bwhen (is|will|does)\b.{0,40}\b(launch|release|come out|arrive|start|begin|happen)/i, why:'when will it happen' },
+  { w:'MED',    re:/\b(iphone|ipad|macbook|samsung|galaxy|oneplus|pixel \d|redmi|realme|vivo|oppo|nothing phone|motorola|xiaomi|laptop|smartphone|processor|snapdragon|gpu|graphics card|rtx|ryzen|airpods|playstation|xbox|nintendo)\b/i, why:'consumer product' },
+  { w:'MED',    re:/\b(specs?|specifications?|review|reviews|comparison|compare|vs\.?|versus|which (one )?(is )?(better|to buy)|worth (buying|it))\b/i, why:'product evaluation' },
+  { w:'STRONG', re:/\b(latest version|current version|newest release|changelog|release notes|deprecat(ed|ion)|end of life|which version)\b/i, why:'software version' },
+
+  /* --- recommendations where the market moves --- */
+  { w:'STRONG', re:/\b(best|top \d*|cheapest|fastest|most popular|recommended)\b.{0,40}\b(under|below|within|in|for)\b.{0,25}(\d|rs\.?|₹|\$|inr|usd|lakh|crore|k\b|budget)/i, why:'best under budget' },
+  { w:'STRONG', re:/\b(best|top \d+|cheapest|fastest|highest rated|most popular|recommended)\b.{0,30}\b(phones?|laptops?|cars?|bikes?|cameras?|tvs?|headphones?|earbuds|apps?|websites?|tools?|services?|banks?|cards?|plans?|colleges?|universit(y|ies)|courses?|hotels?|restaurants?|cities|countr(y|ies)|players?|teams?|movies?|series|shows?|books?|places?)\b/i, why:'best X' },
+
+  /* --- schedules and statuses --- */
+  { w:'STRONG', re:/\b(timings?|opening hours|closing time|(flight|train|bus)\b.{0,15}\bstatus|status\b.{0,15}\b(flight|train|bus)|pnr|live status|exam date|admit card|result date|cut ?off|merit list|counselling date|last date|deadline|application (date|window))\b/i, why:'schedule' },
+
+  /* --- statistics that move --- */
+  { w:'STRONG', re:/\b(population|gdp|unemployment rate|literacy rate|ranking|rank of|world number|market share|subscriber count|user base|revenue|net worth|richest|poorest|box office|viewership|how many (people|users|subscribers|customers))\b/i, why:'moving statistic' },
+  { w:'MED',    re:/\b(largest|biggest|highest|leading)\b.{0,25}\b(company|companies|economy|bank|brand|market|exporter|producer|employer|city|population)\b/i, why:'largest by economy' },
+  { w:'MED',    re:/\bthe new (movie|film|phone|model|version|release|album|series|show|law|rule|policy|update|feature)\b/i, why:'the new X' },
+  { w:'STRONG', re:/\b(new|newest|latest)\b.{0,15}\b(vs\.?|versus|and|or)\b.{0,15}\b(old|older|previous|last year'?s|current)\b/i, why:'new vs old' },
+  { w:'STRONG', re:/\b(difference between|compare|vs\.?|versus)\b.{0,40}\b(iphone|galaxy|pixel|oneplus|redmi|macbook|airpods|playstation|xbox|tesla)\b/i, why:'product comparison' },
+
+  /* --- explicit years at or after now --- */
+  { w:'STRONG', re:null, dynamic:function(t){
+      var m = t.match(/\b(20\d{2})\b/g);
+      if(!m) return false;
+      var y = routeYear();
+      return m.some(function(x){ return parseInt(x,10) >= y; });
+    }, why:'current or future year' },
+
+  /* --- questions whose whole point is present state --- */
+  { w:'STRONG', re:/\b(is|are|has|have|did|does|do|was|were)\b.{0,30}\b(still|now|yet|recently|this year|happen(ed)?|release[d]?|out|live|lifted|banned|approved|passed|rejected|cancelled|canceled|postponed|confirmed|reopened|resolved|fixed|shut down)\b/i, why:'present-state question' },
+  { w:'STRONG', re:/\b(is|are)\b.{0,25}\b(down|up|working|available|open|closed|banned|blocked|live|online|offline|free|paid)\b/i, why:'service status' },
+  { w:'STRONG', re:/\b(status of|state of|update on|any (news|update)|what happened (to|with))\b/i, why:'status request' },
+  { w:'STRONG', re:/\bwhat (did|has)\b.{0,35}\b(say|said|decide|decided|announce|announced|rule|ruled|declare|declared|order|ordered)\b/i, why:'what was said or decided' },
+  { w:'MED',    re:/\b(delay|delayed|cancelled|canceled|rescheduled|diverted)\b.{0,25}\b(flight|train|bus|match|exam|event)\b|\b(flight|train|bus)\b.{0,25}\b(delay|delayed|cancelled|canceled)\b/i, why:'transport disruption' },
+  { w:'MED',    re:/\bwho is (playing|performing|singing|hosting|speaking) (at|in|on|tonight|today)\b/i, why:'who is on the bill' },
+  { w:'STRONG', re:/\b(who won|who is winning|what is trending|trending|viral|going on with)\b/i, why:'outcome request' },
+  { w:'WEAK', re:/\b(near me|nearby|around me|in my area|open now|close to me)\b/i, why:'local lookup' },
+
+  /* --- Hindi / Hinglish, which a lot of this app's questions arrive in --- */
+  { w:'STRONG', re:/\b(aaj|aaj ka|abhi|filhal|is (saal|mahine|hafte))\b/i, why:'hinglish now' },
+  { w:'MED',    re:/\b(kya hai|kya h|batao|bata do|kaisa hai|kitna hai|kab hai|kab aayega|kaun hai)\b/i, why:'hinglish question' },
+  { w:'MED',    re:/\b(rate|price|bhav|daam)\s+(kya|kitna|batao)\b/i, why:'hinglish price' },
+
+  /* --- short forms people actually type --- */
+  { w:'STRONG', re:/\b(rn|atm|now|today)\b\s*[?.!]?$/i, why:'trailing now' },
+  { w:'MED',    re:/\b(temp|temperature)\b/i, why:'temperature' },
+
+  /* --- scheduled things in the future --- */
+  { w:'STRONG', re:/\bwhen (is|are|does|do|will)\b.{0,45}\b(next|this year|drop|air|premiere|start|open|close|due|eclipse|festival|diwali|holi|eid|christmas|new year|sale|exam|result|match|concert|election)\b/i, why:'upcoming event' },
+  { w:'STRONG', re:/\bhow (many|much|long)\b.{0,25}\b(days?|hours?|weeks?|months?|minutes?)\b.{0,15}\b(until|till|to go|left|remaining|before)\b/i, why:'countdown to an event' },
+  { w:'STRONG', re:/\b(until|till)\b.{0,25}\b(election|exam|match|launch|release|result|deadline|holiday|diwali|christmas|new year|birthday|event|concert|flight)\b/i, why:'until a dated event' },
+  { w:'STRONG', re:/\b(next|upcoming|this year'?s)\b.{0,25}\b(date|eclipse|festival|match|season|episode|launch|sale|exam|election|holiday)\b/i, why:'next occurrence' },
+  { w:'MED',    re:/\b(sale dates?|offers?|discounts?|deals?|coupon)\b/i, why:'offers' },
+
+  /* --- outcomes and awards --- */
+  { w:'STRONG', re:/\b(did|has|have)\b.{0,25}\b(win|won|qualify|qualified|lose|lost|beat)\b/i, why:'did X win' },
+  { w:'STRONG', re:/\b(who (got|won|received|takes?)|winner of|recipient of)\b.{0,30}\b(nobel|oscar|grammy|emmy|booker|ballon|award|prize|trophy|medal|title)\b/i, why:'award winner' },
+
+  /* --- travel and tickets --- */
+  { w:'STRONG', re:/\b(flight|train|bus|ticket|airfare)\b.{0,30}\b(price|cost|fare|cheapest|book|from|to)\b/i, why:'travel fare' },
+
+  /* --- money without a preposition --- */
+  { w:'MED',    re:/\b(share|shares|stock)\b\s*(price)?\s*[?.!]?$/i, why:'bare share query' },
+  { w:'MED',    re:/\b(dollar|rupee|euro|pound|yen|dirham|riyal)\s+(rate|price|value)\b/i, why:'currency rate' },
+
+  /* --- rules and rates set by governments --- */
+  { w:'STRONG', re:/\b(tax slab|gst rate|income tax|new rule|new law|new policy|subsidy|reservation quota|minimum wage)\b/i, why:'policy figure' },
+
+  /* --- platform charts --- */
+  { w:'MED',    re:/\b(top|trending|popular|charts?)\b.{0,25}\b(songs?|movies?|shows?|series|videos?|apps?|games?|creators?)\b/i, why:'platform chart' },
+  { w:'STRONG', re:/\b(number one|number 1|no\.? ?1|#1|top ranked|at the top)\b/i, why:'chart position' }
+];
+
+var ROUTE_DIRECT_SIGNALS = [
+  /* --- maths and hard computation --- */
+  { w:'STRONG', re:/\d\s*([\+\-\*\/×÷^]|x(?=\s*\d))\s*\d/i, why:'arithmetic' },
+  { w:'STRONG', re:/\b\d+(\.\d+)?\s*(divided by|multiplied by|plus|minus|times|into|over)\s*\d/i, why:'arithmetic in words' },
+  { w:'STRONG', re:/\b(calculate|compute|evaluate|simplify|factorise|factorize|differentiate|integrate|derive|prove)\b/i, why:'computation verb' },
+  { w:'STRONG', re:/\b(square root|cube root|derivative|integral|logarithm|factorial|hcf|lcm|gcd|permutation|combination|probability of|standard deviation|matrix|determinant|quadratic|binomial)\b/i, why:'maths term' },
+  { w:'MED',    re:/\b(solve|equation|expression)\b.{0,30}(x|y|=|\d)/i, why:'solve equation' },
+  { w:'STRONG', re:/\b(convert|how many)\b.{0,20}\d?.{0,10}\b(km|kilometres?|kilometers?|metres?|meters?|cm|mm|miles?|feet|foot|inch(es)?|kg|grams?|pounds?|ounces?|litres?|liters?|ml|gallons?|celsius|fahrenheit|kelvin|hours?|minutes?|seconds?|days?|weeks?|bytes?|kb|mb|gb|tb)\b/i, why:'unit conversion' },
+
+  /* --- text the user supplied --- */
+  { w:'STRONG', re:/\b(translate|rewrite|rephrase|paraphrase|summari[sz]e|proofread|correct the grammar|fix (the )?grammar|shorten|expand|polish|make it (shorter|longer|formal|casual|professional|friendly)|tone down|improve this)\b/i, why:'text transform' },
+  { w:'STRONG', re:/```|\bfunction\s*\(|\bdef \w+\(|<\/?[a-z]+>|\bconsole\.log\b|\bSELECT\b.{0,30}\bFROM\b/i, why:'pasted code' },
+  { w:'STRONG', re:/\b(fix|debug|refactor|optimi[sz]e|explain|review)\b.{0,25}\b(this|my|the following|below)\b.{0,25}\b(code|function|error|bug|script|query|snippet|program)\b/i, why:'code help' },
+
+  /* --- creative and generative --- */
+  { w:'STRONG', re:/\b(write|compose|draft|generate|create|make)\b.{0,30}\b(poems?|stor(y|ies)|essays?|emails?|letters?|captions?|songs?|lyrics|jokes?|riddles?|speech|paragraphs?|scripts?|bio|resume|cv|cover letter|blog post|taglines?|slogans?|name ideas?|titles?|messages?|wishes|greetings?|notes?|summary|list)\b/i, why:'creative writing' },
+  { w:'STRONG', re:/\b(write|create|generate|make|show me)\b.{0,25}\b(function|program|script|code|class|query|regex|component|algorithm)\b/i, why:'write code' },
+  { w:'STRONG', re:/\b(brainstorm|give me (a |an |some |the )?(ideas?|names?|captions?|titles?|suggestions?|quote|tagline)|suggest (some )?(names?|ideas?|titles?|captions?)|come up with|tell me a (joke|story|riddle|fact|rhyme))\b/i, why:'ideation' },
+  { w:'STRONG', re:/\b(imagine|pretend|role ?play|act as|act like|suppose|what if|hypothetical)\b/i, why:'hypothetical' },
+
+  /* --- language and definitions --- */
+  { w:'STRONG', re:/\b(what does .{1,40} mean|meaning of|definition of|define |synonym|antonym|spelling of|opposite of|pronounce|plural of|past tense of)\b/i, why:'definition' },
+  { w:'MED',    re:/\b(grammar|punctuation|comma|apostrophe|tense|active voice|passive voice)\b/i, why:'grammar' },
+
+  /* --- settled knowledge --- */
+  { w:'STRONG', re:/\b(photosynthesis|gravity|newton'?s|pythagoras|thermodynamics|periodic table|mitosis|meiosis|osmosis|evolution|natural selection|dna|rna|cell (wall|membrane)|respiration|electricity|magnetism|refraction|velocity|acceleration|momentum|atom|molecule|valency|chemical (formula|reaction))\b/i, why:'settled science' },
+  { w:'STRONG', re:/\b(algorithm|recursion|big o|time complexity|data structure|linked list|binary tree|hash table|sorting|oop|inheritance|polymorphism|encapsulation|closure|promise|async|pointer|compile[rd]?|interpreter|api works|http works|tcp|dns works)\b/i, why:'CS concept' },
+  { w:'STRONG', re:/\b(world war( ?(1|2|i|ii|one|two))?|ancient|medieval|renaissance|independence movement|freedom struggle|mughal|roman empire|cold war|industrial revolution|dynasty|civilisation|civilization)\b/i, why:'history' },
+  { w:'STRONG', re:/\b(who (invented|discovered|founded|wrote|painted|composed)|when was .{1,40} (invented|founded|discovered|built|established|written)|history of|origin[s]? of)\b/i, why:'historical fact' },
+
+  /* --- everyday how-to that does not depend on the market --- */
+  { w:'STRONG', re:/\b(recipe|how to (cook|make|bake|prepare|boil|fry|roast|grill|steam)|ingredients for)\b/i, why:'recipe' },
+  { w:'STRONG', re:/\b((how (do|can) i|tips (to|for)|ways to|help me)\b.{0,40}\b(study|learn|improve|remember|focus|sleep|relax|exercise|meditate|revise|prepare|concentrate|start))\b/i, why:'self-improvement' },
+  { w:'MED',    re:/\b(difference between|types of|examples? of|advantages|disadvantages|pros and cons|explain (the|how|why|what))\b/i, why:'explainer' },
+  { w:'MED',    re:/\b(difference between|vs\.?|versus)\b.{0,40}\b(let|var|const|null|undefined|list|tuple|array|class|struct|thread|process|sql|nosql|http|https|tcp|udp|get|post|python|java|javascript|typescript|c\+\+|rust|go|ram|rom|cpu|gpu|weather and climate|climate|virus|bacteria|simile|metaphor|speed and velocity|mass and weight)\b/i, why:'technical comparison' },
+
+  /* --- conversational --- */
+  { w:'MED',    re:/\b(thank you|thanks|appreciate it|good (job|one)|well done|sorry|my bad)\b/i, why:'social' },
+
+  /* --- named constants, laws and effects: settled by definition --- */
+  { w:'STRONG', re:/\b(theorem|law of|laws of|\w+'?s law|effect|principle|postulate|hypothesis|water cycle|carbon cycle|nitrogen cycle|life cycle|boiling point|melting point|freezing point|chemical formula|atomic number|molar mass|speed of light|value of pi)\b/i, why:'named constant or law' },
+  { w:'STRONG', re:/\b(capital of|currency of|official language of|national (bird|animal|flower|anthem|sport)|which continent|hemisphere|longest river|highest mountain|deepest ocean)\b/i, why:'geographic constant' },
+  { w:'MED',    re:/\bhow many\b.{0,30}\b(bones|teeth|planets|continents|states|districts|letters|alphabets|players|sides|legs|chromosomes|elements|oceans)\b/i, why:'settled count' },
+
+  /* --- more computation phrasings --- */
+  { w:'STRONG', re:/\b(\d+(\.\d+)?\s*(percent|per ?cent|%)\s*(of|off)|square of|cube of|squared|cubed|value of|round off|round to)\b/i, why:'computation phrasing' },
+  { w:'STRONG', re:/\bsolve\b.{0,25}\b(for )?[xy]\b|\bfind (the )?value of\b/i, why:'solve for x' },
+
+  /* --- explain / teach, which is stable unless a web signal outweighs it --- */
+  { w:'MED',    re:/\b(explain|describe|teach me|help me understand|walk me through|what is (a|an|the) )\b/i, why:'explainer verb' },
+  { w:'MED',    re:/\b(stand(s)? for|abbreviation|acronym|full form|short for)\b/i, why:'acronym' },
+  { w:'MED',    re:/\bhow (do|does) (a |an |the )?\w+ work\b/i, why:'how it works' },
+  { w:'STRONG', re:/\b(object oriented programming|functional programming|machine learning basics|bubble sort|merge sort|quick sort|binary search|linked list|stack|queue|graph traversal|dynamic programming|closure[s]?|recursion|regex)\b/i, why:'CS topic' },
+
+  /* --- more things people ask you to write or fix --- */
+  { w:'STRONG', re:/\b(make (this|it) (formal|informal|polite|simple|shorter|longer|better)|correct (this|the (spelling|grammar|sentence))|fix (this|the (spelling|grammar))|rewrite this|simplify this|in simple (english|words|terms))\b/i, why:'transform supplied text' },
+  { w:'STRONG', re:/\b(haiku|limerick|sonnet|leave application|resignation letter|apology letter|invitation|speech for|toast for|vows)\b/i, why:'written form' },
+  { w:'STRONG', re:/\b(name|list|give me|suggest|write)\s+(some|a few|\d+|two|three|four|five|ten|the|all|out)\b/i, why:'list request' },
+  { w:'STRONG', re:/\b(make|create|draft|build|prepare)\s+(a|an|my)\s+(plan|schedule|timetable|routine|checklist|outline|roadmap|itinerary)\b/i, why:'plan request' },
+  { w:'STRONG', re:/\b(author|writer|composer|director|creator|inventor|founder|painter) of\b/i, why:'attribution' },
+  { w:'MED',    re:/\b(how (do|to) (i |you )?(tie|fold|clean|fix|remove|draw|plant|iron|wash|cut|grow|store))\b/i, why:'physical how-to' },
+  { w:'STRONG', re:/\bhow to improve\b|\bhow (do|can) i (get|become|be) better\b/i, why:'self-improvement' },
+  { w:'MED',    re:/\b(how do you spell|how is .{1,20} spelt|how to pronounce)\b/i, why:'spelling' },
+  { w:'STRONG', re:/\b(what year did|in which year did|when did .{1,40} (happen|start|end|begin))\b/i, why:'historical date' }
+];
+
+/* ---------- layer 2: dampers ---------- */
+function routeDampers(t, webScore){
+  var adj = 0, directBonus = 0, notes = [];
+  var y = routeYear();
+  /* A clearly past year with no recency word is history, not news:
+     "who won the world cup in 1998" should not fire a live search. */
+  var years = (t.match(/\b(1[89]\d{2}|20\d{2})\b/g) || []).map(Number);
+  var hasFutureOrNow = years.some(function(x){ return x >= y; });
+  var hasPast = years.some(function(x){ return x <= y - 2; });
+  if(hasPast && !hasFutureOrNow && !/\b(today|now|current|latest|recent|this (week|month|year))\b/i.test(t)){
+    adj -= 9; directBonus += 5; notes.push('past year, no recency word');
+  }
+  /* "in general", "typically", "usually" ask for the stable case */
+  if(/\b(in general|generally|typically|usually|on average|in theory|conceptually|as a concept)\b/i.test(t)){
+    adj -= 2; notes.push('asks for the general case');
+  }
+  /* "How does X work" asks for a mechanism, and a mechanism is stable even
+     when X is a market, an election or the weather. This has to outweigh the
+     topical signal or "how does weather forecasting work" runs a live search. */
+  if(/\b(how (does|do|did) .{1,45} work|how .{1,30} works|what is the (concept|principle|idea|logic) (of|behind)|explain (the )?(concept|theory|process|mechanism|rules|basics))\b/i.test(t)){
+    adj -= 6; directBonus += 4; notes.push('mechanism, not status');
+  }
+  /* A request to PRODUCE text is about the writing, not about researching the
+     topic it happens to mention: "write a poem about the news" is a poem. */
+  if(/\b(write|compose|draft|create|generate|make)\b.{0,30}\b(poem|story|essay|song|joke|caption|tweet|post|letter|email|speech|script)\b/i.test(t) &&
+     !/\b(about (the )?(latest|today'?s|current|recent)|using the latest)\b/i.test(t)){
+    adj -= 5; notes.push('asks for text to be written');
+  }
+  /* Asking what a term MEANS is a definition, whatever the term refers to. */
+  if(/\b(what (does|do) .{1,30} (mean|stand for)|meaning of|definition of|full form of|define )\b/i.test(t)){
+    adj -= 5; directBonus += 3; notes.push('definition, not status');
+  }
+  /* Historical framing */
+  if(/\b(history of|origin of|who invented|who discovered|when was .{1,40} (invented|founded|discovered|built|established))\b/i.test(t)){
+    adj -= 3; notes.push('historical fact');
+  }
+  return { adj: adj, directBonus: directBonus, notes: notes };
+}
+
+/* ---------- layer 3: follow-ups ---------- */
+var routeLastDecision = null;   /* what the previous turn actually did */
+function routeIsFollowUp(t){
+  var w = t.trim().split(/\s+/).length;
+  if(w > 7) return false;
+  return /^(and|what about|how about|ok(ay)? (and|but)|also|then|what if|why|why not|really|are you sure|more|tell me more|go on|continue|the price|the cost|in \w+\??|for \w+\??)\b/i.test(t.trim()) ||
+         /^(it|that|those|they|he|she|them|this)\b/i.test(t.trim());
+}
+
+/* ---------- the decision ---------- */
+function routeDecide(text){
+  var t = String(text || '').trim();
+  var why = [];
+  if(!t) return { decision:'direct', confidence:1, why:['empty'] };
+
+  for(var i=0;i<ROUTE_HARD_WEB.length;i++){
+    if(ROUTE_HARD_WEB[i].test(t)) return { decision:'web', confidence:1, why:['explicitly asked to search'] };
+  }
+  for(var j=0;j<ROUTE_HARD_DIRECT.length;j++){
+    if(ROUTE_HARD_DIRECT[j].test(t)) return { decision:'direct', confidence:1, why:['answerable without the web'] };
+  }
+
+  var webScore = 0, directScore = 0;
+  ROUTE_WEB_SIGNALS.forEach(function(s){
+    var hit = s.dynamic ? s.dynamic(t) : s.re.test(t);
+    if(hit){ webScore += ROUTE_W[s.w]; why.push('+web ' + s.why); }
+  });
+  ROUTE_DIRECT_SIGNALS.forEach(function(s){
+    if(s.re.test(t)){ directScore += ROUTE_W[s.w]; why.push('+direct ' + s.why); }
+  });
+
+  var d = routeDampers(t, webScore);
+  webScore += d.adj;
+  directScore += d.directBonus || 0;
+  d.notes.forEach(function(n){ why.push('damper ' + n); });
+
+  /* A short follow-up carries no signals of its own -- inherit. */
+  if(Math.abs(webScore - directScore) < ROUTE_MARGIN && routeIsFollowUp(t) && routeLastDecision){
+    return { decision: routeLastDecision, confidence: 0.7, why: why.concat(['follow-up, inherited ' + routeLastDecision]) };
+  }
+
+  var margin = webScore - directScore;
+  if(margin >= ROUTE_MARGIN) return { decision:'web', confidence: Math.min(1, 0.6 + margin/20), why:why };
+  if(-margin >= ROUTE_MARGIN) return { decision:'direct', confidence: Math.min(1, 0.6 + (-margin)/20), why:why };
+  return { decision:'ask', confidence:0, why:why, webScore:webScore, directScore:directScore };
+}
+
+/* Kept for the call sites: 'direct' | 'web' | null (null -> ask the model). */
 function routeOverride(text){
-  var t = String(text || '');
-  for(var i=0;i<DIRECT_NOW.length;i++){ if(DIRECT_NOW[i].test(t)) return 'direct'; }
-  for(var j=0;j<ALWAYS_WEB.length;j++){ if(ALWAYS_WEB[j].test(t)) return 'web'; }
-  return null;
+  var r = routeDecide(text);
+  return r.decision === 'ask' ? null : r.decision;
 }
 /* user-controlled switches */
 var webForceOn = false;   /* the "Search the web" toggle */
@@ -3661,18 +3958,23 @@ function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); loc
    fire, so the first real tap primes them.
    ================================================================ */
 var HAPTIC_PATTERNS = {
-  tap:      22,              /* generic press: buttons, toggles, menu items */
+  tap:      26,              /* generic press: buttons, toggles, menu items */
   light:    18,              /* lighter: opening menus, switching tabs      */
-  select:   [18, 40, 26],    /* a choice was made: model picked, theme set  */
-  send:     28,              /* message sent                                */
-  start:    20,              /* the answer has begun arriving               */
-  done:     [26, 60, 40],    /* answer finished -- the satisfying one       */
-  success:  [22, 55, 30],    /* image ready, location found, email sent     */
-  error:    [45, 90, 45],    /* something went wrong                        */
-  warn:     40               /* blocked action, e.g. quota reached          */
+  select:   [22, 45, 30],    /* a choice was made: model picked, theme set  */
+  send:     32,              /* message sent                                */
+  /* The answer arc, which is the one people actually notice: a single longer
+     beat as the reply starts, then two even beats when it finishes -- the
+     second beat is what says "and it's done". Kept deliberately crisp; a
+     premium haptic is short and firm, never a long fuzzy rumble. */
+  start:    28,
+  done:     [34, 70, 34],
+  actions:  20,              /* the like/dislike/copy row arriving          */
+  success:  [26, 55, 34],    /* image ready, location found, email sent     */
+  error:    [50, 90, 50],    /* something went wrong                        */
+  warn:     44               /* blocked action, e.g. quota reached          */
 };
 /* how many switch-flips stand in for each pattern on iOS */
-var HAPTIC_IOS_TAPS = { tap:1, light:1, select:2, send:1, start:1, done:2, success:2, error:3, warn:2 };
+var HAPTIC_IOS_TAPS = { tap:1, light:1, select:2, send:1, start:1, done:2, actions:1, success:2, error:3, warn:2 };
 
 var hapticsOn = true;
 try{ hapticsOn = store('pp-haptics') !== '0'; }catch(e){}
@@ -4007,11 +4309,29 @@ function searchLabel(q){
    CHAT UI
    ================================================================ */
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* markers only exist between cleanAnswerText() and md(); anything that shows
+   the raw text instead (copy, email, saved history) turns them back into [n] */
+function stripCiteMarks(t){ return String(t).replace(/@@CITE(\d{1,2})@@/g, '[$1]'); }
 
 function cleanAnswerText(src){
   return String(src || '')
+    /* Models trained on OpenAI-style tooling leak CJK citation brackets --
+       【4†source】 and bare 【2】. The first form carries no useful number, so
+       it goes; the second is a real citation and is normalised to the plain
+       [2] the rest of the app already understands, which md() then renders
+       as a proper superscript chip instead of leaving it as line noise. */
     .replace(/【[^】]*†[^】]*】/g, '')
     .replace(/\[[0-9]+†[^\]]+\]/g, '')
+    /* @@CITE n@@ is a private marker meaning "this is definitely a citation".
+       The CJK form is unambiguous wherever it appears -- even glued to the
+       previous word -- so it is marked here and turned into a chip in md().
+       Plain ASCII [n] cannot be marked this way because x[0] looks identical,
+       so md() applies a spacing rule to those instead. The marker uses only
+       characters esc() leaves alone, so it survives escaping intact. */
+    .replace(/【\s*(\d{1,2}(?:\s*[,،]\s*\d{1,2})*)\s*】/g, function(_, nums){
+      return nums.split(/[,،]/).map(function(n){ return '@@CITE' + n.trim() + '@@'; }).join('');
+    })
+    .replace(/【[^】]{0,40}】/g, '')          /* anything else in those brackets is noise */
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n[ \t]+\n/g, '\n\n')
     .trim();
@@ -4076,6 +4396,15 @@ function md(src){
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  /* Citations become small superscript chips instead of raw brackets sitting
+     in the middle of a sentence. Two forms are handled:
+       - the marked CJK form, unambiguous wherever it sits;
+       - plain [3], which counts as a citation only when it does NOT sit
+         directly against a word -- that is exactly what separates a citation
+         from an array index like x[0]. */
+  text = text.replace(/@@CITE(\d{1,2})@@/g, '<sup class="cite">$1</sup>');
+  text = text.replace(/(^|[\s.,;:!?)”’])\[(\d{1,2})\](?!\()/g,
+    '$1<sup class="cite">$2</sup>');
 
   var lines = text.split('\n'), out = [], list = null;
   function closeList(){ if(list){ out.push(list.tag === 'ul' ? '</ul>' : '</ol>'); list = null; } }
@@ -4200,6 +4529,11 @@ function addFeedback(bubble){
     });
   });
   bubble.appendChild(feedback);
+  /* The row arrives rather than appearing: the four controls stagger in, and a
+     light tap lands with them -- a separate, quieter event from the two beats
+     that just marked the answer finishing. */
+  requestAnimationFrame(function(){ feedback.classList.add('in'); });
+  setTimeout(function(){ haptic('actions'); }, 240);
 }
 
 var thinkingTimer = null;
@@ -4641,6 +4975,21 @@ async function deepResearch(question, bubble, signal){
   }
 }
 
+/* Putting focus back in the composer is right on a desktop, where the caret
+   simply returns to where you were typing. On a phone it yanks the software
+   keyboard back up the instant the answer lands, which covers the answer you
+   were waiting to read. Touch devices keep the keyboard down until the box
+   is tapped. */
+function isTouchDevice(){
+  try{
+    return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+           ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  }catch(e){ return false; }
+}
+function refocusComposer(){
+  if(isTouchDevice()) return;
+  try{ $input.focus(); }catch(e){}
+}
 async function sendMessage(text){
   text = (text || $input.value).trim();
   if(!text || state.busy) return;
@@ -4658,7 +5007,7 @@ async function sendMessage(text){
     if($hero) $hero.style.display = 'none';
     await generateImage(text);
     if(!state.user) bumpUsage();
-    state.busy = false; $send.disabled = false; $input.focus();
+    state.busy = false; $send.disabled = false; refocusComposer();
     return;
   }
   var imgForThisTurn = pendingImage;
@@ -4694,9 +5043,9 @@ async function sendMessage(text){
       note.textContent = 'Researched ' + deepOut.sourceCount + ' sources over ' + deepOut.rounds +
                          ' rounds in ' + Math.floor(deepOut.seconds / 60) + 'm ' + (deepOut.seconds % 60) + 's';
       deepBubble.appendChild(note);
+      haptic('done');               /* answer over — two beats */
       addResponseMeta(deepBubble, 0, true);
       scrollDown();
-      haptic('done');
       if(!state.user) bumpUsage();
       appendToHistory('user', text);
       appendToHistory('assistant', deepOut.text);
@@ -4721,7 +5070,7 @@ async function sendMessage(text){
     }
     currentAbort = null;
     hideStopBtn();
-    state.busy = false; $send.disabled = false; $input.focus();
+    state.busy = false; $send.disabled = false; refocusComposer();
     return;
   }
 
@@ -4761,30 +5110,42 @@ async function sendMessage(text){
       setThinking('Thinking');
       route = { web: false, confidence: 1, searchQuery: text, topic: 'general', freshness: 'none' };
     } else {
-      /* SPEED: decide locally first. Only genuinely ambiguous questions pay for
-         a classifier round-trip; basic maths and everyday tasks go straight to
-         the model, so the path is simply user -> AI -> answer. */
-      var forced = webForceOn ? 'web' : routeOverride(text);
-      if(forced === 'direct'){
+      /* Decide locally first. Only genuinely ambiguous questions pay for a
+         classifier round-trip; anything the signals settle with a clear
+         margin goes straight through, so the common path stays
+         user -> AI -> answer with nothing in between. */
+      var local = webForceOn
+        ? { decision:'web', confidence:1, why:['web toggle on'] }
+        : routeDecide(text);
+      if(local.decision === 'direct'){
         needsLive = false;
-        route = { web:false, confidence:1, searchQuery:text, topic:'general', freshness:'none' };
+        route = { web:false, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' };
         setThinking('Thinking');
-      } else if(forced === 'web'){
+      } else if(local.decision === 'web'){
         needsLive = true;
-        route = { web:true, confidence:1, searchQuery:text, topic:'general', freshness:'none' };
-      } else if(isNormalLocalRequest(text)){
-        needsLive = false;
-        route = { web:false, confidence:1, searchQuery:text, topic:'general', freshness:'none' };
-        setThinking('Thinking');
+        route = { web:true, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' };
       } else {
         setThinking('Thinking');
         try {
           route = await classifyQuery(text, currentAbort ? currentAbort.signal : null);
+          /* The classifier is only trusted when it is sure. An unsure "no" on a
+             question the local signals already leaned toward searching is the
+             exact case that produces a confidently stale answer, so it loses. */
+          if(route.web === false && route.confidence < 0.55 && (local.webScore || 0) > (local.directScore || 0)){
+            route.web = true;
+            route.confidence = 0.55;
+          }
         } catch(routerError) {
-          route = { web: isDynamicQuery(text), confidence: 0, searchQuery: text, topic:'general', freshness:'none' };
+          /* Router unreachable: fall back to the local lean, and to searching
+             when even that is a coin flip. */
+          route = {
+            web: (local.webScore || 0) >= (local.directScore || 0),
+            confidence: 0, searchQuery: text, topic:'general', freshness:'none'
+          };
         }
         needsLive = route.web === true;
       }
+      routeLastDecision = needsLive ? 'web' : 'direct';   /* short follow-ups inherit this */
     }
 
     if(!imgForThisTurn && needsLive){
@@ -4859,6 +5220,7 @@ async function sendMessage(text){
     if(!bubbleEl) bubbleEl = addMessage('bot', '', { sources: sources, searched: needsLive });
     bubbleEl.innerHTML = md(reply);
     scrollDown();
+    haptic('done');               /* answer over — two beats */
     (function(){
       addResponseMeta(bubbleEl, elapsedMs, needsLive);
       { /* detect fenced code blocks in ANY reply, no dedicated mode needed */
@@ -4908,7 +5270,6 @@ async function sendMessage(text){
     currentAbort = null;
     hideStopBtn();
     if(!state.user) bumpUsage();
-    haptic('done');               /* answer finished — the satisfying double tick */
     appendToHistory('user', text);
     appendToHistory('assistant', reply);
     autoTitleChat(activeChatId, text, reply); /* names the chat once it exists */
@@ -4945,7 +5306,7 @@ async function sendMessage(text){
   }
   currentAbort = null;
   hideStopBtn();
-  state.busy = false; $send.disabled = false; $input.focus();
+  state.busy = false; $send.disabled = false; refocusComposer();
 }
 
 $send.addEventListener('click', function(){ sendMessage(); });

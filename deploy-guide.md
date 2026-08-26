@@ -217,3 +217,38 @@ The report call sets `report: true` on `/chat-stream`, which raises the evidence
 window to 90k characters and the reply limit to 8000 tokens. Expect deep search
 to use noticeably more Tavily credits and Groq tokens than a normal question —
 one run is worth roughly 25 ordinary searches.
+
+
+## Smart routing — how it decides whether to search
+
+Every question goes through a local router before anything is sent anywhere.
+It scores evidence rather than matching the first rule that fires, which is
+what the previous version did and why "calculate today's gold rate" could go
+straight to the model and answer from stale memory.
+
+Four layers, in order:
+
+1. **Hard rules** — arithmetic, greetings, an explicit "search the web", and
+   the facts the device itself holds (time, date, location).
+2. **Weighted signals** — evidence for searching (recency words, office-holders,
+   prices, weather, sport, releases, versions, schedules, moving statistics,
+   Hinglish time words) against evidence for answering directly (maths, code,
+   supplied text, creative writing, definitions, settled science, history).
+3. **Dampers** — context that weakens a signal: a past year with no recency
+   word, "in general", a mechanism question ("how does the stock market work"),
+   a definition ("what does GDP mean"), or a request to *write* something about
+   a topical subject ("write a poem about the news").
+4. **Follow-ups** — a short "and in delhi?" carries no signals of its own, so it
+   inherits the previous turn's decision.
+
+Only a clear margin decides locally. Anything genuinely balanced goes to the
+model classifier in `/groq` (`mode: "route"`), whose prompt is written for the
+hard cases specifically. If that classifier answers "no" with low confidence on
+a question the local signals leaned toward searching, the app searches anyway —
+a needless search costs a second, a confidently stale answer costs trust.
+
+Measured on a 431-query labelled corpus (five sets, three of them written after
+the router was finished and never used to tune it): 417 decided locally with
+**0 wrong decisions**. On the sealed set's first run, before any change was made
+in response to it, it was 42/43 correct — the single miss was "how many days
+until the election", which has since been fixed.

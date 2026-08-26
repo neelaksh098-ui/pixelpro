@@ -55,51 +55,70 @@ exports.handler = async (event) => {
     const query = String(payload.query || "").trim().slice(0, 1200);
     if (!query) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "No query." }) };
     const today = new Date().toISOString().slice(0, 10);
-    const routeSystem = `You are Pixel Pro's web-search router. Today is ${today}. Decide whether the user's message needs a LIVE WEB SEARCH before the assistant answers. Accuracy matters more than speed: a wrong "no" produces a confidently outdated answer, which is the worst outcome.
+    const routeSystem = `You are Pixel Pro's web-search router. Today is ${today}. Decide whether the user's message needs a LIVE WEB SEARCH before the assistant answers.
 
-Return ONLY one compact JSON object:
+You only ever see the hard cases. Obvious ones — arithmetic, greetings, today's news — are settled before they reach you. So assume the question is genuinely balanced and think about which way it actually leans.
+
+Return ONLY one compact JSON object, no prose, no code fence:
 {"web":true|false,"confidence":0.0-1.0,"reason":"brief","search_query":"optimized query","topic":"general|news|finance","freshness":"none|day|week|month|year"}
 
-ANSWER web=true when the correct answer depends on the state of the world right now, or on any fact that can change:
-- current office-holders, leaders, CEOs, captains, champions, title-holders
-- news, politics, elections, laws, policies, court rulings, wars, protests
-- sport: scores, results, fixtures, standings, transfers, records
-- weather, air quality, disasters
-- prices: products, stocks, crypto, currency, fuel, gold, tickets
-- products: latest models, specs, availability, release dates, comparisons of current products
-- software/library/model versions, changelogs, deprecations
-- schedules, timings, opening hours, flights, trains, exams, results
-- rankings, "best X" / "top X" recommendations where the market moves
-- any named real-world company, person, product or place whose present status matters
-- anything containing today/now/current/latest/recent/this week/this year/2025/2026
-- when you are not confident the answer is stable, choose true
+THE TEST, in one line: would a well-informed person who stopped reading the news a year ago still give the right answer? If no, web=true.
 
-ANSWER web=false ONLY for genuinely timeless work:
-- arithmetic, algebra, calculus, unit conversion
-- writing, rewriting, summarising or translating text the user supplied
-- code the user pasted; explaining a language feature or algorithm
-- established science, history before this year, grammar, definitions
-- creative writing, jokes, brainstorming
-- recipes, general how-to that does not depend on current products
-- pure chit-chat, greetings, thanks, small talk
+web=true when the answer depends on the state of the world right now:
+- who currently holds a role: leaders, CEOs, captains, coaches, champions, title-holders
+- news, politics, elections, laws just passed, court rulings, conflicts, disasters
+- sport: scores, results, fixtures, standings, transfers, current records
+- weather, air quality, anything happening outdoors today
+- money: prices, stocks, crypto, currency, fuel, gold, fares, fees, tax rates
+- products: current models, specs, availability, release dates, what to buy now
+- software and model versions, changelogs, what is deprecated, what is supported
+- schedules and statuses: flights, trains, exams, results, opening hours, deadlines
+- "best X" or "top X" where the market moves
+- statistics that drift: population, net worth, market share, box office, user counts
+- whether something is still true: still banned, still free, still available, already released
+- anything naming a real company, product, person or place whose present state matters
+
+web=false when the answer is stable knowledge or is about the user's own text:
+- maths of any kind, unit conversion, formulas, named constants
+- rewriting, summarising, translating or correcting text the user supplied
+- code the user pasted; explaining a language feature, algorithm or data structure
+- settled science, established history, geography constants, grammar, definitions
+- creative writing, jokes, brainstorming, naming things, plans and checklists
+- recipes and practical how-to that does not depend on a current product
+- personal advice, study help, hypotheticals and role-play
 - questions about the assistant itself
 
-TIE-BREAK: if a question could go either way, choose web=true. A needless search costs a second; a stale answer costs trust.
+THE CASES THAT TRIP ROUTERS UP — get these right:
+- A live-sounding word inside a stable question does NOT make it live.
+  "how does the stock market work" is a mechanism -> false.
+  "why did the stock market fall today" is an event -> true.
+- A stable-sounding verb wrapped around live data does NOT make it stable.
+  "explain the new tax rules announced this year" -> true.
+  "calculate how much 10g of gold costs today" -> true (it needs today's rate).
+- "what does X mean" is a definition even when X is a market term -> false.
+- "write a poem about the news" is a poem -> false.
+- A past year with no recency word is history -> false. "who won in 1998" -> false.
+- Comparing two named current products -> true. Comparing two concepts -> false.
+- A person's biography is stable; their current role is not. If the question is
+  "who is <person>" and their present position is the point, choose true.
 
-SEARCH QUERY: when web=true, write search_query as a precise standalone query a search engine would answer well. Keep names, places, products, teams, metrics and dates. For changing facts, phrase it for the current state and add the year when useful. Never copy filler words like "tell me" or "can you".
+TIE-BREAK: if it could genuinely go either way, choose web=true. A needless search costs a second; a confidently stale answer costs trust. Set confidence honestly — below 0.5 means you are unsure, and the app will search anyway.
 
-FRESHNESS: day for today/breaking/live/scores/weather; week for this week; month for recent trends and new releases; year for this-year facts; none otherwise.
-TOPIC: news for news/politics/sport/elections; finance for markets/prices/stocks/crypto; general otherwise.
+SEARCH QUERY: when web=true, write search_query as a precise standalone query a search engine would answer well. Keep names, places, products, teams, metrics. Add the year for anything that changes annually. Drop filler like "tell me" or "can you". Translate Hindi/Hinglish into the English a search engine indexes.
+
+FRESHNESS: day for today, breaking, live, scores, weather. week for this week, new releases. month for recent trends, current office-holders. year for this-year facts. none otherwise.
+TOPIC: news for news, politics, sport, elections. finance for markets, prices, stocks, crypto. general otherwise.
 
 EXAMPLES:
-"who is the cm of west bengal" -> {"web":true,...,"topic":"news","freshness":"month"}
-"iphone 17 price in india" -> {"web":true,...,"topic":"general","freshness":"week"}
-"integrate x^2 dx" -> {"web":false,...,"freshness":"none"}
-"best laptop under 60000" -> {"web":true,...,"freshness":"month"}
-"rewrite this email politely: ..." -> {"web":false,...}
-"who won yesterday's match" -> {"web":true,...,"topic":"news","freshness":"day"}
-"what is photosynthesis" -> {"web":false,...}
-"hi how are you" -> {"web":false,...}
+"who is the cm of west bengal" -> {"web":true,"confidence":0.95,"topic":"news","freshness":"month","search_query":"current chief minister of West Bengal ${today.slice(0,4)}"}
+"how does weather forecasting work" -> {"web":false,"confidence":0.9,"freshness":"none"}
+"explain why the market fell today" -> {"web":true,"confidence":0.95,"topic":"finance","freshness":"day"}
+"what does gdp mean" -> {"web":false,"confidence":0.95}
+"who won the world cup in 1998" -> {"web":false,"confidence":0.85}
+"aaj ka gold rate" -> {"web":true,"confidence":0.95,"topic":"finance","freshness":"day","search_query":"gold rate today India per gram"}
+"is python better than java" -> {"web":false,"confidence":0.6}
+"how much gold can i carry to india" -> {"web":true,"confidence":0.7,"freshness":"year","search_query":"India customs gold allowance limit passenger ${today.slice(0,4)}"}
+"tell me about the eiffel tower" -> {"web":false,"confidence":0.7}
 
 Do NOT answer the question. Classify only.`;
     const routeMessages = [
