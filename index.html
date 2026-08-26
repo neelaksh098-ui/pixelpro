@@ -1564,6 +1564,132 @@ body.empty-state .suggests{display:flex}
   .feedback.in button{animation:none}
 }
 
+/* ================================================================
+   LANDING SKY — drifting clouds behind the blue wash.
+   Every cloud is one element with a soft radial fill and a couple of
+   pseudo-element puffs, animated on transform only, so the whole layer
+   costs nothing in layout and cannot introduce shift. It sits behind
+   the content and takes no pointer events.
+   ================================================================ */
+.landing-sky{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.landing-hero,.landing-nav{position:relative;z-index:1}
+.cloud{
+  position:absolute;border-radius:999px;
+  background:radial-gradient(closest-side at 50% 55%, rgba(255,255,255,.96), rgba(255,255,255,.72) 62%, rgba(255,255,255,0) 100%);
+  filter:blur(.4px);
+  will-change:transform;
+}
+/* the puffs that stop a cloud reading as a plain ellipse */
+.cloud::before,.cloud::after{
+  content:"";position:absolute;border-radius:999px;background:inherit;
+}
+.cloud::before{width:58%;height:150%;left:12%;top:-62%}
+.cloud::after{width:42%;height:120%;right:12%;top:-42%}
+
+.c1{width:300px;height:74px;top:16%;left:-32%;opacity:.85;animation:drift 68s linear infinite}
+.c2{width:210px;height:54px;top:31%;left:-26%;opacity:.62;animation:drift 92s linear infinite;animation-delay:-24s}
+.c3{width:390px;height:92px;top:52%;left:-40%;opacity:.72;animation:drift 110s linear infinite;animation-delay:-58s}
+.c4{width:170px;height:44px;top:68%;left:-22%;opacity:.5;animation:drift 78s linear infinite;animation-delay:-12s}
+.c5{width:260px;height:64px;top:8%;left:-28%;opacity:.45;animation:drift 128s linear infinite;animation-delay:-80s}
+.c6{width:340px;height:80px;top:80%;left:-36%;opacity:.55;animation:drift 96s linear infinite;animation-delay:-44s}
+@keyframes drift{
+  from{transform:translate3d(0,0,0)}
+  to{transform:translate3d(175vw,0,0)}
+}
+/* a gentle vertical bob layered on top, so they do not read as a conveyor */
+.c2,.c4,.c6{animation-name:drift,bob;animation-duration:92s,13s;animation-timing-function:linear,ease-in-out;animation-iteration-count:infinite,infinite}
+.c3{animation-name:drift,bob;animation-duration:110s,17s;animation-timing-function:linear,ease-in-out;animation-iteration-count:infinite,infinite}
+@keyframes bob{0%,100%{translate:0 0}50%{translate:0 -10px}}
+
+/* dark sky: clouds become faint haze rather than white blobs */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .cloud{
+    background:radial-gradient(closest-side at 50% 55%, rgba(150,185,255,.20), rgba(120,160,240,.10) 62%, rgba(255,255,255,0) 100%);
+  }
+}
+:root[data-theme="dark"] .cloud{
+  background:radial-gradient(closest-side at 50% 55%, rgba(150,185,255,.20), rgba(120,160,240,.10) 62%, rgba(255,255,255,0) 100%);
+}
+
+/* ================================================================
+   TYPED HEADLINE — the quotes cycle, typed then cleared.
+   The heading is given a fixed min-height so a shorter quote never
+   reflows the hero underneath it.
+   ================================================================ */
+/* The heading is a fixed-height flex box so a one-line quote and a two-line
+   quote do not shift the hero beneath them; the text and the caret live in a
+   single inner span, so the caret trails the last character instead of being
+   parked at the right edge. */
+.landing-title{min-height:2.6em;display:flex;align-items:center;justify-content:center}
+.landing-type-wrap{display:inline}
+.type-caret{
+  display:inline-block;width:2px;height:.92em;border-radius:1px;
+  background:var(--accent);vertical-align:-.06em;margin-left:3px;
+  animation:typeBlink 1.05s steps(1,end) infinite;
+}
+@keyframes typeBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
+.landing-title.clearing .type-caret{animation:none;opacity:1}
+
+@media (prefers-reduced-motion:reduce){
+  .cloud{animation:none!important}
+  .type-caret{animation:none}
+}
+@media (max-width:680px){
+  .c3,.c5{display:none}          /* fewer, larger clouds read better on a phone */
+  .landing-title{min-height:2.9em}
+}
+
+/* ================================================================
+   CHAT ACTION SHEET — what a long press opens on a phone.
+   ================================================================ */
+.chat-sheet{position:fixed;inset:0;z-index:120;display:block}
+.chat-sheet-scrim{
+  position:absolute;inset:0;background:rgba(8,16,32,.42);
+  opacity:0;transition:opacity .22s var(--ease,ease);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+}
+.chat-sheet.show .chat-sheet-scrim{opacity:1}
+.chat-sheet-card{
+  position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));
+  background:var(--card);border:1px solid var(--line);border-radius:20px;
+  padding:8px 8px 10px;
+  box-shadow:0 -8px 44px -10px rgba(8,20,50,.35),0 2px 8px rgba(0,0,0,.10);
+  transform:translateY(115%);opacity:0;
+  transition:transform .3s cubic-bezier(.22,.9,.28,1),opacity .2s ease;
+  max-height:80vh;overflow-y:auto;overscroll-behavior:contain;
+}
+.chat-sheet.show .chat-sheet-card{transform:none;opacity:1}
+.chat-sheet-grab{width:38px;height:4px;border-radius:99px;background:var(--line-strong);margin:4px auto 10px}
+.chat-sheet-title{
+  padding:2px 12px 10px;font-size:13px;font-weight:600;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-bottom:1px solid var(--line);margin-bottom:6px;
+}
+.chat-sheet-item{
+  width:100%;display:flex;align-items:center;gap:14px;
+  padding:14px 14px;border:none;background:none;border-radius:12px;
+  font-size:16px;font-weight:500;color:var(--ink);text-align:left;
+  transition:background .14s var(--ease,ease),transform .14s var(--ease,ease);
+}
+.chat-sheet-item svg{width:19px;height:19px;flex:none;color:var(--muted)}
+.chat-sheet-item:active{background:var(--hover);transform:scale(.985)}
+.chat-sheet-item.danger{color:#DC2626}
+.chat-sheet-item.danger svg{color:#DC2626}
+.chat-sheet-cancel{
+  width:100%;margin-top:6px;padding:14px;border:none;border-radius:12px;
+  background:var(--bg-2);color:var(--ink);font-size:16px;font-weight:650;
+  transition:background .14s var(--ease,ease),transform .14s var(--ease,ease);
+}
+.chat-sheet-cancel:active{transform:scale(.985)}
+/* a finger has no hover, so the desktop strip only gets in the way there */
+@media (hover:none){
+  .sb-item:hover .sb-item-actions{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .chat-sheet-card{transition:none;transform:none}
+  .chat-sheet-scrim{transition:none}
+}
+
 </style>
 </head>
 <body>
@@ -1778,8 +1904,12 @@ body.empty-state .suggests{display:flex}
     </nav>
     <button class="landing-login-btn" id="landingLoginBtn">Login</button>
   </header>
+  <div class="landing-sky" aria-hidden="true">
+    <span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span>
+    <span class="cloud c4"></span><span class="cloud c5"></span><span class="cloud c6"></span>
+  </div>
   <div class="landing-hero">
-    <h1 class="landing-title">Precise AI. One Assistant.</h1>
+    <h1 class="landing-title"><span class="landing-type-wrap"><span id="landingType"></span><span class="type-caret" aria-hidden="true"></span></span></h1>
     <p class="landing-sub">Access fast, precise answers and live web search in one place.</p>
     <div class="landing-composer" id="landingComposer">
       <input id="landingInput" type="text" placeholder="Ask anything" autocomplete="off" />
@@ -2285,7 +2415,111 @@ function makeChatRow(c, withAgent){
   acts.querySelector('.share-act').addEventListener('click', function(ev){ ev.stopPropagation(); shareChat(c.id); });
   acts.querySelector('.del-act').addEventListener('click', function(ev){ ev.stopPropagation(); deleteChat(c.id); });
   el.appendChild(acts);
+  attachChatLongPress(el, c);
   return el;
+}
+
+/* ================================================================
+   LONG PRESS ON A CHAT — the phone equivalent of the hover row.
+   A pointer has no hover, so the little pin/share/delete strip that
+   appears next to a chat on a laptop is unreachable on a phone. Holding
+   a chat for half a second opens the same actions as a sheet instead.
+   The desktop behaviour is untouched: the hover strip is still there,
+   and a mouse never triggers this.
+   ================================================================ */
+function attachChatLongPress(row, c){
+  if(!isTouchDevice()) return;
+  var timer = null, startX = 0, startY = 0, fired = false;
+  function cancel(){ if(timer){ clearTimeout(timer); timer = null; } }
+  row.addEventListener('touchstart', function(e){
+    if(!e.touches || e.touches.length !== 1) return;
+    fired = false;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    cancel();
+    timer = setTimeout(function(){
+      fired = true;
+      haptic('select');              /* the press has been recognised */
+      openChatSheet(c);
+    }, 480);
+  }, { passive:true });
+  row.addEventListener('touchmove', function(e){
+    if(!e.touches || !e.touches.length) return;
+    /* a scroll is not a long press */
+    if(Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) cancel();
+  }, { passive:true });
+  row.addEventListener('touchend', function(e){
+    cancel();
+    /* a long press has already been handled -- do not let it become a tap */
+    if(fired && e.cancelable) e.preventDefault();
+  });
+  row.addEventListener('touchcancel', cancel, { passive:true });
+  /* swallow the click the browser fires after a long press */
+  row.addEventListener('click', function(e){
+    if(fired){ e.preventDefault(); e.stopPropagation(); fired = false; }
+  }, true);
+  row.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+}
+
+function closeChatSheet(){
+  var sheet = document.getElementById('chatSheet');
+  if(!sheet) return;
+  sheet.classList.remove('show');
+  setTimeout(function(){ if(sheet.parentNode) sheet.parentNode.removeChild(sheet); }, 220);
+}
+function openChatSheet(c){
+  closeChatSheet();
+  /* built on document.body, not inside the sidebar: the sidebar carries a
+     transform for its slide, and a transformed ancestor would make
+     position:fixed resolve against it instead of the viewport. */
+  var sheet = document.createElement('div');
+  sheet.className = 'chat-sheet';
+  sheet.id = 'chatSheet';
+  sheet.innerHTML =
+    '<div class="chat-sheet-scrim"></div>' +
+    '<div class="chat-sheet-card" role="dialog" aria-modal="true">' +
+      '<div class="chat-sheet-grab" aria-hidden="true"></div>' +
+      '<div class="chat-sheet-title"></div>' +
+      '<button class="chat-sheet-item" data-act="pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7l2-3.2Z"/></svg><span></span></button>' +
+      '<button class="chat-sheet-item" data-act="rename"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span>Rename</span></button>' +
+      '<button class="chat-sheet-item" data-act="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg><span>Share</span></button>' +
+      '<button class="chat-sheet-item danger" data-act="delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg><span>Delete</span></button>' +
+      '<button class="chat-sheet-cancel" data-act="cancel">Cancel</button>' +
+    '</div>';
+  sheet.querySelector('.chat-sheet-title').textContent = c.title || 'Chat';
+  sheet.querySelector('[data-act="pin"] span').textContent = c.pinned ? 'Unpin' : 'Pin to top';
+  document.body.appendChild(sheet);
+  requestAnimationFrame(function(){ sheet.classList.add('show'); });
+
+  /* Lifting the finger after a long press makes the browser fire a click at
+     the point it was held -- which now lands on the scrim that just appeared
+     under it, dismissing the sheet the moment it opens. Ignore anything that
+     arrives in the first fraction of a second. */
+  var openedAt = Date.now();
+  sheet.querySelector('.chat-sheet-scrim').addEventListener('click', function(){
+    if(Date.now() - openedAt < 450) return;
+    haptic('light'); closeChatSheet();
+  });
+  sheet.querySelectorAll('[data-act]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      if(Date.now() - openedAt < 450) return;   /* same ghost-click guard */
+      var act = btn.getAttribute('data-act');
+      closeChatSheet();
+      if(act === 'pin'){ togglePin(c.id); }
+      else if(act === 'share'){ haptic('tap'); shareChat(c.id); }
+      else if(act === 'delete'){ deleteChat(c.id); }
+      else if(act === 'rename'){
+        haptic('tap');
+        var v = prompt('Rename chat', c.title || '');
+        if(v === null) return;
+        v = v.trim().slice(0, 80);
+        if(!v) return;
+        setChatTitle(c.id, v);
+        renderSidebar();
+        showToast('Renamed.');
+      }
+      else { haptic('light'); }
+    });
+  });
 }
 function renderSidebar(){
   var list = document.getElementById('sbList');
@@ -2462,10 +2696,82 @@ function hideWelcome(){
 var authResolved = false;
 function hadUser(){ try{ return localStorage.getItem('pp-had-user') === '1'; }catch(e){ return false; } }
 function setHadUser(v){ try{ if(v) localStorage.setItem('pp-had-user','1'); else localStorage.removeItem('pp-had-user'); }catch(e){} }
+
+/* ================================================================
+   LANDING HEADLINE — types a quote, holds it, clears it, moves on.
+   Two haptics, deliberately different: a soft confirm when a line
+   finishes landing, and a lighter downward tick when it clears. They
+   stay silent until the page has been touched, because no platform
+   allows feedback before that -- which is correct, not a bug.
+   ================================================================ */
+var LANDING_QUOTES = [
+  'Precise AI. One assistant.',
+  'Ask anything. Get real answers.',
+  'Live web. Actual sources.',
+  'Think deeper. Search smarter.',
+  'One assistant. Every task.',
+  'Your questions, answered precisely.'
+];
+var landingTypeTimer = null;
+function stopLandingType(){
+  if(landingTypeTimer){ clearTimeout(landingTypeTimer); landingTypeTimer = null; }
+}
+function startLandingType(){
+  var el = document.getElementById('landingType');
+  var title = el && el.parentElement;
+  if(!el || !title) return;
+  stopLandingType();
+
+  var reduced = false;
+  try{ reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+  if(reduced){ el.textContent = LANDING_QUOTES[0]; return; }
+
+  var qi = 0, ci = 0, phase = 'typing';
+  function step(){
+    /* stop the moment the landing page is no longer on screen */
+    var w = document.getElementById('welcome');
+    if(!w || w.classList.contains('hide')){ landingTypeTimer = setTimeout(step, 600); return; }
+
+    var quote = LANDING_QUOTES[qi];
+    if(phase === 'typing'){
+      ci++;
+      el.textContent = quote.slice(0, ci);
+      if(ci >= quote.length){
+        phase = 'holding';
+        haptic('typed');                 /* the line has landed */
+        landingTypeTimer = setTimeout(step, 2100);
+        return;
+      }
+      /* a touch of variance so it reads as typing, not a metronome */
+      landingTypeTimer = setTimeout(step, 46 + Math.random() * 46);
+      return;
+    }
+    if(phase === 'holding'){
+      phase = 'clearing';
+      title.classList.add('clearing');
+      haptic('cleared');                 /* and now it is being taken away */
+      landingTypeTimer = setTimeout(step, 60);
+      return;
+    }
+    ci -= 2;
+    if(ci <= 0){
+      ci = 0; el.textContent = '';
+      title.classList.remove('clearing');
+      phase = 'typing';
+      qi = (qi + 1) % LANDING_QUOTES.length;
+      landingTypeTimer = setTimeout(step, 380);
+      return;
+    }
+    el.textContent = quote.slice(0, ci);
+    landingTypeTimer = setTimeout(step, 26);
+  }
+  landingTypeTimer = setTimeout(step, 420);
+}
+
 function maybeShowWelcome(){
   var w = document.getElementById('welcome');
   if(!w) return;
-  if(state.user){ w.classList.add('hide'); return; }
+  if(state.user){ w.classList.add('hide'); stopLandingType(); return; }
   /* Until Firebase has genuinely answered, never reveal the landing page:
      a remembered session means this user IS signed in and is just waiting on
      a slow auth restore (routine in the wrapped Android app, where the SDK
@@ -2474,6 +2780,7 @@ function maybeShowWelcome(){
   if(!authResolved){ w.classList.add('hide'); return; }
   if(hadUser()){ w.classList.add('hide'); return; }
   w.classList.remove('hide');
+  startLandingType();
 }
 document.getElementById('landingLoginBtn').addEventListener('click', function(){ if(typeof openGate === 'function') openGate(); });
 document.getElementById('landingDiscover').addEventListener('click', function(){
@@ -3969,12 +4276,14 @@ var HAPTIC_PATTERNS = {
   start:    28,
   done:     [34, 70, 34],
   actions:  20,              /* the like/dislike/copy row arriving          */
+  typed:    [18, 40, 26],    /* a landing headline finished typing          */
+  cleared:  [26, 34, 14],    /* ...and is being cleared away (falling away) */
   success:  [26, 55, 34],    /* image ready, location found, email sent     */
   error:    [50, 90, 50],    /* something went wrong                        */
   warn:     44               /* blocked action, e.g. quota reached          */
 };
 /* how many switch-flips stand in for each pattern on iOS */
-var HAPTIC_IOS_TAPS = { tap:1, light:1, select:2, send:1, start:1, done:2, actions:1, success:2, error:3, warn:2 };
+var HAPTIC_IOS_TAPS = { tap:1, light:1, select:2, send:1, start:1, done:2, actions:1, typed:2, cleared:2, success:2, error:3, warn:2 };
 
 var hapticsOn = true;
 try{ hapticsOn = store('pp-haptics') !== '0'; }catch(e){}
@@ -4185,11 +4494,19 @@ function searchLabel(q){
 /* ================================================================
    AI BRAIN  —  Groq only for fast everyday answers
    ================================================================ */
+/* One source of truth for who made this, appended to EVERY system prompt --
+   the tiers each supply their own prompt and the vision model gets a third
+   one, so a line living only in the default prompt was simply absent on most
+   paths. */
+var IDENTITY_LINE = 'Your developer and creator is Mr. Neelaksh Naithani. ' +
+  'Whenever the user asks who made, created, built, developed, owns, trains, or is behind you -- ' +
+  'in any language or phrasing -- always answer that you were created by Mr. Neelaksh Naithani, ' +
+  'and never name any other person, company or lab as your creator. ';
 function systemPrompt(){
   var today = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   var projectContext = '';
   return 'You are Pixel Pro, a friendly, accurate, fast AI assistant. Today is ' + today + '. ' +
-    'If the user asks who developed, created, owns, built, or is behind you, answer clearly: "I was created by Neelaksh Naithani." Do not invent another developer or owner. ' +
+    IDENTITY_LINE +
     'Reply in the same language the user writes in (English, Hindi or Bengali). ' +
     'Answer the exact question first. Be concise but complete, usually 2–6 short paragraphs or bullets. ' +
     'Use 1–3 natural, relevant emojis to make answers friendly and interactive, but never spam emojis or replace important words with emojis. ' +
@@ -5002,7 +5319,9 @@ async function sendMessage(text){
   $input.value = ''; autoGrow(); if(typeof updateSendVisual === 'function') updateSendVisual();
   if($hero) { $hero.style.display = 'none'; syncEmptyState(); }
 
-  if(looksLikeImageRequest(text)){
+  /* With a photo attached the turn is about THAT photo. "create an image like
+     this one" used to drop the attachment and generate something unrelated. */
+  if(looksLikeImageRequest(text) && !pendingImage){
     addMessage('user', esc(text));
     if($hero) $hero.style.display = 'none';
     await generateImage(text);
@@ -5084,7 +5403,7 @@ async function sendMessage(text){
   /* Pixel Pro / Pixel Lite use their own system prompt instead of
      systemPrompt(), so location context must be appended here too or it
      would only reach Pixel Moderate. */
-  if(tierConf.system) baseSystem += locationContext();
+  if(tierConf.system) baseSystem += ' ' + IDENTITY_LINE + locationContext();
   var messages = [{ role:'system', content: baseSystem }]
     .concat(state.history.slice(-10))
     .concat([{ role:'user', content: text }]);
@@ -5199,9 +5518,22 @@ async function sendMessage(text){
     }
 
     /* Stream the answer in live. The bubble is created first and filled as
-       tokens arrive, so words appear immediately instead of after the wait. */
+       tokens arrive, so words appear immediately instead of after the wait.
+
+       A photo turn skips all of this. Its answer already came back from the
+       vision model above, and streaming it again would send the image to the
+       text-only streaming model -- which is exactly why attached photos used
+       to come back as "I can't see the image": the real answer was computed
+       and then overwritten by a model that never received the picture. */
     var bubbleEl = null, elapsedMs = 0, lastPaint = 0;
-    reply = await streamAI(streamMessages, currentAbort ? currentAbort.signal : null, streamLive, function(piece, full){
+    if(imgForThisTurn){
+      elapsedMs = Date.now() - thinkingStartedAt;
+      removeThinking();
+      bubbleEl = addMessage('bot', '');
+      haptic('start');
+      typeInto(bubbleEl, reply, function(){ scrollDown(); });
+    }
+    if(!imgForThisTurn) reply = await streamAI(streamMessages, currentAbort ? currentAbort.signal : null, streamLive, function(piece, full){
       if(!bubbleEl){
         elapsedMs = Date.now() - thinkingStartedAt;
         removeThinking();
@@ -5218,7 +5550,7 @@ async function sendMessage(text){
     if(!elapsedMs) elapsedMs = Date.now() - thinkingStartedAt;
     removeThinking();
     if(!bubbleEl) bubbleEl = addMessage('bot', '', { sources: sources, searched: needsLive });
-    bubbleEl.innerHTML = md(reply);
+    if(!imgForThisTurn) bubbleEl.innerHTML = md(reply);
     scrollDown();
     haptic('done');               /* answer over — two beats */
     (function(){

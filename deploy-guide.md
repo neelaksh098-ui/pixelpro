@@ -252,3 +252,42 @@ the router was finished and never used to tune it): 417 decided locally with
 **0 wrong decisions**. On the sealed set's first run, before any change was made
 in response to it, it was 42/43 correct — the single miss was "how many days
 until the election", which has since been fixed.
+
+
+## Photos (the "+" -> Add photo option)
+
+No new environment variable. Photos go to Groq's vision model
+(`meta-llama/llama-4-maverick-17b-128e-instruct`), with
+`meta-llama/llama-4-scout-17b-16e-instruct` as an automatic fallback when the
+first is rate limited, erroring or retired — previously a photo turn had no
+second chance at all.
+
+Images are resized client-side to a 1568px long edge and re-encoded as JPEG
+under a 3.2 MB budget before they ever leave the phone, which is what keeps a
+100 MB camera photo inside the request limits.
+
+## Who built Pixel Pro
+
+The app answers **Mr. Neelaksh Naithani** to any "who made / created / built /
+developed / owns you" question. That instruction lives in one constant
+(`IDENTITY_LINE`) that is appended to every system prompt — the default one,
+each of the three model tiers, and the separate vision prompt on the server —
+because a line living only in the default prompt was absent on most paths.
+
+## Landing page
+
+The signed-out landing page has a drifting cloud layer behind the blue wash and
+a headline that types out a rotating set of lines ("Precise AI. One assistant.",
+"Ask anything. Get real answers.", …), holds each one, then clears it. Two
+different haptics fire: a soft confirm when a line lands, a lighter tick when it
+clears. Both stay silent until the page has been touched, because no platform
+allows vibration before the first interaction.
+
+Everything is transform/opacity only and the headline box is height-locked, so
+none of it can move the layout.
+
+## Long press on a chat (phones)
+
+A pointer has no hover, so the pin/share/delete strip that appears beside a chat
+on a laptop is unreachable on a phone. Holding a chat for ~0.5s opens an action
+sheet with Pin, Rename, Share and Delete. Desktop behaviour is unchanged.

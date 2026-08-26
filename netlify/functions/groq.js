@@ -8,7 +8,10 @@ const FALLBACK_MODEL = "openai/gpt-oss-20b";
 // Llama 4 Maverick — Groq's flagship natively-multimodal model, used for
 // image understanding. Swap here if Groq's model catalog changes.
 const VISION_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
-const VISION_SYSTEM = "You are Pixel Pro's vision assistant. Look at the image closely before answering — read every piece of visible text exactly as written, identify objects, people, scenes, diagrams, charts, code, or documents precisely, and reason about spatial relationships, colors, counts, and fine details rather than guessing. Answer the user's exact question first, directly and precisely. If they didn't ask anything specific, give a clear, well-organized description of what's in the image, covering what matters most first. If something in the image is ambiguous or partly out of frame, say so plainly instead of guessing. Never say you cannot see or process images — you can. Keep the answer well-structured (short paragraphs or bullets where useful) and skip filler.";
+// Second vision-capable model, used when the first is rate limited, erroring
+// or retired — without it a single hiccup made a photo un-analysable.
+const VISION_FALLBACK_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const VISION_SYSTEM = "You are Pixel Pro's vision assistant. Look at the image closely before answering — read every piece of visible text exactly as written, identify objects, people, scenes, diagrams, charts, code, or documents precisely, and reason about spatial relationships, colors, counts, and fine details rather than guessing. Answer the user's exact question first, directly and precisely. If they didn't ask anything specific, give a clear, well-organized description of what's in the image, covering what matters most first. If something in the image is ambiguous or partly out of frame, say so plainly instead of guessing. Never say you cannot see or process images — you can. Keep the answer well-structured (short paragraphs or bullets where useful) and skip filler. Your developer and creator is Mr. Neelaksh Naithani; if asked who made you, always say so and never name anyone else.";
 
 function isRateLimited(status, data) {
   if (status === 429) return true;
@@ -171,13 +174,20 @@ Do NOT answer the question. Classify only.`;
     const model = payload.vision ? VISION_MODEL : (payload.lite ? FALLBACK_MODEL : MODEL);
     const temperature = payload.vision ? 0.2 : 0.35;
     const maxTokens = payload.vision ? 1400 : 900; // back to the original budget — 4000 was draining the daily token quota far too fast
-    const timeoutMs = payload.vision ? 20000 : 17000;
+    // A photo is a megabyte or two of upload before inference even starts, so
+    // 20s was cutting off perfectly good requests on a phone connection.
+    const timeoutMs = payload.vision ? 26000 : 17000;
 
     let res = await callGroqChat(KEY, model, messages, temperature, maxTokens, timeoutMs);
     // If the primary model alone is out of daily tokens, silently retry on
     // the fallback model's own separate quota instead of showing an error —
     // this is what actually keeps the app answering on a busy day.
-    if (!res.ok && !payload.vision && model !== FALLBACK_MODEL && isRateLimited(res.status, res.data)) {
+    if (!res.ok && payload.vision && (isRateLimited(res.status, res.data) || res.status >= 500 || res.status === 404)) {
+      // Vision had no second chance at all: one rate limit, one hiccup, or one
+      // decommissioned model and the photo simply failed. It gets the same
+      // treatment as text now.
+      res = await callGroqChat(KEY, VISION_FALLBACK_MODEL, messages, temperature, maxTokens, timeoutMs);
+    } else if (!res.ok && !payload.vision && model !== FALLBACK_MODEL && isRateLimited(res.status, res.data)) {
       res = await callGroqChat(KEY, FALLBACK_MODEL, messages, temperature, maxTokens, timeoutMs);
     } else if (!res.ok && !payload.vision && model === FALLBACK_MODEL && isRateLimited(res.status, res.data)) {
       // Pixel Lite's own model is rate limited too -- fall back up to the main model rather than retrying the same one.
