@@ -31,19 +31,24 @@ export default async (req) => {
     return new Response(JSON.stringify({ error: "No messages." }), { status: 400, headers: { ...CORS, "Content-Type": "application/json" } });
   }
 
+  // A deep-research report is synthesised from dozens of sources at once, so
+  // it needs a far bigger evidence window and far more room to write than an
+  // ordinary grounded answer.
+  const isReport = payload.report === true;
+
   const liveContext = String(payload.liveContext || "").trim();
   if (liveContext) {
     messages.unshift({
       role: "system",
       content:
         "LIVE WEB CONTEXT — retrieved moments ago. Ground your answer in this evidence. Prefer the most recent and most relevant sources, state figures and dates exactly as reported, and say plainly when the sources disagree or do not cover something. Never invent details that are not supported here.\n\n" +
-        liveContext.slice(0, 14000),
+        liveContext.slice(0, isReport ? 90000 : 14000),
     });
   }
 
   const model = payload.lite ? FALLBACK_MODEL : MODEL;
-  const maxTokens = payload.deep ? 2600 : 1500;
-  const temperature = payload.deep ? 0.3 : 0.35;
+  const maxTokens = isReport ? 8000 : (payload.deep ? 2600 : 1500);
+  const temperature = isReport ? 0.25 : (payload.deep ? 0.3 : 0.35);
 
   async function openStream(useModel) {
     return fetch("https://api.groq.com/openai/v1/chat/completions", {

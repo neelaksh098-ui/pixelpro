@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://accounts.google.com" />
 <link rel="preconnect" href="https://apis.google.com" />
 <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -334,7 +334,7 @@ body.locked{overflow:hidden;position:fixed;width:100%;left:0}
   .bubble{font-size:14.5px;padding:11px 14px}
   .composer textarea{font-size:16px;line-height:1.5}
   .composer{gap:6px;padding:8px 8px 8px 16px}
-  .hero h2{font-size:clamp(22px,6vw,30px)}
+  .hero h2{font-size:clamp(30px,8.4vw,40px)}
   .hero p{font-size:13.5px}
   .chips{gap:8px}
   .chip{padding:8px 12px;font-size:12.5px}
@@ -448,7 +448,13 @@ main{flex:1;overflow-y:auto;scroll-behavior:smooth}
 .wrap{max-width:768px;margin:0 auto;padding:28px clamp(14px,4vw,24px) 24px;display:flex;flex-direction:column;gap:26px}
 
 .hero{text-align:center;padding:34px 10px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:calc(100dvh - 260px)}
-.hero h2{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;color:var(--ink);font-size:clamp(25px,3.4vw,40px);letter-spacing:-.025em;line-height:1.2;text-wrap:balance;max-width:none;white-space:nowrap}
+/* The hero is the one piece of type on the page that gets to be a display
+   face: a high-contrast editorial serif at a large optical size, which is
+   what separates a premium product from a default one. Instrument Serif is
+   the display face; Inter still does all the working text. */
+.hero h2{font-family:'Instrument Serif','Bricolage Grotesque',Georgia,'Times New Roman',serif;font-weight:400;color:var(--ink);font-size:clamp(34px,4.6vw,54px);letter-spacing:-.012em;line-height:1.08;text-wrap:balance;max-width:none;white-space:nowrap;font-feature-settings:"liga" 1,"kern" 1;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+/* one word set in the italic — the small editorial touch that reads expensive */
+.hero h2 i{font-style:italic;font-weight:400}
 @media(max-width:520px){.hero h2{white-space:normal;max-width:15ch}}
 .hero h2 .rgb-text{color:var(--ink)}
 @keyframes rgbText{0%{background-position:0% 50%}100%{background-position:300% 50%}}
@@ -470,7 +476,11 @@ main{flex:1;overflow-y:auto;scroll-behavior:smooth}
 .msg.user .bubble{background:var(--active);color:var(--ink);box-shadow:none;border:none}
 .bubble p{margin:0 0 14px}
 .bubble p:last-child{margin:0}
-.bubble h3,.bubble h4{font-family:'Bricolage Grotesque',sans-serif;margin:14px 0 6px;letter-spacing:-.01em}
+.bubble h3,.bubble h4{font-family:'Bricolage Grotesque',sans-serif;margin:18px 0 7px;letter-spacing:-.012em;line-height:1.3}
+/* browsers default h4 to body size, which leaves the section headings of a
+   long answer indistinguishable from the paragraphs under them */
+.bubble h3{font-size:1.18em;font-weight:700}
+.bubble h4{font-size:1.07em;font-weight:700}
 .bubble h3:first-child,.bubble h4:first-child{margin-top:2px}
 .bubble ul,.bubble ol{margin:6px 0 14px 22px;display:flex;flex-direction:column;gap:7px}
 .bubble a{color:var(--accent);font-weight:600;text-decoration:none;border-bottom:1px solid transparent}
@@ -875,7 +885,7 @@ body.empty-state .composer-wrap{transform:translate3d(0,-15vh,0)}
   .sidebar{width:min(300px,86vw)}
   .landing-title{font-size:clamp(22px,7vw,28px)}
   .landing-sub{font-size:14.5px}
-  .hero h2{font-size:clamp(22px,7vw,28px)}
+  .hero h2{font-size:clamp(29px,9vw,38px)}
   .login-card{padding:30px 20px 22px}
   .login-card h3{font-size:23px}
   .login-sub{font-size:14.5px;margin-bottom:24px}
@@ -914,7 +924,7 @@ body.empty-state .composer-wrap{transform:translate3d(0,-15vh,0)}
 /* short landscape phones: never let the composer get pushed off-screen */
 @media (max-height:520px){
   body.empty-state .hero{padding-bottom:2px}
-  .hero h2{font-size:22px}
+  .hero h2{font-size:30px}
   .landing-hero{padding-bottom:40px}
   .landing-sub{margin-bottom:20px}
 }
@@ -1077,6 +1087,32 @@ body.empty-state .suggests{display:flex}
   .welcome,.boot,.page,.gate,.agent-editor{padding-left:0}
   #menuBtn{display:none}
 }
+
+/* ================================================================
+   DESKTOP SIDEBAR — docked, not a drawer.
+   On a phone the sidebar is an overlay you dismiss. On a laptop that
+   is wrong: ChatGPT docks the panel and the conversation moves over to
+   make room, and collapsing it leaves the icon rail behind. Same here
+   above 900px -- the panel is part of the layout, there is no scrim,
+   the page never locks, and the open/closed choice is remembered.
+   Below 900px nothing changes: it is still the drawer it was.
+   ================================================================ */
+@media (min-width:900px){
+  body{transition:padding-left .26s var(--ease,cubic-bezier(.22,.8,.3,1))}
+  body.sb-docked{padding-left:300px}
+  body.sb-docked .rail{display:none}
+  body.sb-docked .sidebar{transform:none}
+  /* the scrim belongs to the drawer, never to the docked panel */
+  body.sb-docked .overlay{display:none}
+  .sb-collapse{display:grid}
+}
+@media (prefers-reduced-motion:reduce){
+  body{transition:none}
+}
+/* the collapse control lives in the sidebar head, next to the brand */
+.sb-collapse{display:none}
+.sb-head .icon-btn{transition:background .16s var(--ease,ease),transform .16s var(--ease,ease)}
+.sb-head .icon-btn:active{transform:scale(.92)}
 /* Full-screen overlays are positioned against the viewport, so they must NOT
    be offset for the rail -- doing that pushed the landing page off-screen. */
 .welcome,.boot,.page,.gate,.agent-editor{left:0;right:0;width:auto}
@@ -1194,6 +1230,23 @@ body.empty-state .suggests{display:flex}
   .tier-opt-name{font-size:14.5px}
   .tier-opt-desc{font-size:12px}
 }
+/* The "+" menu sits just above the composer, so a model list that pops out
+   of it as its own absolutely-positioned layer has nowhere to go: on a phone
+   it ran off the bottom of the screen and the modes could not be reached at
+   all. The list is laid out inline instead -- inside the menu's own scroll
+   area, at every screen size -- where nothing can escape the viewport. The
+   menu's height is then clamped in JS to the exact space above the composer
+   (see sizePlusMenu), which is the only number that is always right. */
+.plus-menu{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.plus-menu .tier-menu{
+  position:static;display:none;width:auto;min-width:0;max-width:none;
+  margin:2px 0 0;padding:2px 0 0;background:none;border:none;box-shadow:none;
+  animation:none;
+}
+.plus-menu .tier-menu.show{display:flex}
+.plus-menu .tier-pill[aria-expanded="true"]{background:var(--hover)}
+.plus-menu .tier-pill[aria-expanded="true"] svg{transform:rotate(180deg)}
+.plus-menu .tier-pill svg{transition:transform .18s var(--ease,ease)}
 
 /* ================================================================
    ANIMATION QUALITY — one easing curve, GPU-friendly, no layout shift
@@ -1299,12 +1352,14 @@ body.empty-state .suggests{display:flex}
 .pill .send svg{transition:transform .22s var(--spring)}
 .pill .send:hover:not(:disabled) svg{transform:translateX(1px) translateY(-1px)}
 
-/* ---- 2. Composer: a focus ring you can feel ---- */
+/* ---- 2. Composer: focus is a quiet lift, never a coloured ring ---- */
 .pill{transition:border-color .2s var(--glide),box-shadow .28s var(--glide),transform .2s var(--glide)}
 .pill:focus-within{
-  border-color:color-mix(in srgb,var(--accent) 45%,var(--line-strong));
-  box-shadow:0 0 0 3px var(--accent-glow),0 6px 24px -8px rgba(15,30,70,.2),0 1px 3px rgba(0,0,0,.06);
+  border-color:var(--line-strong);
+  box-shadow:0 6px 24px -8px rgba(15,30,70,.16),0 1px 3px rgba(0,0,0,.05);
 }
+/* browsers also draw their own focus ring on the textarea itself */
+.pill textarea:focus,.pill textarea:focus-visible{outline:none;box-shadow:none}
 
 /* ---- 3. Feedback row: press pop + a settled selected state ---- */
 .feedback button{transition:background .16s var(--glide),color .16s var(--glide),transform .2s var(--spring)}
@@ -1369,6 +1424,109 @@ body.empty-state .suggests{display:flex}
   .feedback .regen-act:active svg{transform:none}
 }
 
+
+/* ================================================================
+   DEEP SEARCH — the live research panel.
+   It replaces the ordinary "Thinking…" line for the whole run, so it
+   has to stay interesting for two or three minutes without ever being
+   noisy: one breathing orb, a bar that only moves on real progress,
+   and a short rolling list of what is actually happening.
+   ================================================================ */
+.deepres{
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 4%,var(--card)),var(--card) 46%);
+  padding:14px 15px 12px;
+  max-width:520px;
+  box-shadow:0 2px 14px -6px rgba(15,30,70,.14);
+  animation:msgIn .3s var(--ease,ease) both;
+}
+.deepres-head{display:flex;align-items:center;gap:9px;margin-bottom:11px}
+.deepres-title{font-weight:650;font-size:14.5px;color:var(--ink);letter-spacing:-.01em}
+.deepres-time{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+/* the orb: a slow double pulse, like something is genuinely working */
+.deepres-orb{
+  position:relative;width:16px;height:16px;flex:none;border-radius:50%;
+  background:radial-gradient(circle at 34% 32%,color-mix(in srgb,#fff 55%,var(--accent)),var(--accent) 62%,var(--accent-deep));
+  box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent);
+  animation:deepOrb 2.4s cubic-bezier(.4,0,.3,1) infinite;
+}
+@keyframes deepOrb{
+  0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent);transform:scale(1)}
+  35%{box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 0%,transparent);transform:scale(1.1)}
+  70%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 0%,transparent);transform:scale(1)}
+  100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 0%,transparent);transform:scale(1)}
+}
+.deepres-bar{height:3px;border-radius:99px;background:color-mix(in srgb,var(--ink) 8%,transparent);overflow:hidden;margin-bottom:12px}
+.deepres-bar i{
+  display:block;height:100%;width:2%;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 60%,var(--gold)));
+  transition:width .5s cubic-bezier(.22,.8,.3,1);
+}
+.deepres-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.deepres-steps li{
+  display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.42;color:var(--muted);
+  animation:deepStepIn .28s var(--ease,ease) both;
+}
+@keyframes deepStepIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.deepres-txt{min-width:0;overflow-wrap:anywhere}
+.deepres-ico{
+  flex:none;width:14px;height:14px;margin-top:2px;border-radius:50%;
+  border:1.6px solid color-mix(in srgb,var(--muted) 45%,transparent);position:relative;
+}
+/* the in-flight step: a ring that spins, and text that shimmers */
+.deepres-steps li.active .deepres-ico{
+  border-color:color-mix(in srgb,var(--accent) 28%,transparent);
+  border-top-color:var(--accent);
+  animation:deepSpin .8s linear infinite;
+}
+@keyframes deepSpin{to{transform:rotate(360deg)}}
+.deepres-steps li.active .deepres-txt{
+  color:var(--ink);font-weight:550;
+  background:linear-gradient(90deg,var(--ink) 0%,var(--ink) 36%,color-mix(in srgb,var(--accent) 80%,var(--ink)) 50%,var(--ink) 64%,var(--ink) 100%);
+  background-size:220% 100%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  animation:deepShimmer 2.2s ease-in-out infinite;
+}
+@keyframes deepShimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}
+/* a finished step ticks and fades back */
+.deepres-steps li.done .deepres-ico{
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  background:color-mix(in srgb,var(--accent) 14%,transparent);
+  animation:deepTick .3s cubic-bezier(.34,1.4,.5,1);
+}
+.deepres-steps li.done .deepres-ico::after{
+  content:"";position:absolute;left:3.4px;top:1px;width:3.4px;height:6.6px;
+  border:solid var(--accent);border-width:0 1.7px 1.7px 0;transform:rotate(42deg);
+}
+@keyframes deepTick{0%{transform:scale(1)}45%{transform:scale(1.3)}100%{transform:scale(1)}}
+.deepres-steps li.done{opacity:.62}
+.deepres-foot{margin-top:11px;padding-top:9px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.deepres-foot:empty{display:none}
+/* the receipt under a finished report */
+.deepres-done{
+  margin-top:12px;font-size:12.5px;color:var(--muted);
+  display:inline-flex;align-items:center;gap:7px;
+}
+.deepres-done::before{
+  content:"";width:6px;height:6px;border-radius:50%;flex:none;
+  background:linear-gradient(135deg,var(--accent),var(--gold));
+}
+/* the "+" menu row reads as a mode, not a plain action, once armed */
+.plus-item#deepToggle.on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+@media (max-width:520px){
+  .deepres{padding:12px 12px 10px;border-radius:14px}
+  .deepres-steps li{font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){
+  .deepres,.deepres-steps li{animation:none}
+  .deepres-orb{animation:none}
+  .deepres-steps li.active .deepres-ico{animation:none;border-top-color:var(--accent)}
+  .deepres-steps li.active .deepres-txt{animation:none;-webkit-text-fill-color:currentColor;color:var(--ink);background:none}
+  .deepres-steps li.done .deepres-ico{animation:none}
+  .deepres-bar i{transition:none}
+}
+
 </style>
 </head>
 <body>
@@ -1403,7 +1561,7 @@ body.empty-state .suggests{display:flex}
 <main id="main">
   <div class="wrap" id="chat" role="log" aria-live="polite">
     <div class="hero" id="hero">
-      <h2>What can I help with?</h2>
+      <h2>What can I <i>help</i> with?</h2>
       <div class="chips" id="chips" style="display:none"></div>
     </div>
   </div>
@@ -1445,6 +1603,11 @@ body.empty-state .suggests{display:flex}
       <button class="plus-item" id="imageBtn" type="button">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
         <span>Create an image</span>
+      </button>
+      <button class="plus-item" id="deepToggle" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+        <span>Deep search</span>
+        <span class="plus-state" id="deepState"></span>
       </button>
       <button class="plus-item" id="webToggle" type="button" aria-pressed="false">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>
@@ -2188,8 +2351,69 @@ document.getElementById('acctLogoutBtn').addEventListener('click', function(){
 });
 var $sbSearchInput = document.getElementById('sbSearchInput');
 if($sbSearchInput) $sbSearchInput.addEventListener('input', renderSidebar);
-function openSidebar(){ document.getElementById('sidebar').classList.add('open'); document.getElementById('overlay').classList.add('show'); renderSidebar(); lockBody(); }
-function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('show'); unlockBody(); }
+/* Above this width the sidebar is docked into the layout instead of
+   floating over it as a drawer -- see the DESKTOP SIDEBAR css block. */
+function sidebarIsDocked(){
+  try{ return window.matchMedia('(min-width:900px)').matches; }catch(e){ return false; }
+}
+function setDockedSidebar(open){
+  document.body.classList.toggle('sb-docked', !!open);
+  try{ store('pp-sb-docked', open ? '1' : '0'); }catch(e){}
+}
+function openSidebar(){
+  renderSidebar();
+  if(sidebarIsDocked()){
+    /* docked: no scrim, no body lock -- the page simply makes room */
+    document.getElementById('sidebar').classList.add('open');
+    setDockedSidebar(true);
+    return;
+  }
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+  lockBody();
+}
+function closeSidebar(){
+  if(sidebarIsDocked()){
+    setDockedSidebar(false);
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('show');
+    return;
+  }
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+  unlockBody();
+}
+function toggleSidebar(){
+  var open = sidebarIsDocked()
+    ? document.body.classList.contains('sb-docked')
+    : document.getElementById('sidebar').classList.contains('open');
+  if(open) closeSidebar(); else openSidebar();
+}
+/* Restore the remembered desktop state, and keep the two modes from
+   leaking into each other when the window crosses the breakpoint. */
+function syncSidebarMode(){
+  var docked = sidebarIsDocked();
+  if(docked){
+    /* a drawer left open on a narrow window must not keep the page locked */
+    document.getElementById('overlay').classList.remove('show');
+    unlockBody();
+    var want = false;
+    try{ want = store('pp-sb-docked') === '1'; }catch(e){}
+    document.body.classList.toggle('sb-docked', want);
+    document.getElementById('sidebar').classList.toggle('open', want);
+    if(want) renderSidebar();
+  } else {
+    document.body.classList.remove('sb-docked');
+    if(!document.getElementById('sidebar').classList.contains('open')){
+      document.getElementById('overlay').classList.remove('show');
+    }
+  }
+}
+try{
+  var sbMQ = window.matchMedia('(min-width:900px)');
+  if(sbMQ.addEventListener) sbMQ.addEventListener('change', syncSidebarMode);
+  else if(sbMQ.addListener) sbMQ.addListener(syncSidebarMode);
+}catch(e){}
 /* ---------- welcome / startup page ---------- */
 function hideWelcome(){
   var w = document.getElementById('welcome');
@@ -2308,8 +2532,8 @@ function openChat(id){
   if(state.history.length > 16) state.history = state.history.slice(-16);
   closeSidebar(); renderSidebar();
 }
-document.getElementById('menuBtn').addEventListener('click', openSidebar);
-document.getElementById('sbClose').addEventListener('click', closeSidebar);
+document.getElementById('menuBtn').addEventListener('click', function(){ haptic('light'); openSidebar(); });
+document.getElementById('sbClose').addEventListener('click', function(){ haptic('light'); closeSidebar(); });
 document.getElementById('overlay').addEventListener('click', closeSidebar);
 document.getElementById('sbNew').addEventListener('click', function(){
   haptic('tap');
@@ -2411,7 +2635,7 @@ var GREETS = ['how are you today?','great to see you!','what shall we explore?',
 function personalizeHero(){
   var h = document.querySelector('#hero h2');
   if(!h) return;
-  h.textContent = 'What can I help with?';
+  h.innerHTML = 'What can I <i>help</i> with?';
 }
 
 /* ---------- stop / abort ---------- */
@@ -2735,6 +2959,16 @@ window.addEventListener('resize', syncTierPill);
 function openTierMenu(){
   document.getElementById('tierMenu').classList.add('show');
   document.getElementById('tierPillBtn').setAttribute('aria-expanded', 'true');
+  /* the list expands inline, so the menu just grew -- re-clamp it and bring
+     the models into view rather than leaving them below the fold */
+  if(typeof sizePlusMenu === 'function') sizePlusMenu();
+  var menu = document.getElementById('plusMenu');
+  if(menu && menu.classList.contains('show')){
+    requestAnimationFrame(function(){
+      try{ menu.scrollTo({ top: menu.scrollHeight, behavior: 'smooth' }); }
+      catch(e){ menu.scrollTop = menu.scrollHeight; }
+    });
+  }
 }
 function closeTierMenu(){
   document.getElementById('tierMenu').classList.remove('show');
@@ -3297,6 +3531,7 @@ async function doSignIn(hint){
     }
     var res = await A.signInWithPopup(A.auth, A.provider);
     state.user = res.user;
+    haptic('success');
     updateSigninUI();
     closeGate();
     hideWelcome();
@@ -3403,38 +3638,142 @@ refreshQuotaBadge();
 function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){ return null; } }
 
 /* ================================================================
-   HAPTICS — short, tasteful vibration feedback, the way ChatGPT and
-   other premium apps confirm actions. Supported on Android (including
-   the wrapped APK); iOS Safari has no Vibration API, so this is a
-   no-op there rather than an error. Fully user-controllable.
+   HAPTICS — short vibration feedback, the way ChatGPT and other
+   premium apps confirm actions.
+
+   Two engines, because the two platforms expose completely different
+   things:
+
+   * Android (Chrome, and the wrapped APK, which runs on Chrome)
+     has the Vibration API. Note the durations below: anything under
+     roughly 20ms is rounded away to nothing by most Android vibration
+     motors, so a "tasteful" 8ms pulse is not subtle -- it is silent.
+     Everything here is at or above the threshold where a hand actually
+     feels it.
+
+   * iOS Safari has no Vibration API at all and never has. What it does
+     have, since Safari 17.4, is real Taptic Engine feedback when a
+     <input type="checkbox" switch> is toggled. Flipping a hidden one
+     is the only way to produce a genuine haptic on an iPhone from the
+     web, so that is what runs there.
+
+   Both engines need user activation before the platform will let them
+   fire, so the first real tap primes them.
    ================================================================ */
 var HAPTIC_PATTERNS = {
-  tap:      12,              /* generic press: buttons, toggles, menu items */
-  light:    8,               /* very subtle: opening menus, switching tabs   */
-  select:   [10, 28, 10],    /* a choice was made: model picked, theme set   */
-  send:     14,              /* message sent                                 */
-  start:    10,              /* the answer has begun arriving                */
-  done:     [16, 46, 22],    /* answer finished — the satisfying one         */
-  success:  [12, 34, 12],    /* image ready, location found, email sent      */
-  error:    [30, 70, 30],    /* something went wrong                         */
-  warn:     22               /* blocked action, e.g. quota reached           */
+  tap:      22,              /* generic press: buttons, toggles, menu items */
+  light:    18,              /* lighter: opening menus, switching tabs      */
+  select:   [18, 40, 26],    /* a choice was made: model picked, theme set  */
+  send:     28,              /* message sent                                */
+  start:    20,              /* the answer has begun arriving               */
+  done:     [26, 60, 40],    /* answer finished -- the satisfying one       */
+  success:  [22, 55, 30],    /* image ready, location found, email sent     */
+  error:    [45, 90, 45],    /* something went wrong                        */
+  warn:     40               /* blocked action, e.g. quota reached          */
 };
+/* how many switch-flips stand in for each pattern on iOS */
+var HAPTIC_IOS_TAPS = { tap:1, light:1, select:2, send:1, start:1, done:2, success:2, error:3, warn:2 };
+
 var hapticsOn = true;
 try{ hapticsOn = store('pp-haptics') !== '0'; }catch(e){}
-function hapticsSupported(){
+
+var hapticPrimed = false;
+var iosHapticEl = null;
+
+function isIOS(){
+  try{
+    var ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }catch(e){ return false; }
+}
+function vibrationApiSupported(){
   return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+}
+/* Safari 17.4+ only: a checkbox that supports the `switch` attribute. */
+function iosHapticSupported(){
+  if(!isIOS()) return false;
+  try{
+    var probe = document.createElement('input');
+    probe.type = 'checkbox';
+    return 'switch' in probe;
+  }catch(e){ return false; }
+}
+function hapticsSupported(){ return vibrationApiSupported() || iosHapticSupported(); }
+function hapticEngine(){
+  if(vibrationApiSupported()) return 'vibration';
+  if(iosHapticSupported()) return 'ios-switch';
+  return 'none';
+}
+function ensureIosHapticEl(){
+  if(iosHapticEl) return iosHapticEl;
+  try{
+    var el = document.createElement('input');
+    el.type = 'checkbox';
+    el.setAttribute('switch', '');
+    el.setAttribute('aria-hidden', 'true');
+    el.tabIndex = -1;
+    /* Must stay in the layout and be focusable-adjacent for Safari to fire the
+       Taptic Engine -- display:none kills the haptic -- so it is hidden the
+       way a visually-hidden control is. */
+    el.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(el);
+    iosHapticEl = el;
+  }catch(e){}
+  return iosHapticEl;
 }
 function setHaptics(on){
   hapticsOn = !!on;
   try{ store('pp-haptics', hapticsOn ? '1' : '0'); }catch(e){}
 }
-function haptic(kind){
-  if(!hapticsOn || !hapticsSupported()) return;
+function hapticsMuted(){
   /* Never buzz for someone who has asked the OS to reduce motion. */
-  try{ if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
+  try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  catch(e){ return false; }
+}
+function haptic(kind){
+  if(!hapticsOn || hapticsMuted()) return;
   var pattern = HAPTIC_PATTERNS[kind];
-  if(pattern === undefined) pattern = HAPTIC_PATTERNS.tap;
-  try{ navigator.vibrate(pattern); }catch(e){}
+  if(pattern === undefined){ pattern = HAPTIC_PATTERNS.tap; kind = 'tap'; }
+  if(vibrationApiSupported()){
+    try{ navigator.vibrate(pattern); }catch(e){}
+    return;
+  }
+  if(iosHapticSupported()){
+    var el = ensureIosHapticEl();
+    if(!el) return;
+    var taps = HAPTIC_IOS_TAPS[kind] || 1;
+    for(var i = 0; i < taps; i++){
+      (function(n){
+        setTimeout(function(){ try{ el.checked = !el.checked; el.dispatchEvent(new Event('change')); }catch(e){} }, n * 70);
+      })(i);
+    }
+  }
+}
+/* Both platforms refuse to produce feedback until the page has been
+   interacted with, so the very first pointer/key event arms the engine. */
+function primeHaptics(){
+  if(hapticPrimed) return;
+  hapticPrimed = true;
+  if(iosHapticSupported()) ensureIosHapticEl();
+  /* A zero-length vibrate is inaudible but establishes activation on Android. */
+  if(vibrationApiSupported()){ try{ navigator.vibrate(0); }catch(e){} }
+}
+['pointerdown','touchstart','keydown','click'].forEach(function(ev){
+  document.addEventListener(ev, primeHaptics, { once:true, passive:true, capture:true });
+});
+/* Plain-English answer to "why is nothing vibrating?", shown in Settings. */
+function hapticsDiagnosis(){
+  if(hapticsMuted()) return 'Off — your device is set to reduce motion';
+  var engine = hapticEngine();
+  if(engine === 'none'){
+    return isIOS()
+      ? 'Not available — needs iOS 17.4 or newer'
+      : 'Not supported by this browser';
+  }
+  if(!hapticsOn) return 'Off';
+  if(engine === 'ios-switch') return 'On — iPhone Taptic Engine';
+  return 'On — check the phone is not on silent, and that system vibration is enabled';
 }
 
 /* ---------- elements ---------- */
@@ -3561,12 +3900,16 @@ function systemPrompt(){
 
 /* Streams the answer token-by-token into `onDelta`. Falls back to the classic
    buffered endpoint if streaming is unavailable, so answers never break. */
-async function streamAI(messages, signal, liveContext, onDelta){
+async function streamAI(messages, signal, liveContext, onDelta, opts){
+  opts = opts || {};
   var body = JSON.stringify({
     messages: messages,
     liveContext: liveContext || '',
-    lite: (typeof currentTier !== 'undefined' && currentTier === 'lite'),
-    deep: !!thinkOn
+    lite: (typeof currentTier !== 'undefined' && currentTier === 'lite') && !opts.report,
+    deep: !!thinkOn || !!opts.report,
+    /* a deep-research report gets a much larger evidence window and far more
+       room to write than an ordinary grounded answer */
+    report: !!opts.report
   });
   var r;
   try{
@@ -3946,6 +4289,358 @@ function isDynamicQuery(q){ return !isNormalLocalRequest(q); }
 function searchLabel(q){ return isNormalLocalRequest(q) ? 'Thinking…' : 'Searching the live web…'; }
 
 /* ---------- send flow ---------- */
+
+/* ================================================================
+   DEEP SEARCH — real multi-round research, not one search dressed up.
+
+   An ordinary live answer is: one query -> one search -> one reply. That
+   is right for "who won last night", and useless for "compare these four
+   things and tell me what actually matters".
+
+   Deep search instead runs a research loop in the browser, which is the
+   only place it can run: each round is its own set of requests, so it is
+   never bounded by a serverless function's timeout the way a single
+   server-side job would be.
+
+     1. plan      - the model writes 8 distinct lines of enquiry
+     2. search    - those run against the live web, three at a time
+     3. reflect   - the model reads what came back and names the gaps
+     4. follow up - new queries aimed only at those gaps
+     5. repeat    - while there is still budget and still something to ask
+     6. write     - one long report grounded in everything gathered
+
+   Rounds continue until roughly two minutes of genuine searching have
+   been done, or until the model runs out of angles worth chasing -- the
+   time is spent gathering, never waiting. Stop cancels the whole loop.
+   ================================================================ */
+var DEEP_MIN_RESEARCH_MS = 100000;  /* keep gathering for at least ~1m40 */
+var DEEP_MAX_RESEARCH_MS = 165000;  /* hard stop on gathering at ~2m45  */
+var DEEP_MAX_ROUNDS = 4;            /* the usual shape of a run          */
+var DEEP_HARD_ROUNDS = 7;           /* ceiling while still under the floor */
+var DEEP_CONCURRENCY = 3;           /* parallel searches per batch       */
+var DEEP_MAX_SOURCES = 44;
+
+var deepOn = false;
+try{ deepOn = store('pp-deep') === '1'; }catch(e){}
+
+function syncDeep(){
+  var btn = document.getElementById('deepToggle');
+  var st = document.getElementById('deepState');
+  if(btn){ btn.classList.toggle('on', deepOn); btn.setAttribute('aria-pressed', deepOn ? 'true' : 'false'); }
+  if(st) st.textContent = deepOn ? 'On' : '';
+  document.body.classList.toggle('deep-on', deepOn);
+  if($input) $input.placeholder = deepOn ? 'Ask something worth researching' : (activeAgent ? ('Message ' + activeAgent.name) : 'Ask anything');
+  try{ store('pp-deep', deepOn ? '1' : '0'); }catch(e){}
+}
+
+/* ---------- the live progress panel ---------- */
+function deepPanel(bubble){
+  var panel = {
+    root: null, stepsEl: null, timeEl: null, barEl: null, footEl: null,
+    startedAt: Date.now(), timer: null, steps: [], sources: 0, rounds: 0, plannedRounds: DEEP_MAX_ROUNDS
+  };
+  bubble.innerHTML =
+    '<div class="deepres">' +
+      '<div class="deepres-head">' +
+        '<span class="deepres-orb" aria-hidden="true"></span>' +
+        '<span class="deepres-title">Deep research</span>' +
+        '<span class="deepres-time" id="deepTime">0:00</span>' +
+      '</div>' +
+      '<div class="deepres-bar" aria-hidden="true"><i></i></div>' +
+      '<ol class="deepres-steps"></ol>' +
+      '<div class="deepres-foot"></div>' +
+    '</div>';
+  panel.root = bubble.querySelector('.deepres');
+  panel.stepsEl = bubble.querySelector('.deepres-steps');
+  panel.timeEl = bubble.querySelector('.deepres-time');
+  panel.barEl = bubble.querySelector('.deepres-bar i');
+  panel.footEl = bubble.querySelector('.deepres-foot');
+
+  panel.tick = function(){
+    var secs = Math.floor((Date.now() - panel.startedAt) / 1000);
+    if(panel.timeEl) panel.timeEl.textContent = Math.floor(secs/60) + ':' + String(secs % 60).padStart(2,'0');
+  };
+  panel.timer = setInterval(panel.tick, 500);
+
+  panel.step = function(text){
+    var li = document.createElement('li');
+    li.className = 'active';
+    li.innerHTML = '<span class="deepres-ico" aria-hidden="true"></span><span class="deepres-txt"></span>';
+    li.querySelector('.deepres-txt').textContent = text;
+    panel.stepsEl.appendChild(li);
+    /* only the newest few steps stay on screen, oldest collapse away */
+    var all = panel.stepsEl.children;
+    if(all.length > 6) all[0].remove();
+    scrollDown();
+    return {
+      done: function(newText){
+        li.classList.remove('active');
+        li.classList.add('done');
+        if(newText) li.querySelector('.deepres-txt').textContent = newText;
+      },
+      update: function(newText){ li.querySelector('.deepres-txt').textContent = newText; }
+    };
+  };
+  panel.progress = function(frac){
+    if(panel.barEl) panel.barEl.style.width = Math.max(2, Math.min(100, frac * 100)).toFixed(1) + '%';
+  };
+  panel.foot = function(){
+    if(!panel.footEl) return;
+    panel.footEl.textContent = panel.sources + (panel.sources === 1 ? ' source' : ' sources') +
+      ' · round ' + Math.max(1, panel.rounds) + ' of ' + panel.plannedRounds;
+  };
+  panel.stop = function(){ if(panel.timer){ clearInterval(panel.timer); panel.timer = null; } };
+  return panel;
+}
+
+/* ---------- helpers ---------- */
+function deepParseQueries(raw, max){
+  var out = [];
+  if(!raw) return out;
+  var text = String(raw);
+  /* the model is asked for JSON, but never trust that it obliged */
+  var match = text.match(/\[[\s\S]*\]/);
+  if(match){
+    try{
+      var arr = JSON.parse(match[0]);
+      if(Array.isArray(arr)) out = arr.map(function(x){ return String(x || '').trim(); });
+    }catch(e){}
+  }
+  if(!out.length){
+    out = text.split('\n').map(function(l){
+      return l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').replace(/^["']|["']$/g,'').trim();
+    });
+  }
+  var seen = {}, clean = [];
+  out.forEach(function(q){
+    q = q.replace(/^["']|["'],?$/g,'').trim();
+    if(q.length < 6 || q.length > 240) return;
+    var key = q.toLowerCase();
+    if(seen[key]) return;
+    seen[key] = 1;
+    clean.push(q);
+  });
+  return clean.slice(0, max || 8);
+}
+
+/* run a batch of searches with bounded concurrency, tolerating failures */
+async function deepRunSearches(queries, signal, onResult){
+  var i = 0;
+  async function worker(){
+    for(;;){
+      if(signal && signal.aborted) return;
+      var idx = i++;
+      if(idx >= queries.length) return;
+      var q = queries[idx];
+      try{
+        var web = await tavilySearch(q, {
+          maxResults: 6,
+          searchDepth: 'advanced',
+          timeout: 26000,
+          signal: signal
+        });
+        if(onResult) onResult(q, web);
+      }catch(e){
+        if(e && e.name === 'AbortError') return;
+        if(onResult) onResult(q, null);   /* one dead query never kills the round */
+      }
+    }
+  }
+  var pool = [];
+  for(var w = 0; w < Math.min(DEEP_CONCURRENCY, queries.length); w++) pool.push(worker());
+  await Promise.all(pool);
+}
+
+function deepAddSources(store, seen, web){
+  var added = 0;
+  if(!web) return 0;
+  (web.results || []).forEach(function(it){
+    var url = it && it.url;
+    if(!url || seen[url]) return;
+    seen[url] = 1;
+    store.push({
+      title: it.title || url,
+      url: url,
+      date: it.published_date || '',
+      score: Number(it.score) || 0,
+      content: String(it.content || '').slice(0, 2200),
+      raw: String(it.raw_content || '').slice(0, 3000)
+    });
+    added++;
+  });
+  return added;
+}
+
+async function deepAsk(prompt, signal, maxWords){
+  var messages = [
+    { role:'system', content: 'You are the planning stage of a research engine. Reply with ONLY what is asked for — no preamble, no explanation, no markdown fences.' },
+    { role:'user', content: prompt }
+  ];
+  return await callAI(messages, false, signal, '');
+}
+
+/* ---------- the loop ---------- */
+async function deepResearch(question, bubble, signal){
+  var panel = deepPanel(bubble);
+  var sources = [], seen = {}, askedQueries = {};
+  var startedAt = Date.now();
+  function elapsed(){ return Date.now() - startedAt; }
+  function aborted(){ return signal && signal.aborted; }
+  /* While the run is still short of the research floor, keep going past the
+     usual round count -- more rounds mean more sources and a better report,
+     so the extra time is spent gathering rather than waiting. */
+  function roundCap(){ return elapsed() < DEEP_MIN_RESEARCH_MS ? DEEP_HARD_ROUNDS : DEEP_MAX_ROUNDS; }
+
+  try{
+    /* -- 1. plan -------------------------------------------------- */
+    var s1 = panel.step('Planning the research');
+    panel.progress(0.04);
+    var todayStr = new Date().toDateString();
+    var planRaw = '';
+    try{
+      planRaw = await deepAsk(
+        'Today is ' + todayStr + '. A user asked:\n\n"' + question + '"\n\n' +
+        'Write 8 web search queries that together research this thoroughly from genuinely different angles: ' +
+        'the direct facts, the numbers/data, expert or official sources, recent developments, criticism or ' +
+        'counter-arguments, practical/real-world detail, comparisons with alternatives, and background context. ' +
+        'Each query must be a standalone search string a search engine would handle well — no question marks ' +
+        'needed, no numbering. Return ONLY a JSON array of 8 strings.', signal);
+    }catch(e){ if(e && e.name === 'AbortError') throw e; }
+    var queries = deepParseQueries(planRaw, 8);
+    if(!queries.length) queries = [question];
+    queries.forEach(function(q){ askedQueries[q.toLowerCase()] = 1; });
+    s1.done('Planned ' + queries.length + ' lines of enquiry');
+
+    /* -- 2..5. search / reflect / follow up ------------------------ */
+    var round = 0;
+    while(round < roundCap() && queries.length && !aborted()){
+      round++;
+      panel.rounds = round;
+      panel.plannedRounds = Math.max(panel.rounds, Math.min(roundCap(), DEEP_HARD_ROUNDS));
+      var roundStep = panel.step('Searching the web · ' + queries.length + ' queries');
+      var doneCount = 0;
+      var roundNew = 0;
+      await deepRunSearches(queries, signal, function(q, web){
+        doneCount++;
+        var added = deepAddSources(sources, seen, web);
+        roundNew += added;
+        panel.sources = sources.length;
+        panel.foot();
+        roundStep.update('Searching · ' + doneCount + '/' + queries.length + ' — “' + q.slice(0, 46) + (q.length > 46 ? '…' : '') + '”');
+        /* research is ~70% of the visible progress, writing is the rest */
+        panel.progress(0.04 + 0.66 * Math.min(1, (round - 1 + doneCount / queries.length) / DEEP_MAX_ROUNDS));
+      });
+      if(aborted()) throw new DOMException('Aborted','AbortError');
+      roundStep.done('Read ' + roundNew + ' new ' + (roundNew === 1 ? 'source' : 'sources') + ' across ' + queries.length + ' searches');
+
+      var enoughTime = elapsed() >= DEEP_MIN_RESEARCH_MS;
+      var outOfTime = elapsed() >= DEEP_MAX_RESEARCH_MS;
+      if(round >= roundCap() || outOfTime || (enoughTime && sources.length >= DEEP_MAX_SOURCES)){
+        panel.plannedRounds = round;
+        break;
+      }
+
+      /* reflect: what is still missing? */
+      var reflectStep = panel.step('Reviewing what is still missing');
+      var digest = sources.slice(0, 30).map(function(s, i){
+        return (i+1) + '. ' + s.title + ' — ' + s.content.slice(0, 220);
+      }).join('\n');
+      var followRaw = '';
+      try{
+        followRaw = await deepAsk(
+          'Research question: "' + question + '"\n\n' +
+          'Sources gathered so far:\n' + digest + '\n\n' +
+          'Identify what this evidence still does NOT answer, then write ' + (round === 1 ? 6 : 5) +
+          ' new web search queries that would close those specific gaps. Do not repeat these already-run ' +
+          'queries: ' + Object.keys(askedQueries).slice(0, 24).join(' | ') + '\n' +
+          'Return ONLY a JSON array of search query strings. If the evidence genuinely covers everything ' +
+          'well, return an empty array [].', signal);
+      }catch(e){ if(e && e.name === 'AbortError') throw e; }
+
+      var next = deepParseQueries(followRaw, round === 1 ? 6 : 5).filter(function(q){
+        return !askedQueries[q.toLowerCase()];
+      });
+      next.forEach(function(q){ askedQueries[q.toLowerCase()] = 1; });
+
+      if(!next.length){
+        /* Nothing left worth asking. Stop rather than invent busywork —
+           unless barely any time has been spent, in which case widen once. */
+        if(!enoughTime && round < roundCap()){
+          next = [question + ' detailed analysis', question + ' latest 2026', question + ' criticism limitations'];
+          next = next.filter(function(q){ return !askedQueries[q.toLowerCase()]; });
+          next.forEach(function(q){ askedQueries[q.toLowerCase()] = 1; });
+          reflectStep.done('Widening the search');
+        } else {
+          reflectStep.done('Evidence looks complete');
+          panel.plannedRounds = round;
+          break;
+        }
+      } else {
+        reflectStep.done('Found ' + next.length + ' gaps to close');
+      }
+      queries = next;
+    }
+
+    if(aborted()) throw new DOMException('Aborted','AbortError');
+
+    /* -- 6. write -------------------------------------------------- */
+    var writeStep = panel.step('Writing the report from ' + sources.length + ' sources');
+    panel.progress(0.74);
+    panel.foot();
+
+    var ranked = sources.slice().sort(function(a,b){ return b.score - a.score; }).slice(0, DEEP_MAX_SOURCES);
+    var evidence = ranked.map(function(s, i){
+      return '[' + (i+1) + '] ' + s.title +
+             '\nURL: ' + s.url +
+             '\nPublished: ' + (s.date || 'unknown') +
+             '\nContent: ' + s.content +
+             (s.raw ? '\nExtracted: ' + s.raw : '');
+    }).join('\n\n');
+
+    var reportMessages = [
+      { role:'system', content:
+        systemPrompt() +
+        '\n\nYou are writing a DEEP RESEARCH REPORT. You have been given ' + ranked.length +
+        ' sources gathered over several rounds of live web searching. Write the most thorough, ' +
+        'genuinely useful answer you can from that evidence.\n' +
+        'Rules:\n' +
+        '- Open with a short direct answer to the question — two or three sentences, no heading.\n' +
+        '- Then a "## Key findings" section of the most important specific points, each with real ' +
+        'numbers, names and dates from the sources.\n' +
+        '- Then several "## " sections covering the distinct themes the evidence supports. Go deep: ' +
+        'explain mechanisms and reasons, not just headlines. Use tables where figures compare well.\n' +
+        '- Cite with bracketed numbers like [3] matching the source list, throughout.\n' +
+        '- Include a "## Where sources disagree" section if they do, and a "## What is still unclear" ' +
+        'section naming the questions the evidence did not settle. Never pad these — omit a section ' +
+        'entirely rather than filling it with nothing.\n' +
+        '- Be long and detailed where the evidence supports it, and honest where it does not. ' +
+        'Never invent a fact, figure or citation that is not in the evidence.\n' +
+        '- Do not describe your own process or mention that you searched.' },
+      { role:'user', content: question }
+    ];
+
+    var reportText = await streamAI(reportMessages, signal, evidence, function(piece, full){
+      writeStep.update('Writing the report · ' + full.length.toLocaleString() + ' characters');
+      panel.progress(0.74 + 0.25 * Math.min(1, full.length / 9000));
+    }, { report:true });
+
+    writeStep.done('Report complete');
+    panel.progress(1);
+    panel.stop();
+
+    return {
+      text: reportText,
+      sources: ranked.slice(0, 12).map(function(s){ return { title:s.title, link:s.url, date:s.date }; }),
+      sourceCount: ranked.length,
+      rounds: panel.rounds,
+      seconds: Math.round(elapsed() / 1000)
+    };
+  }catch(e){
+    panel.stop();
+    throw e;
+  }
+}
+
 async function sendMessage(text){
   text = (text || $input.value).trim();
   if(!text || state.busy) return;
@@ -3975,6 +4670,60 @@ async function sendMessage(text){
     addMessage('user', esc(text));
   }
   addThinking('Thinking');
+
+  /* Deep search takes over the whole turn: a research loop, its own live
+     progress panel, and one long grounded report at the end. */
+  if(deepOn && !imgForThisTurn){
+    try{
+      removeThinking();
+      var deepBubble = addMessage('bot', '');
+      haptic('start');
+      var deepOut = await deepResearch(text, deepBubble, currentAbort ? currentAbort.signal : null);
+      deepBubble.innerHTML = md(deepOut.text);
+      if(deepOut.sources && deepOut.sources.length){
+        var srcWrap = document.createElement('div');
+        srcWrap.className = 'sources';
+        srcWrap.innerHTML = deepOut.sources.map(function(it, i){
+          return '<a href="' + esc(it.link) + '" target="_blank" rel="noopener"><b>' + (i+1) + '</b>' +
+                 esc(it.title) + (it.date ? ' <span class="src">· ' + timeAgo(it.date) + '</span>' : '') + '</a>';
+        }).join('');
+        deepBubble.appendChild(srcWrap);
+      }
+      var note = document.createElement('div');
+      note.className = 'deepres-done';
+      note.textContent = 'Researched ' + deepOut.sourceCount + ' sources over ' + deepOut.rounds +
+                         ' rounds in ' + Math.floor(deepOut.seconds / 60) + 'm ' + (deepOut.seconds % 60) + 's';
+      deepBubble.appendChild(note);
+      addResponseMeta(deepBubble, 0, true);
+      scrollDown();
+      haptic('done');
+      if(!state.user) bumpUsage();
+      appendToHistory('user', text);
+      appendToHistory('assistant', deepOut.text);
+      autoTitleChat(activeChatId, text, deepOut.text);
+      extractMemory(text, deepOut.text);
+      if(mailToggleOn){ sendReplyAsEmail(text, deepOut.text); }
+      state.history.push({ role:'user', content: text });
+      state.history.push({ role:'assistant', content: deepOut.text.slice(0, 1500) });
+      if(state.history.length > 16) state.history = state.history.slice(-16);
+    }catch(deepErr){
+      var stopped = currentAbort === null || (deepErr && deepErr.name === 'AbortError');
+      if(deepBubble){
+        if(stopped){
+          deepBubble.innerHTML = '<p>Research stopped.</p>';
+        } else {
+          haptic('error');
+          deepBubble.innerHTML = '<p><strong>Deep search could not finish.</strong></p>' +
+            '<p class="err-detail">' + esc(String((deepErr && deepErr.message) || 'Unknown error')).slice(0,260) + '</p>';
+          deepBubble.classList.add('err');
+        }
+      }
+    }
+    currentAbort = null;
+    hideStopBtn();
+    state.busy = false; $send.disabled = false; $input.focus();
+    return;
+  }
 
   var messagesOverride = null;
   var streamMessages = null, streamLive = '';
@@ -4313,6 +5062,7 @@ function startAgentChat(id){
   var a = null;
   loadAgents().forEach(function(x){ if(x.id === id) a = x; });
   if(!a) return;
+  haptic('select');
   activeAgent = a;
   closePage('agentsPage');
   closeSidebar();
@@ -4399,7 +5149,8 @@ function renderSettings(tab){
           '<div class="settings-row-val">' + loadMemory().length + ' saved</div>' +
           '<button class="settings-row-btn" id="setClearMem" type="button">Clear</button></div>' +
         '<div class="settings-row"><div class="settings-row-meta"><b>Haptics</b><small>Short vibration feedback on send, replies and actions</small></div>' +
-          '<div class="settings-row-val" id="hapticVal">' + (hapticsSupported() ? (hapticsOn ? 'On' : 'Off') : 'Not supported here') + '</div>' +
+          '<div class="settings-row-val" id="hapticVal">' + esc(hapticsDiagnosis()) + '</div>' +
+          '<button class="settings-row-btn" id="setTestHaptic" type="button">Test</button>' +
           '<button class="settings-row-btn" id="setHaptics" type="button">' + (hapticsOn ? 'Turn off' : 'Turn on') + '</button></div>' +
         '<div class="settings-row"><div class="settings-row-meta"><b>Voice</b><small>Checks the premium voice and reports the exact problem</small></div>' +
           '<div class="settings-row-val" id="voiceDiag">Not tested</div>' +
@@ -4419,6 +5170,24 @@ function renderSettings(tab){
       showToast(hapticsSupported()
         ? (hapticsOn ? 'Haptics on' : 'Haptics off')
         : "This device doesn't support vibration — the setting is saved anyway.");
+    });
+    /* Fires straight out of the tap, which is the one moment every platform
+       is guaranteed to allow feedback -- so if nothing is felt here, the
+       problem is the device, not the app, and the row says which. */
+    document.getElementById('setTestHaptic').addEventListener('click', function(){
+      var engine = hapticEngine();
+      if(engine === 'none'){
+        showToast(isIOS()
+          ? 'This iPhone is on iOS 17.3 or older — Safari added web haptics in 17.4.'
+          : "This browser has no vibration support.");
+        return;
+      }
+      if(!hapticsOn){ showToast('Haptics are turned off — switch them on first.'); return; }
+      if(hapticsMuted()){ showToast('Your device is set to reduce motion, so haptics stay silent.'); return; }
+      haptic('done');
+      showToast(engine === 'ios-switch'
+        ? 'Sent to the Taptic Engine.'
+        : "Buzzed. Felt nothing? Check the phone isn't on silent and that system vibration/touch feedback is on.");
     });
     document.getElementById('setTestVoice').addEventListener('click', async function(){
       var out = document.getElementById('voiceDiag');
@@ -4520,8 +5289,22 @@ function openSettingsPage(){
    ================================================================ */
 var $plusBtn = document.getElementById('plusBtn');
 var $plusMenu = document.getElementById('plusMenu');
-function openPlus(){ $plusMenu.classList.add('show'); $plusBtn.classList.add('open'); $plusBtn.setAttribute('aria-expanded','true'); }
+/* The menu opens upward from the composer, so the only height it can safely
+   take is the gap above the composer -- a vh fraction is a guess and was
+   wrong on short screens and in landscape. Measure it instead. */
+function sizePlusMenu(){
+  if(!$plusMenu || !$plusMenu.classList.contains('show')) return;
+  var anchor = document.querySelector('.pill') || $plusBtn;
+  var top = anchor ? anchor.getBoundingClientRect().top : window.innerHeight;
+  $plusMenu.style.maxHeight = Math.max(150, Math.round(top - 20)) + 'px';
+}
+function openPlus(){
+  $plusMenu.classList.add('show'); $plusBtn.classList.add('open'); $plusBtn.setAttribute('aria-expanded','true');
+  sizePlusMenu();
+}
 function closePlus(){ $plusMenu.classList.remove('show'); $plusBtn.classList.remove('open'); $plusBtn.setAttribute('aria-expanded','false'); closeTierMenu(); }
+window.addEventListener('resize', sizePlusMenu);
+try{ if(window.visualViewport) window.visualViewport.addEventListener('resize', sizePlusMenu); }catch(e){}
 $plusBtn.addEventListener('click', function(e){
   e.stopPropagation();
   haptic('light');
@@ -4549,6 +5332,20 @@ function syncWeb(){
 }
 $webToggle.addEventListener('click', function(){ webForceOn = !webForceOn; haptic('tap'); syncWeb(); });
 syncWeb();
+
+/* Deep search — a research run, not a single search. */
+var $deepToggle = document.getElementById('deepToggle');
+if($deepToggle){
+  $deepToggle.addEventListener('click', function(){
+    deepOn = !deepOn;
+    haptic(deepOn ? 'select' : 'tap');
+    syncDeep();
+    showToast(deepOn
+      ? 'Deep search on — the next question gets a full research run. It takes a couple of minutes.'
+      : 'Deep search off.');
+  });
+  syncDeep();
+}
 
 /* Create an image */
 document.getElementById('imageBtn').addEventListener('click', function(){
@@ -4703,6 +5500,7 @@ function saveToLibrary(src, prompt){
   if(typeof renderLibrary === 'function') renderLibrary();
 }
 function deleteFromLibrary(id){
+  haptic('warn');
   saveLibrary(loadLibrary().filter(function(x){ return x.id !== id; }));
   renderLibrary();
 }
@@ -4741,7 +5539,7 @@ document.getElementById('sbLibrary').addEventListener('click', function(){ close
   function el(id){ return document.getElementById(id); }
   var rOpen = el('railOpen'), rNew = el('railNew'), rSearch = el('railSearch'),
       rPin = el('railPinned'), rChats = el('railChats'), rAgents = el('railAgents'), rAv = el('railAvatar');
-  if(rOpen) rOpen.addEventListener('click', function(){ openSidebar(); });
+  if(rOpen) rOpen.addEventListener('click', function(){ haptic('light'); toggleSidebar(); });
   if(rNew) rNew.addEventListener('click', function(){
     activeAgent = null; applyAgentUI();
     newChat(); setActiveChatPointer(null); startFreshView(); renderSidebar();
@@ -4814,6 +5612,7 @@ function finishBoot(){
   bootDone = true;
   maybeShowWelcome();
   syncEmptyState();
+  syncSidebarMode();   /* restore the remembered desktop dock state */
   var el = document.getElementById('boot');
   if(!el) return;
   el.classList.add('gone');

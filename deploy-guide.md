@@ -160,17 +160,60 @@ never dead-ends — but Stability is the only paid/primary provider.
 
 ## Haptics (vibration feedback)
 
-No environment variable and no setup — it uses the browser's Vibration API.
+No environment variable and no setup.
 
 A short vibration fires when an answer **starts** and a different double-pulse
 when it **completes**, plus on send, the feedback icons (like / dislike / copy /
 regenerate), model selection, the composer toggles, pinning and deleting a chat,
-opening the mic, and when a generated image or your location is ready. Each
-action has its own pattern, so the phone in your pocket tells you what happened.
+opening the mic, signing in, and when a generated image or your location is
+ready. Each action has its own pattern, so the phone in your pocket tells you
+what happened.
 
-- Works in the Android APK and Android Chrome.
-- iOS Safari has no Vibration API, so it is silently inert there — nothing
-  breaks, there is simply no vibration.
-- Off automatically when the device is set to "reduce motion".
-- Switch it off in **Settings → General → Haptics**; the choice is remembered
-  on the device (`pp-haptics` in localStorage).
+Two engines, because the platforms differ:
+
+- **Android** (Chrome, and the wrapped APK, which runs on Chrome) uses the
+  Vibration API. Every pattern is at least 18 ms — below roughly 20 ms most
+  Android vibration motors round the pulse away to nothing, which is why very
+  short "tasteful" buzzes are not subtle but silent.
+- **iPhone** has no Vibration API and never has. Since **iOS 17.4** Safari does
+  fire the real Taptic Engine when an `<input type="checkbox" switch>` is
+  toggled, so that is what runs there. On iOS 17.3 and older there is no way for
+  any website to vibrate the phone.
+
+Both platforms refuse feedback until the page has been touched, so the first tap
+arms the engine.
+
+**Settings → General → Haptics** shows what is actually happening on that device
+and offers a **Test** button that fires straight out of your tap. If Test
+produces nothing on an Android phone, the cause is on the device: silent mode,
+or system touch-vibration turned off. Haptics also stay silent when the device is
+set to reduce motion. The on/off choice is remembered per device (`pp-haptics`).
+
+
+## Deep search
+
+A toggle inside the composer's **+** menu. No new environment variables — it
+reuses `TAVILY_API_KEY` and `GROQ_KEY`.
+
+Ordinary live search is one query, one search, one answer. Deep search instead
+runs a research loop **in the browser**, which is the only place it can run: each
+round is its own set of requests, so it is never bounded by a serverless
+function's timeout.
+
+1. The model plans 8 distinct lines of enquiry.
+2. Those run against Tavily, three at a time.
+3. The model reads what came back and names the gaps.
+4. New queries target only those gaps.
+5. Repeat while there is budget and still something worth asking.
+6. One long report is written from everything gathered, with numbered citations.
+
+Rounds continue until roughly 1m40 of genuine searching has happened, and stop
+by 2m45 at the latest — a typical run is 20-30 searches over 4-7 rounds and takes
+two to three minutes end to end. If the model runs out of angles worth chasing it
+stops early rather than padding. **Stop generating** cancels the whole loop at any
+point.
+
+The report call sets `report: true` on `/chat-stream`, which raises the evidence
+window to 90k characters and the reply limit to 8000 tokens. Expect deep search
+to use noticeably more Tavily credits and Groq tokens than a normal question —
+one run is worth roughly 25 ordinary searches.
