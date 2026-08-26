@@ -2439,7 +2439,7 @@ body.empty-state .suggests{display:flex}
 <script>
 /* ================================================================
    PIXEL PRO — fast AI assistant
-   Voice : Web Speech API input / ElevenLabs TTS
+   Voice : Web Speech API input / Cartesia Sonic TTS
    ================================================================ */
 
 var state = {
@@ -3415,7 +3415,7 @@ function unlockBody(){ document.body.classList.remove('locked'); document.body.s
 
 /* ---------- Pixel Live voice assistant ---------- */
 /* ================================================================
-   ELEVENLABS TTS — fast natural voice for Pixel Live + chat
+   CARTESIA SONIC TTS — fast natural voice for Pixel Live + chat
    ================================================================ */
 var voiceGender = 'male';
 
@@ -3433,7 +3433,7 @@ document.querySelectorAll('#voiceGender button').forEach(function(b){
 });
 
 var ttsAudio = null;
-async function elevenSpeak(text, done){
+async function speakAloud(text, done){
   if(ttsAudio){ try{ ttsAudio.pause(); }catch(e){} ttsAudio = null; }
   if(window.speechSynthesis) speechSynthesis.cancel();
   try{
@@ -3444,7 +3444,7 @@ async function elevenSpeak(text, done){
     });
     var d = await r.json();
     if(!r.ok || !d.audio) { var err = new Error(d.error || 'No audio returned'); err.serverSide = true; throw err; }
-    var audio = new Audio('data:audio/mpeg;base64,' + d.audio);
+    var audio = new Audio('data:' + (d.mime || 'audio/mpeg') + ';base64,' + d.audio);
     audio.preload = 'auto';
     ttsAudio = audio;
     audio.onended = function(){ ttsAudio = null; if(done) done(); };
@@ -3487,7 +3487,7 @@ async function elevenSpeak(text, done){
         });
       })();
     }catch(playErr){
-      /* Autoplay was blocked by the browser -- the ElevenLabs audio is fine,
+      /* Autoplay was blocked by the browser -- the Cartesia audio is fine,
          so keep it and let the next tap play it rather than dropping to the
          robotic browser voice. */
       if(playErr && (playErr.name === 'NotAllowedError' || /gesture|interact/i.test(playErr.message || ''))){
@@ -3613,6 +3613,7 @@ var live = {
   locked:false,          /* command submission lock -- set synchronously */
   lastCommand:'', lastCommandAt:0,
   errorStreak:0, quietStreak:0,
+  fillerToken:0,
   transcript:[], startedAt:0,
   abort:null,
   level:0, targetLevel:0,
@@ -3970,10 +3971,27 @@ function liveStopSpeaking(){
 function liveSpeak(text, done){
   liveGo('responding');
   var sid = live.sessionId;
-  elevenSpeak(text, function(){
+  speakAloud(text, function(){
     if(sid !== live.sessionId) return;       /* a newer turn owns the screen */
     if(done) done();
   });
+}
+
+/* A short, honest line while a web search runs. It is not a stall for its
+   own sake -- the search really is happening -- it just stops two seconds of
+   dead air reading as a crash. Fire-and-forget: its own completion must never
+   move the state machine, because the real answer owns that. */
+var LIVE_FILLERS = [
+  'Let me look that up.',
+  'One moment, checking that now.',
+  'Give me a second, I am looking it up.'
+];
+function speakFiller(){
+  var token = ++live.fillerToken;
+  var line = LIVE_FILLERS[Math.floor(Math.random() * LIVE_FILLERS.length)];
+  liveCaption(line, 'bot');
+  speakAloud(line, function(){ /* deliberately does nothing */ });
+  return token;
 }
 
 /* ================= asking ================= */
@@ -4002,17 +4020,39 @@ async function liveAsk(question){
   }
 
   try{
+    /* THE ORB REMEMBERS.
+
+       This used to send [system, user] and nothing else, so every question
+       arrived with no idea what had just been said -- "what about tomorrow"
+       was answered as if it were the first thing anyone had ever asked. The
+       session's own turns are the context now, trimmed to the last few
+       exchanges so a long conversation does not turn into a long prompt. */
+    var history = live.transcript
+      .slice(0, -1)                 /* the question just pushed is added below */
+      .slice(-10)
+      .map(function(m){ return { role:m.role, content:String(m.content).slice(0, 700) }; });
+
     var msgs = [
-      { role:'system', content: systemPrompt() + ' This is voice mode: keep the spoken answer to 1–3 short sentences, plain speech, no markdown, no lists, no headings.' },
-      { role:'user', content: question }
-    ];
+      { role:'system', content: systemPrompt() +
+        ' This is voice mode: keep the spoken answer to 1–3 short sentences, plain speech, no markdown, no lists, no headings.' +
+        ' You are mid-conversation. Read short or vague replies as answers to what you just asked, resolve "it", "that" and "there" against the turns above, and never restart the topic unless the user does.' }
+    ].concat(history).concat([{ role:'user', content: question }]);
+
     var reply;
     var decision = routeDecide(question);
+    /* Strictly greater, not >=: a genuinely neutral question ("who is
+       Ada Lovelace") should stay on the fast path rather than paying for a
+       search it does not need. Anything that actually leans current still
+       searches. */
     var needsWeb = decision.decision === 'web' ||
-      (decision.decision === 'ask' && (decision.webScore || 0) >= (decision.directScore || 0));
+      (decision.decision === 'ask' && (decision.webScore || 0) > (decision.directScore || 0));
 
     if(needsWeb){
       liveGo('searching');
+      /* A search costs a second or two of silence, and silence reads as a
+         crash. Say something true while it runs -- the microphone is already
+         off in this state, so the filler cannot be heard as a question. */
+      speakFiller();
       var liveWeb = await tavilySearch(question, {
         topic: /\b(news|headlines?|breaking|sports?|match|score|result|election)\b/i.test(question) ? 'news' : 'general',
         timeRange: /\b(today|tonight|now|currently|current|latest|breaking|live)\b/i.test(question) ? 'day' : undefined,
@@ -4030,6 +4070,8 @@ async function liveAsk(question){
     }
     if(signal.aborted || sid !== live.sessionId){ live.locked = false; return; }
     if(!state.user) bumpUsage();
+    live.fillerToken++;             /* whatever the filler was doing, it is over */
+    liveStopSpeaking();
     live.transcript.push({ role:'assistant', content:reply });
     liveCaption(reply, 'bot');
     liveSpeak(reply, finish);
@@ -4093,6 +4135,7 @@ function openLive(){
   live.transcript = []; live.startedAt = Date.now();
   live.lastCommand = ''; live.lastCommandAt = 0;
   live.errorStreak = 0; live.quietStreak = 0;
+  live.fillerToken = 0;
   live.abort = null;
   live.sessionId++;
   liveClearAllTimers();
@@ -5925,7 +5968,7 @@ function scrollDown(){ requestAnimationFrame(function(){ $main.scrollTop = $main
 /* ---------- text-to-speech ---------- */
 function speak(text){
   if(!state.speak) return;
-  elevenSpeak(text, null);
+  speakAloud(text, null);
 }
 
 /* ---------- Tavily-first routing ---------- */
@@ -7060,7 +7103,7 @@ function renderSettings(tab){
         var d = await r.json().catch(function(){ return {}; });
         if(!r.ok || !d.audio){
           out.textContent = 'Premium voice failed';
-          showToast('ElevenLabs: ' + (d.error || ('HTTP ' + r.status)));
+          showToast('Cartesia: ' + (d.error || ('HTTP ' + r.status)));
         } else {
           out.textContent = 'Premium voice working';
           var a = new Audio('data:audio/mpeg;base64,' + d.audio);

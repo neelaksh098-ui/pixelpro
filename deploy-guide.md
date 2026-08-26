@@ -39,12 +39,37 @@ feature never dead-ends.
 Note on deliverability: sending "from" a free-provider address (gmail.com) through a third party
 can occasionally land in spam, because gmail.com's DMARC policy doesn't authorise it. It works,
 but a verified domain of your own is the robust long-term answer.
-- `ELEVENLABS_API_KEY` — your ElevenLabs API key
-- `ELEVENLABS_VOICE_ID` — your default ElevenLabs voice ID
-- `ELEVENLABS_VOICE_ID_MALE` — optional male voice ID (overrides the default for male)
-- `ELEVENLABS_VOICE_ID_FEMALE` — optional female voice ID (overrides the default for female)
-- `ELEVENLABS_MODEL_ID` — optional, defaults to `eleven_flash_v2_5`
-- `ELEVENLABS_OUTPUT_FORMAT` — optional, defaults to `mp3_44100_128`
+- `CARTESIA_API_KEY` — from https://play.cartesia.ai/keys
+- `CARTESIA_MODEL` — optional, defaults to `sonic-3.6`
+- `CARTESIA_VOICE_ID` — optional, defaults to `db6b0ed5-d5d3-463d-ae85-518a07d3c2b4` ("Skyler")
+- `CARTESIA_VOICE_ID_MALE` / `CARTESIA_VOICE_ID_FEMALE` — optional per-gender overrides
+- `CARTESIA_FORMAT` — optional, `wav` (default) or `mp3`
+- `CARTESIA_SAMPLE_RATE` — optional, defaults to `16000`
+- `CARTESIA_SPEED` — optional, e.g. `1.1`
+- `CARTESIA_VERSION` — optional, defaults to `2024-06-10`
+
+Cartesia has been removed entirely. If a Cartesia call fails the app falls
+back to the browser's own voice so a reply is never silent.
+
+**Why `/tts/bytes` and not the WebSocket.** Cartesia's lowest-latency path is
+`wss://api.cartesia.ai/tts/websocket`, fed token-by-token straight from the LLM
+stream. That needs a process that stays alive holding two sockets at once.
+Netlify Functions are request/response and are destroyed when the response
+ends, so there is nowhere for that process to live; and the browser can only
+hold the socket itself by being handed the Cartesia key, which would publish it
+to every visitor. `/tts/bytes` is one round trip, and Sonic's time-to-first-byte
+is tens of milliseconds, so most of the advantage is kept. What is lost is
+overlapping synthesis with generation — roughly one sentence of latency on a
+long reply. Getting that back means moving off Netlify Functions to something
+long-lived: Fly, Render, Railway, or a Cloudflare Durable Object, which would
+proxy the socket and keep the key server-side.
+
+**Format.** `wav`/`pcm_s16le`/16000 is the default because it is genuinely
+uncompressed — the encoder does no work, which is the point of raw PCM — and a
+WAV header is the one container `<audio>` plays with no decode step. Set
+`CARTESIA_FORMAT=mp3` if the wire cost matters more than the encode cost, which
+it does on a slow mobile connection: WAV is roughly ten times the bytes of a
+64 kbps MP3 of the same speech.
 
 Delete the old Google AI provider after the new deployment is working.
 
@@ -89,7 +114,7 @@ After deployment, test:
 
 ## Voice
 
-Pixel Pro uses ElevenLabs for spoken responses, including the Pixel Live voice orb and normal chat speech. Voice input still uses the browser Web Speech API when available, and the Live screen also includes a text command box so commands can be typed instead of spoken.
+Pixel Pro uses Cartesia Sonic for spoken responses, including the Pixel Live voice orb and normal chat speech. Voice input still uses the browser Web Speech API when available, and the Live screen also includes a text command box so commands can be typed instead of spoken.
 
 ## Android APK — removing the URL bar (RESOLVED)
 
@@ -295,7 +320,7 @@ sheet with Pin, Rename, Share and Delete. Desktop behaviour is unchanged.
 
 ## Pixel Live (voice mode)
 
-No new environment variables — it uses the same Groq, Tavily and ElevenLabs
+No new environment variables — it uses the same Groq, Tavily and Cartesia
 keys as the rest of the app.
 
 Voice mode is a strict state machine:
@@ -360,3 +385,19 @@ the gesture went straight to the chat.
 waiting for JavaScript, so `preventDefault()` in a touchmove listener arrives
 too late. The textarea declares `touch-action: none` and only adds
 `.can-scroll` (`pan-y`) once its own content actually overflows.
+
+
+## Pixel Live memory and search
+
+The orb used to send only `[system, user]` on every turn, so it had no idea
+what had just been said — "what year was that" was answered as if it were the
+first question ever asked. The session's own turns are now the context, trimmed
+to the last ten so a long conversation does not become a long prompt.
+
+Live search uses the same router as the typed composer, with one deliberate
+difference: on a genuinely balanced question the orb stays on the fast path
+rather than paying for a search, because latency matters more in speech. And
+because a search costs a second or two of silence — which reads as a crash —
+the orb says a short true line ("Let me look that up") while it runs. The
+microphone is already stopped in that state, so the filler cannot be heard as a
+question.

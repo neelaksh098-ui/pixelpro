@@ -31,7 +31,7 @@ After generating the release certificate, publish the SHA-256 fingerprint in `ht
 
 ## Voice architecture
 
-- ElevenLabs handles TTS for normal chat and the Pixel Live voice orb.
-- The default model is `eleven_flash_v2_5`; set `ELEVENLABS_MODEL_ID` to override it.
+- Cartesia Sonic handles TTS for normal chat and the Pixel Live voice orb.
+- The default voice model is `sonic-3.6`; set `CARTESIA_MODEL` to override it.
 - Browser Web Speech API remains the input method for the microphone/orb.
 - Pixel Live includes a text command box as an alternative to speaking.
