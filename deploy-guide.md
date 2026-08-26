@@ -291,3 +291,38 @@ none of it can move the layout.
 A pointer has no hover, so the pin/share/delete strip that appears beside a chat
 on a laptop is unreachable on a phone. Holding a chat for ~0.5s opens an action
 sheet with Pin, Rename, Share and Delete. Desktop behaviour is unchanged.
+
+
+## Pixel Live (voice mode)
+
+No new environment variables — it uses the same Groq, Tavily and ElevenLabs
+keys as the rest of the app.
+
+- **The microphone never closes.** Recognition runs continuously and restarts
+  itself, so there is no "your turn" window to wait for.
+- **Barge-in.** Speech that arrives while Pixel is talking cuts the audio off
+  and becomes the next question.
+- **A 420ms end-of-speech gap** (was 700ms) ends your turn.
+- **The orb is a canvas** — ~1450 jittered points on a Fibonacci sphere.
+  Neutral when idle, **blue while you speak**, **amber while Pixel speaks**.
+- **Two controls only**: end session and mute. The text box is gone.
+- **Live-web lookups play a short two-note chime** instead of an orb animation;
+  the small "Searching the web…" status text stays.
+- **Saying goodbye ends the session** ("bye", "see you", "that's all", …).
+  Questions *about* farewells ("what does goodbye mean in french") do not.
+- **Every session is saved to Channels** in the sidebar, with a card confirming
+  it, and opens again as a readable transcript.
+
+## Tables in answers
+
+Markdown tables are parsed and rendered properly. On a laptop they stay real
+tables; below 600px each row becomes a labelled card, because a six-column
+comparison squeezed into 360px is unreadable however neatly it is drawn.
+`<br>` inside a cell becomes a real break and bullets become a real list.
+
+## Renaming
+
+`window.prompt()` is suppressed inside a Trusted Web Activity, which is why
+renaming silently did nothing in the Android app. Both the display name and
+chat rename now use an in-app dialog, and the display name updates the sidebar,
+the greeting, the settings row and cloud sync together.

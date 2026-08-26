@@ -1690,6 +1690,277 @@ body.empty-state .suggests{display:flex}
   .chat-sheet-scrim{transition:none}
 }
 
+/* ================================================================
+   PIXEL LIVE — the voice screen, rebuilt.
+
+   The orb is a canvas, not a stack of divs. It draws a sphere of about
+   a thousand points on a Fibonacci lattice, rotates it, and breathes
+   with whoever is talking. A thousand DOM nodes would have cost a
+   thousand style recalculations a frame; one canvas costs one draw.
+
+   The screen carries no text box any more: two controls, end and mute,
+   exactly like the reference. Colour carries the state instead of
+   words -- blue while you speak, amber while Pixel speaks.
+   ================================================================ */
+.live{
+  background:var(--bg);
+  gap:0;justify-content:space-between;padding:0;
+}
+.live-gear{
+  position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;
+  width:38px;height:38px;border-radius:50%;border:none;background:none;
+  color:var(--muted);display:grid;place-items:center;
+  transition:background .16s var(--ease,ease),color .16s var(--ease,ease),transform .16s var(--ease,ease);
+}
+.live-gear svg{width:20px;height:20px}
+.live-gear:hover{background:var(--hover);color:var(--ink)}
+.live-gear:active{transform:scale(.9)}
+
+/* the caption sits above the orb and holds the last thing said */
+.live-caption{
+  flex:1;display:flex;align-items:flex-end;justify-content:center;
+  width:min(660px,88vw);margin:0 auto;
+  padding:calc(64px + env(safe-area-inset-top)) 16px 26px;
+  font-size:17px;line-height:1.5;color:var(--ink);text-align:center;
+  text-wrap:balance;min-height:0;
+  transition:color .3s var(--ease,ease);
+}
+.live-caption:empty{opacity:0}
+.live-caption.user{color:var(--muted);font-style:italic}
+
+.orb-wrap{position:relative;width:min(300px,72vw);height:min(300px,72vw);display:grid;place-items:center;flex:none}
+.orb-wrap::before,.orb-wrap::after{content:none}
+.orb-canvas{width:100%;height:100%;display:block}
+
+.live-status{
+  flex:1;display:flex;align-items:flex-start;justify-content:center;
+  padding:26px 16px 0;font-size:16px;font-weight:650;letter-spacing:-.01em;
+  color:var(--muted);transition:color .3s var(--ease,ease);text-align:center;
+}
+.live.state-user .live-status{color:var(--accent)}
+.live.state-speaking .live-status{color:var(--gold-bright,#D4A22A)}
+
+/* the two controls, exactly the pair in the reference */
+.live-controls{
+  flex:none;display:flex;align-items:center;justify-content:center;gap:22px;
+  padding:0 20px calc(38px + env(safe-area-inset-bottom));
+}
+.live-ctl{
+  width:58px;height:58px;border-radius:50%;border:none;
+  background:var(--bg-2);color:var(--ink);
+  display:grid;place-items:center;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);
+  transition:background .16s var(--ease,ease),transform .18s cubic-bezier(.34,1.4,.5,1),color .16s var(--ease,ease);
+}
+.live-ctl svg{width:23px;height:23px}
+.live-ctl:hover{background:var(--hover)}
+.live-ctl:active{transform:scale(.9)}
+.live-ctl .mic-off{display:none}
+.live-ctl.muted{background:color-mix(in srgb,#DC2626 12%,var(--bg-2));color:#DC2626}
+.live-ctl.muted .mic-on{display:none}
+.live-ctl.muted .mic-off{display:block}
+
+@media (max-width:400px){
+  .live-caption{font-size:16px;padding-top:calc(56px + env(safe-area-inset-top))}
+  .live-ctl{width:54px;height:54px}
+}
+@media (max-height:640px){
+  .live-caption{padding-bottom:14px}
+  .live-status{padding-top:14px}
+  .live-controls{padding-bottom:calc(22px + env(safe-area-inset-bottom))}
+}
+
+/* the end-of-session card */
+.live-saved{
+  position:fixed;left:50%;bottom:calc(112px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(14px) scale(.96);
+  z-index:130;display:flex;align-items:center;gap:11px;
+  padding:13px 18px;border-radius:14px;max-width:88vw;
+  background:color-mix(in srgb,var(--ink) 90%,transparent);color:var(--bg);
+  border:1px solid color-mix(in srgb,#fff 14%,transparent);
+  backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
+  box-shadow:0 14px 40px -12px rgba(0,0,0,.45);
+  font-size:14px;font-weight:600;opacity:0;pointer-events:none;
+  transition:opacity .24s var(--ease,ease),transform .4s cubic-bezier(.34,1.4,.5,1);
+}
+.live-saved.show{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.live-saved svg{width:17px;height:17px;flex:none;color:#4ADE80}
+
+/* a live session in the sidebar reads as a channel, not a chat */
+.sb-channel-ico{
+  flex:none;width:22px;height:22px;border-radius:50%;
+  background:color-mix(in srgb,var(--accent) 14%,transparent);
+  display:grid;place-items:center;color:var(--accent);
+}
+.sb-channel-ico svg{width:12px;height:12px}
+
+/* ================================================================
+   AGENTS — an empty state, and cards that arrive.
+   ================================================================ */
+.agents-grid .agent-card,.agents-grid .agent-new{
+  animation:agentIn .42s cubic-bezier(.22,.9,.28,1) both;
+  animation-delay:calc(var(--i,0) * 60ms);
+}
+@keyframes agentIn{
+  from{opacity:0;transform:translateY(14px) scale(.97)}
+  to{opacity:1;transform:none}
+}
+.agents-grid.is-empty{grid-template-columns:1fr;max-width:560px}
+.agents-hint{
+  grid-column:1/-1;text-align:center;padding:6px 8px 40px;color:var(--muted);
+  animation:agentIn .5s cubic-bezier(.22,.9,.28,1) both;animation-delay:140ms;
+}
+.agents-hint b{
+  display:block;font-family:'Bricolage Grotesque',sans-serif;font-size:18px;
+  font-weight:800;letter-spacing:-.015em;color:var(--ink);margin-bottom:8px;
+}
+.agents-hint p{font-size:14.5px;line-height:1.6;max-width:46ch;margin:0 auto}
+/* a small robot with three things orbiting it -- the page's one moving part */
+.agents-hint-orbit{
+  position:relative;width:104px;height:104px;margin:6px auto 18px;
+  display:grid;place-items:center;
+}
+.agents-hint-orbit i{font-size:34px;font-style:normal;line-height:1;animation:agentBob 3.4s ease-in-out infinite}
+.agents-hint-orbit span{
+  position:absolute;inset:0;border-radius:50%;
+  border:1px dashed color-mix(in srgb,var(--accent) 26%,transparent);
+  animation:agentSpin 9s linear infinite;
+}
+.agents-hint-orbit span:nth-child(1){inset:6px;animation-duration:11s}
+.agents-hint-orbit span:nth-child(2){inset:18px;animation-duration:8s;animation-direction:reverse;border-color:color-mix(in srgb,var(--gold) 30%,transparent)}
+.agents-hint-orbit span:nth-child(3){inset:30px;animation-duration:14s;border-style:dotted}
+@keyframes agentSpin{to{transform:rotate(360deg)}}
+@keyframes agentBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@media (prefers-reduced-motion:reduce){
+  .agents-grid .agent-card,.agents-grid .agent-new,.agents-hint{animation:none}
+  .agents-hint-orbit span,.agents-hint-orbit i{animation:none}
+}
+
+/* Channels holds content now, which on a short screen -- landscape especially
+   -- was enough to push the account row off the bottom of the sidebar. Every
+   section can shrink and scroll its own list, so the account row stays put
+   however many sections are open. */
+#bodyChannels .sb-list{max-height:30vh;overflow-y:auto}
+.sb-sec-body{flex:0 1 auto;min-height:0}
+#bodyChannels .sb-list,#bodyDMs .sb-list{min-height:0}
+@media (max-height:560px){
+  .sb-section-label{padding:14px 20px 6px}
+  #bodyChannels .sb-list,#bodyDMs .sb-list{max-height:22vh}
+  .sb-empty-ico{padding:14px 12px;gap:6px}
+  .sb-empty-ico span{font-size:13px}
+}
+
+/* Everything between the brand and the account row scrolls as one column.
+   Before this the nav rows and the three section headers were fixed-height
+   siblings, so on a short screen -- landscape is the obvious one -- their
+   combined height alone pushed the account row off the bottom, whatever the
+   lists inside them did. Now the account row is pinned and the rest scrolls. */
+.sb-scroll{
+  flex:1;min-height:0;display:flex;flex-direction:column;
+  overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:var(--glass-line) transparent;
+}
+/* the lists inside no longer need their own scrollers on short screens */
+.sb-scroll #bodyChats{flex:none}
+.sb-scroll #bodyChats .sb-list{flex:none;overflow:visible}
+@media (min-height:561px){
+  .sb-scroll #bodyChats{flex:1;min-height:0}
+  .sb-scroll #bodyChats .sb-list{flex:1;min-height:0;overflow-y:auto}
+}
+
+/* ================================================================
+   TABLES IN ANSWERS — a real table, not a wall of pipes.
+   On a phone the columns become stacked label/value rows, because a
+   six-column comparison squeezed into 360px is unreadable however
+   neatly it is drawn.
+   ================================================================ */
+.table-wrap{
+  margin:14px 0;overflow-x:auto;overscroll-behavior-x:contain;
+  border:1px solid var(--line);border-radius:12px;
+  -webkit-overflow-scrolling:touch;
+}
+.bubble table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.5;background:var(--card)}
+.bubble thead th{
+  background:var(--bg-2);color:var(--ink);font-weight:700;font-size:13px;
+  letter-spacing:.01em;text-align:left;padding:10px 13px;white-space:nowrap;
+  border-bottom:1px solid var(--line);
+}
+.bubble tbody td{
+  padding:10px 13px;vertical-align:top;color:var(--ink);
+  border-bottom:1px solid var(--line);
+}
+.bubble tbody tr:last-child td{border-bottom:none}
+.bubble tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--ink) 2%,transparent)}
+.bubble table .cell-list{margin:0;padding-left:17px}
+.bubble table .cell-list li{margin:2px 0}
+.bubble table th:first-child,.bubble table td:first-child{font-weight:600}
+
+@media (max-width:600px){
+  /* stack: every cell becomes its own labelled row */
+  .table-wrap{border:none;border-radius:0;overflow:visible;margin:12px 0}
+  .bubble table,.bubble thead,.bubble tbody,.bubble tr,.bubble td{display:block;width:100%}
+  .bubble thead{display:none}
+  .bubble tbody tr{
+    border:1px solid var(--line);border-radius:12px;
+    margin-bottom:10px;overflow:hidden;background:var(--card);
+  }
+  .bubble tbody td{
+    border-bottom:1px solid var(--line);padding:9px 13px;background:none!important;
+  }
+  .bubble tbody td:last-child{border-bottom:none}
+  .bubble tbody td::before{
+    content:attr(data-label);display:block;
+    font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:3px;
+  }
+  .bubble tbody td[data-label=""]::before{display:none}
+  .bubble table td:first-child{font-weight:600}
+}
+
+/* the text dialog that replaced window.prompt() */
+.ask-modal{position:fixed;inset:0;z-index:140;display:grid;place-items:center;padding:20px}
+.ask-scrim{
+  position:absolute;inset:0;background:rgba(8,16,32,.45);
+  opacity:0;transition:opacity .2s var(--ease,ease);
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+}
+.ask-modal.show .ask-scrim{opacity:1}
+.ask-card{
+  position:relative;width:min(380px,100%);background:var(--card);
+  border:1px solid var(--line);border-radius:18px;padding:22px 20px 18px;
+  box-shadow:0 24px 60px -14px rgba(8,20,50,.4),0 2px 8px rgba(0,0,0,.08);
+  transform:translateY(10px) scale(.97);opacity:0;
+  transition:transform .3s cubic-bezier(.34,1.3,.5,1),opacity .2s ease;
+}
+.ask-modal.show .ask-card{transform:none;opacity:1}
+.ask-card h3{
+  font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:800;
+  letter-spacing:-.015em;color:var(--ink);margin-bottom:4px;
+}
+.ask-sub{font-size:13.5px;color:var(--muted);line-height:1.45;margin-bottom:14px}
+.ask-card h3 + .ask-input{margin-top:12px}
+.ask-input{
+  width:100%;padding:12px 14px;border-radius:11px;
+  border:1px solid var(--line-strong);background:var(--bg);
+  font-family:inherit;font-size:16px;color:var(--ink);outline:none;
+  transition:border-color .16s var(--ease,ease),box-shadow .16s var(--ease,ease);
+}
+.ask-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.ask-actions{display:flex;gap:9px;margin-top:16px}
+.ask-actions button{
+  flex:1;padding:12px;border-radius:11px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);font-size:15px;font-weight:650;
+  transition:background .14s var(--ease,ease),transform .14s var(--ease,ease);
+}
+.ask-actions button:active{transform:scale(.98)}
+.ask-actions .ask-save{
+  background:var(--accent);border-color:var(--accent);color:#fff;
+  box-shadow:0 4px 12px -4px color-mix(in srgb,var(--accent) 55%,transparent);
+}
+@media (prefers-reduced-motion:reduce){
+  .ask-card,.ask-scrim{transition:none;transform:none}
+}
+
 </style>
 </head>
 <body>
@@ -1973,6 +2244,7 @@ body.empty-state .suggests{display:flex}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
     </button>
   </div>
+  <div class="sb-scroll" id="sbScroll">
   <button class="sb-nav" id="sbNew">
     <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
     New Chat
@@ -1993,7 +2265,7 @@ body.empty-state .suggests{display:flex}
     <svg class="sb-sec-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     Channels
   </button>
-  <div class="sb-sec-body" id="bodyChannels"><div class="sb-empty">No channels yet.</div></div>
+  <div class="sb-sec-body" id="bodyChannels"><div class="sb-list" id="sbChannelList"></div></div>
   <button class="sb-section-label" id="secDMs" type="button">
     <svg class="sb-sec-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     Direct messages
@@ -2004,6 +2276,7 @@ body.empty-state .suggests{display:flex}
     Chats
   </button>
   <div class="sb-sec-body" id="bodyChats"><div class="sb-list" id="sbList"></div></div>
+  </div>
   <div class="sb-account-wrap">
     <div class="acct-menu" id="acctMenu">
 <button class="acct-item" id="acctSettingsBtn" type="button">
@@ -2057,14 +2330,16 @@ body.empty-state .suggests{display:flex}
   <iframe id="htmlPreviewFrame" sandbox="allow-scripts allow-forms allow-modals allow-popups" title="HTML preview"></iframe>
 </div>
 <div class="live" id="liveOverlay">
-  <button class="live-close" id="liveClose" aria-label="Close voice mode">&times;</button>
-  <div class="live-tag">✦ PIXEL LIVE</div>
-  <div class="orb-wrap"><div class="orb" id="orb"><i></i><i></i><i></i></div></div>
-  <div class="live-status" id="liveStatus">Listening… just speak</div>
-  <div class="live-text" id="liveText"></div>
-  <div class="live-command" aria-label="Type a voice command">
-    <input id="liveCommandInput" type="text" autocomplete="off" placeholder="Type a command for Pixel…" maxlength=600 />
-    <button id="liveCommandBtn" type="button">Send</button>
+  <button class="live-gear" id="liveGear" aria-label="Voice settings" title="Voice settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></button>
+  <div class="live-caption" id="liveText"></div>
+  <div class="orb-wrap"><canvas class="orb-canvas" id="orbCanvas" width="440" height="440" aria-hidden="true"></canvas></div>
+  <div class="live-status" id="liveStatus">Say something…</div>
+  <div class="live-controls">
+    <button class="live-ctl" id="liveClose" aria-label="End voice session" title="End session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <button class="live-ctl" id="liveMute" aria-label="Mute microphone" title="Mute microphone" aria-pressed="false">
+      <svg class="mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
+      <svg class="mic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5a3 3 0 0 1 6 0v5"/><path d="M15 13.5a3 3 0 0 1-6-1.5V9"/><path d="M5 11a7 7 0 0 0 10.6 6"/><path d="M19 11a7 7 0 0 1-.6 2.8"/><path d="M12 18v4"/><path d="m3 3 18 18"/></svg>
+    </button>
   </div>
 </div>
 
@@ -2404,8 +2679,12 @@ function sortPinned(list){
 }
 function makeChatRow(c, withAgent){
   var el = document.createElement('div');
+  var isLive = c.kind === 'live';
   el.className = 'sb-item' + (c.id === activeChatId ? ' active' : '') + (c.pinned ? ' pinned' : '');
-  el.innerHTML = (withAgent ? '<span class="sb-dm-emoji"></span>' : '') + '<span class="t"></span>';
+  el.innerHTML =
+    (withAgent ? '<span class="sb-dm-emoji"></span>' : '') +
+    (isLive ? '<span class="sb-channel-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg></span>' : '') +
+    '<span class="t"></span>';
   if(withAgent) el.querySelector('.sb-dm-emoji').textContent = c.agentEmoji || '\ud83e\udd16';
   el.querySelector('.t').textContent = withAgent ? (c.agentName + ' \u00b7 ' + c.title) : c.title;
   el.querySelector('.t').addEventListener('click', function(){ openChat(c.id); });
@@ -2509,13 +2788,12 @@ function openChatSheet(c){
       else if(act === 'delete'){ deleteChat(c.id); }
       else if(act === 'rename'){
         haptic('tap');
-        var v = prompt('Rename chat', c.title || '');
-        if(v === null) return;
-        v = v.trim().slice(0, 80);
-        if(!v) return;
-        setChatTitle(c.id, v);
-        renderSidebar();
-        showToast('Renamed.');
+        askForText({ title:'Rename chat', value:c.title || '', placeholder:'Chat name', maxLength:80 }, function(v){
+          if(v === null) return;
+          setChatTitle(c.id, v);
+          renderSidebar();
+          showToast('Renamed.');
+        });
       }
       else { haptic('light'); }
     });
@@ -2539,9 +2817,22 @@ function renderSidebar(){
       return false;
     });
   }
-  /* agent conversations live under Direct messages, everything else under Chats */
-  var dms = sortPinned(all.filter(function(c){ return !!c.agentId; }));
-  var chats = sortPinned(all.filter(function(c){ return !c.agentId; }));
+  /* Three homes, and Channels finally has something to hold: voice sessions
+     recorded with Pixel Live. Agent conversations stay under Direct messages,
+     everything typed stays under Chats. */
+  var channels = sortPinned(all.filter(function(c){ return c.kind === 'live'; }));
+  var dms = sortPinned(all.filter(function(c){ return !!c.agentId && c.kind !== 'live'; }));
+  var chats = sortPinned(all.filter(function(c){ return !c.agentId && c.kind !== 'live'; }));
+
+  var chList = document.getElementById('sbChannelList');
+  if(chList){
+    chList.innerHTML = '';
+    if(!channels.length){
+      chList.innerHTML = '<div class="sb-empty-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg><span>No voice sessions yet</span></div>';
+    } else {
+      channels.forEach(function(c){ chList.appendChild(makeChatRow(c, false)); });
+    }
+  }
 
   var dmList = document.getElementById('sbDmList');
   if(dmList){
@@ -2736,6 +3027,7 @@ function startLandingType(){
     if(phase === 'typing'){
       ci++;
       el.textContent = quote.slice(0, ci);
+      if(quote.charAt(ci - 1) !== ' ') hapticTick();   /* one per letter, not per space */
       if(ci >= quote.length){
         phase = 'holding';
         haptic('typed');                 /* the line has landed */
@@ -2754,6 +3046,7 @@ function startLandingType(){
       return;
     }
     ci -= 2;
+    if(ci > 0 && ci % 3 === 0) hapticTick();          /* sparser going out than coming in */
     if(ci <= 0){
       ci = 0; el.textContent = '';
       title.classList.remove('clearing');
@@ -3109,138 +3402,486 @@ function fallbackSpeak(text, done){
 }
 if(window.speechSynthesis){ try{ speechSynthesis.onvoiceschanged = function(){}; speechSynthesis.getVoices(); }catch(e){} }
 
+/* ================================================================
+   PIXEL LIVE — voice mode.
+
+   Three things make this feel like a conversation rather than a
+   walkie-talkie, and all three were missing before:
+
+   * The microphone never closes. Recognition runs continuously and
+     restarts itself; there is no "your turn" window to wait for.
+   * Barge-in. Speech that arrives while Pixel is talking cuts the
+     audio off mid-word and becomes the next question, the way
+     interrupting a person does.
+   * A short end-of-speech gap. 420ms of quiet ends your turn instead
+     of the old 700ms, which is the difference between a reply that
+     feels immediate and one that feels like it is thinking about
+     whether you have finished.
+
+   The orb is a canvas: about a thousand points on a Fibonacci lattice,
+   rotated and projected each frame, breathing with whoever is speaking.
+   Colour carries the state -- blue for you, amber for Pixel.
+   ================================================================ */
+
+var live = {
+  on:false, busy:false, rec:null, muted:false,
+  state:'idle',              /* idle | listening | user | thinking | searching | speaking */
+  level:0, targetLevel:0,
+  transcript:[],             /* the session, for saving into Channels */
+  startedAt:0,
+  farewell:false,
+  restartTimer:null
+};
+
+/* ---------- the orb ---------- */
+var orbAnim = { raf:null, pts:null, rot:0, ctx:null, dpr:1 };
+
+function orbBuildPoints(n){
+  /* A Fibonacci lattice spaces points evenly over a sphere without the
+     crowding at the poles you get from stepping latitude and longitude. On
+     its own it is TOO even -- the eye picks out the spiral and it reads as a
+     woven grid -- so each point is nudged off its slot. Even coverage,
+     no visible pattern. */
+  var pts = [], golden = Math.PI * (3 - Math.sqrt(5));
+  var jitter = 0.55 / Math.sqrt(n);          /* scaled so density stays uniform */
+  for(var i = 0; i < n; i++){
+    var y = 1 - (i / (n - 1)) * 2;
+    var r = Math.sqrt(Math.max(0, 1 - y * y));
+    var th = golden * i;
+    var x = Math.cos(th) * r, z = Math.sin(th) * r;
+    x += (Math.random() - 0.5) * jitter * 9;
+    y += (Math.random() - 0.5) * jitter * 9;
+    z += (Math.random() - 0.5) * jitter * 9;
+    var len = Math.sqrt(x*x + y*y + z*z) || 1;   /* push it back onto the shell */
+    pts.push({ x:x/len, y:y/len, z:z/len, j: Math.random(), s: 0.72 + Math.random() * 0.6 });
+  }
+  return pts;
+}
+function orbColour(){
+  /* read the palette so the orb follows the theme instead of hard-coding */
+  var cs = getComputedStyle(document.documentElement);
+  var accent = (cs.getPropertyValue('--accent') || '#2563EB').trim();
+  var gold = (cs.getPropertyValue('--gold-bright') || '#D4A22A').trim();
+  var muted = (cs.getPropertyValue('--muted') || '#6B7280').trim();
+  if(live.state === 'user') return accent;
+  if(live.state === 'speaking') return gold;
+  if(live.state === 'thinking' || live.state === 'searching') return accent;
+  return muted;
+}
+function orbStart(){
+  var c = document.getElementById('orbCanvas');
+  if(!c) return;
+  orbStop();
+  orbAnim.ctx = c.getContext('2d');
+  orbAnim.pts = orbAnim.pts || orbBuildPoints(1450);
+  orbAnim.dpr = Math.min(2, window.devicePixelRatio || 1);
+  function resize(){
+    var box = c.getBoundingClientRect();
+    c.width = Math.max(1, Math.round(box.width * orbAnim.dpr));
+    c.height = Math.max(1, Math.round(box.height * orbAnim.dpr));
+  }
+  resize();
+  orbAnim.resize = resize;
+  window.addEventListener('resize', resize);
+
+  var reduced = false;
+  try{ reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+
+  var t = 0;
+  function frame(){
+    var ctx = orbAnim.ctx;
+    if(!ctx){ return; }
+    var W = c.width, H = c.height, cx = W/2, cy = H/2;
+    ctx.clearRect(0,0,W,H);
+
+    t += 0.016;
+    /* ease the level so the orb never snaps between sizes */
+    live.level += (live.targetLevel - live.level) * 0.12;
+
+    if(!reduced) orbAnim.rot += (live.state === 'speaking' ? 0.0042 : live.state === 'user' ? 0.0036 : 0.0018);
+
+    var base = Math.min(W,H) * 0.34;
+    var breathe = live.state === 'idle' || live.state === 'listening'
+      ? Math.sin(t * 1.1) * 0.012
+      : Math.sin(t * 2.6) * 0.02;
+    var radius = base * (1 + breathe + live.level * 0.13);
+
+    var col = orbColour();
+    var rot = orbAnim.rot, cosR = Math.cos(rot), sinR = Math.sin(rot);
+    var tilt = 0.42, cosT = Math.cos(tilt), sinT = Math.sin(tilt);
+    var pts = orbAnim.pts;
+
+    ctx.fillStyle = col;
+    for(var i = 0; i < pts.length; i++){
+      var p = pts[i];
+      /* spin around Y, then tip the whole sphere slightly toward the viewer */
+      var x1 = p.x * cosR - p.z * sinR;
+      var z1 = p.x * sinR + p.z * cosR;
+      var y2 = p.y * cosT - z1 * sinT;
+      var z2 = p.y * sinT + z1 * cosT;
+
+      /* each point wobbles a little on its own clock, more when there is
+         energy in the room -- this is what stops it reading as a rigid mesh */
+      var wob = 1 + (Math.sin(t * (1.4 + p.j) + p.j * 9) * 0.018) * (1 + live.level * 3.2);
+
+      var persp = 1 / (1.9 - z2 * 0.55);
+      var sx = cx + x1 * radius * wob * persp;
+      var sy = cy + y2 * radius * wob * persp;
+
+      /* depth decides both size and opacity, which is the whole illusion */
+      var depth = (z2 + 1) / 2;
+      var size = (0.34 + depth * 1.12) * p.s * orbAnim.dpr;
+      ctx.globalAlpha = 0.09 + depth * 0.74;
+      ctx.beginPath();
+      ctx.arc(sx, sy, size, 0, 6.2832);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    orbAnim.raf = requestAnimationFrame(frame);
+  }
+  orbAnim.raf = requestAnimationFrame(frame);
+}
+function orbStop(){
+  if(orbAnim.raf){ cancelAnimationFrame(orbAnim.raf); orbAnim.raf = null; }
+  if(orbAnim.resize){ window.removeEventListener('resize', orbAnim.resize); orbAnim.resize = null; }
+}
+
+/* ---------- a small sound for the live-web lookup ---------- */
+var liveAudioCtx = null;
+function liveChime(kind){
+  try{
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return;
+    liveAudioCtx = liveAudioCtx || new AC();
+    if(liveAudioCtx.state === 'suspended') liveAudioCtx.resume();
+    var now = liveAudioCtx.currentTime;
+    /* two soft notes -- rising to go and look, falling to come back */
+    var notes = kind === 'found' ? [880, 660] : [660, 990];
+    notes.forEach(function(f, i){
+      var o = liveAudioCtx.createOscillator();
+      var g = liveAudioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, now + i * 0.11);
+      g.gain.linearRampToValueAtTime(0.055, now + i * 0.11 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.11 + 0.20);
+      o.connect(g); g.connect(liveAudioCtx.destination);
+      o.start(now + i * 0.11); o.stop(now + i * 0.11 + 0.22);
+    });
+  }catch(e){}
+}
+
+/* ---------- state ---------- */
+var LIVE_STATUS = {
+  idle:'Say something…',
+  listening:'Say something…',
+  user:'Listening…',
+  thinking:'Thinking…',
+  searching:'Searching the web…',
+  speaking:'Speaking…'
+};
+function setOrb(mode){
+  live.state = mode || 'idle';
+  var ov = document.getElementById('liveOverlay');
+  if(ov){
+    ov.className = ov.className.replace(/\s*state-\S+/g,'');
+    ov.classList.add('state-' + live.state);
+  }
+  var s = document.getElementById('liveStatus');
+  if(s) s.textContent = live.muted ? 'Microphone muted' : (LIVE_STATUS[live.state] || LIVE_STATUS.idle);
+  live.targetLevel = live.state === 'user' ? 0.85 : live.state === 'speaking' ? 0.62 : live.state === 'thinking' || live.state === 'searching' ? 0.3 : 0.1;
+}
+function liveCaption(text, who){
+  var el = document.getElementById('liveText');
+  if(!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('user', who === 'user');
+}
+
+/* ---------- farewells end the session ---------- */
+function isFarewell(t){
+  var raw = String(t || '').trim();
+  t = raw.toLowerCase().replace(/[.!,?]+$/,'');
+  if(!t || t.split(/\s+/).length > 6) return false;
+  /* "what does goodbye mean in french" contains a farewell and is not one.
+     Anything shaped like a question, a translation or a definition is asking
+     ABOUT the word, so it must not hang up the call. */
+  if(/\?$/.test(raw)) return false;
+  if(/\b(what|how|why|when|where|which|who|meaning|means|mean|define|definition|translate|translation|spell|spelling|synonym|opposite|say|write|explain|difference)\b/.test(t)) return false;
+  return /(^|\b)(bye+|bye bye|goodbye|good bye|see ya|see you( later| soon)?|talk to you later|ttyl|catch you later|that'?s all|that is all|thats all|i'?m done|im done|that'?ll be all|nothing else|no more|stop( now)?|end (the )?(call|session|chat)|hang up|disconnect|exit|quit|alvida|chalta hu|chalta hoon|thik hai bye|ok bye|okay bye|thank you bye|good night)(\b|$)/.test(t);
+}
+
+/* ---------- speaking, interruptible ---------- */
+function liveStopSpeaking(){
+  if(ttsAudio){ try{ ttsAudio.pause(); ttsAudio.currentTime = 0; }catch(e){} ttsAudio = null; }
+  if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
+}
 function liveSpeak(text, done){
   setOrb('speaking');
+  live.speakToken = (live.speakToken || 0) + 1;
+  var token = live.speakToken;
   elevenSpeak(text, function(){
-    setOrb('');
+    /* a barge-in bumped the token: this callback belongs to audio that is
+       no longer the current turn, so it must not restart listening */
+    if(token !== live.speakToken) return;
+    if(live.on && !live.busy) setOrb('listening');
     if(done) done();
   });
 }
-function setOrb(mode){
-  var o = document.getElementById('orb');
-  if(!o) return;
-  o.className = 'orb' + (mode ? ' ' + mode : '');
-  var s = document.getElementById('liveStatus');
-  if(s) s.textContent = mode==='listening' ? 'Listening…' : mode==='thinking' ? 'Thinking…' : mode==='searching' ? 'Searching the live web…' : mode==='speaking' ? 'Speaking…' : 'Tap the orb and speak';
-}
+
+/* ---------- continuous listening ---------- */
 function liveListen(){
-  if(!live.on || live.busy) return;
+  if(!live.on || live.muted) return;
   var SR2 = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR2){ document.getElementById('liveStatus').textContent = 'Voice input is not supported here. Type below instead.'; return; }
-  try{ if(live.rec) live.rec.abort(); }catch(e){}
+  if(!SR2){
+    var st = document.getElementById('liveStatus');
+    if(st) st.textContent = 'Voice input is not supported in this browser.';
+    return;
+  }
+  try{ if(live.rec){ live.rec.onend = null; live.rec.abort(); } }catch(e){}
+
   var r = new SR2(); live.rec = r;
   r.lang = state.lang==='hi'?'hi-IN':state.lang==='bn'?'bn-IN':'en-IN';
   r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
-  var finalText = '';
-  var silenceTimer = null;
-  r.onstart = function(){ setOrb('listening'); };
+
+  var pending = '', gapTimer = null;
+
+  function commit(){
+    var q = pending.trim();
+    pending = '';
+    if(gapTimer){ clearTimeout(gapTimer); gapTimer = null; }
+    if(!q) return;
+    if(isFarewell(q)){
+      live.farewell = true;
+      liveCaption(q, 'user');
+      live.transcript.push({ role:'user', content:q });
+      endLiveWithFarewell();
+      return;
+    }
+    liveAsk(q);
+  }
+
+  r.onstart = function(){ if(live.on && !live.busy && !live.muted) setOrb('listening'); };
   r.onerror = function(e){
-    if(e.error === 'no-speech' || e.error === 'aborted') return;
-    if(live.on && !live.busy) setOrb('');
+    if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      var st = document.getElementById('liveStatus');
+      if(st) st.textContent = 'Microphone permission is blocked.';
+      live.muted = true;
+      syncLiveMute();
+    }
   };
   r.onend = function(){
-    if(live.on && !live.busy){ try{ r.start(); }catch(e){} }
+    /* the engine stops itself every so often -- bring it straight back so the
+       microphone is genuinely always open, rather than open in windows */
+    if(!live.on || live.muted) return;
+    if(live.restartTimer) clearTimeout(live.restartTimer);
+    live.restartTimer = setTimeout(function(){
+      if(live.on && !live.muted){ try{ r.start(); }catch(e){ liveListen(); } }
+    }, 160);
   };
   r.onresult = function(e){
-    var interim = '';
+    var interim = '', gotFinal = false;
     for(var i = e.resultIndex; i < e.results.length; i++){
-      if(e.results[i].isFinal){ finalText += e.results[i][0].transcript; }
+      if(e.results[i].isFinal){ pending += e.results[i][0].transcript + ' '; gotFinal = true; }
       else { interim += e.results[i][0].transcript; }
     }
-    var liveText = document.getElementById('liveText');
-    if(liveText && interim) liveText.textContent = interim;
-    if(finalText.trim()){
-      var q = finalText.trim(); finalText = '';
-      if(silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(function(){
-        try{ r.stop(); }catch(e){}
-        liveAsk(q);
-      }, 700);
+    var heard = (pending + interim).trim();
+    if(!heard) return;
+
+    /* BARGE-IN: speech during Pixel's turn cuts it off and takes over */
+    if(live.state === 'speaking' || live.busy){
+      if(heard.length < 2) return;
+      liveStopSpeaking();
+      live.speakToken = (live.speakToken || 0) + 1;   /* orphan the old callback */
+      if(live.abort){ try{ live.abort.abort(); }catch(e){} live.abort = null; }
+      live.busy = false;
+      haptic('light');
     }
+
+    setOrb('user');
+    live.targetLevel = 0.7 + Math.min(0.5, heard.length / 90);
+    liveCaption(heard, 'user');
+
+    if(gapTimer) clearTimeout(gapTimer);
+    /* a short gap ends the turn. Final results are trusted sooner than
+       interim ones, which are still being revised. */
+    gapTimer = setTimeout(commit, gotFinal ? 420 : 900);
   };
   try{ r.start(); }catch(e){}
 }
+function liveStopListening(){
+  if(live.restartTimer){ clearTimeout(live.restartTimer); live.restartTimer = null; }
+  try{ if(live.rec){ live.rec.onend = null; live.rec.abort(); } }catch(e){}
+  live.rec = null;
+}
+function syncLiveMute(){
+  var b = document.getElementById('liveMute');
+  if(b){ b.classList.toggle('muted', live.muted); b.setAttribute('aria-pressed', live.muted ? 'true':'false'); }
+  if(live.muted){ liveStopListening(); setOrb('idle'); }
+  else { setOrb('listening'); liveListen(); }
+  var s = document.getElementById('liveStatus');
+  if(s && live.muted) s.textContent = 'Microphone muted';
+}
 
-var live = { on:false, busy:false, rec:null };
+/* ---------- asking ---------- */
 async function liveAsk(question){
   question = String(question || '').trim();
-  if(live.busy || !question) return;
-  if(quotaExceeded()){ liveSpeak('You have used today\'s free questions. Please sign in with Google to continue.', function(){ closeLive(); openGate(); }); return; }
+  if(!question) return;
+  if(quotaExceeded()){
+    liveSpeak('You have used today’s free questions. Please sign in to continue.', function(){ closeLive(); openGate(); });
+    return;
+  }
   live.busy = true;
-  var cmd = document.getElementById('liveCommandInput');
-  var sendBtn = document.getElementById('liveCommandBtn');
-  if(cmd) cmd.value = '';
-  if(sendBtn) sendBtn.disabled = true;
-  try{ if(live.rec) live.rec.abort(); }catch(e){}
-  document.getElementById('liveText').textContent = '“' + question + '”';
+  live.transcript.push({ role:'user', content:question });
+  liveCaption(question, 'user');
   setOrb('thinking');
+  live.abort = new AbortController();
+  var signal = live.abort.signal;
+
   try{
     var msgs = [
-      { role:'system', content: systemPrompt() + ' This is voice mode: keep the spoken answer to 1–3 short sentences and avoid markdown tables or long lists.' },
+      { role:'system', content: systemPrompt() + ' This is voice mode: keep the spoken answer to 1–3 short sentences, plain speech, no markdown, no lists, no headings.' },
       { role:'user', content: question }
     ];
     var reply;
-    var voiceNeedsLive = !isNormalLocalRequest(question);
-    if(voiceNeedsLive){
+    /* the same router the typed composer uses, so voice inherits every bit of
+       its accuracy instead of its own cruder rule */
+    var decision = routeDecide(question);
+    var needsWeb = decision.decision === 'web' ||
+      (decision.decision === 'ask' && (decision.webScore || 0) >= (decision.directScore || 0));
+
+    if(needsWeb){
       setOrb('searching');
+      liveChime('search');          /* the sound replaces the old animation */
       var liveWeb = await tavilySearch(question, {
-        topic: /\b(news|headlines?|breaking|sports?|match|score|result|election|fifa|cricket|football)\b/i.test(question) ? 'news' : 'general',
+        topic: /\b(news|headlines?|breaking|sports?|match|score|result|election)\b/i.test(question) ? 'news' : 'general',
         timeRange: /\b(today|tonight|now|currently|current|latest|breaking|live)\b/i.test(question) ? 'day' : undefined,
-        days: /\b(today|tonight|now|currently|current|latest|breaking|live)\b/i.test(question) ? 1 : undefined,
-        maxResults: 10, searchDepth: 'advanced', timeout: 25000
+        maxResults: 6, searchDepth: 'basic', timeout: 14000, signal: signal
       });
-      var lc = (liveWeb.answer ? 'TAVILY ANSWER:\n' + String(liveWeb.answer).slice(0,2200) + '\n\n' : '') + (liveWeb.results || []).slice(0,8).map(function(it,i){ return '['+(i+1)+'] '+(it.title||'')+'\nURL: '+(it.url||'')+'\nPublished: '+(it.published_date||'unknown')+'\nSnippet: '+String(it.content||'').slice(0,1800)+'\nExtracted: '+String(it.raw_content||'').slice(0,2500); }).join('\n\n');
-      reply = await callAI(msgs, false, null, lc);
+      var lc = (liveWeb.answer ? 'TAVILY ANSWER:\n' + String(liveWeb.answer).slice(0,1800) + '\n\n' : '') +
+        (liveWeb.results || []).slice(0,5).map(function(it,i){
+          return '['+(i+1)+'] '+(it.title||'')+'\nURL: '+(it.url||'')+'\nPublished: '+(it.published_date||'unknown')+'\nSnippet: '+String(it.content||'').slice(0,1200);
+        }).join('\n\n');
+      liveChime('found');
+      setOrb('thinking');
+      reply = await callAI(msgs, false, signal, lc);
     } else {
-      reply = await callAI(msgs, false, null);
+      reply = await callAI(msgs, false, signal);
     }
+    if(signal.aborted) return;      /* interrupted -- the new turn owns the screen */
     if(!state.user) bumpUsage();
-    document.getElementById('liveText').textContent = reply.slice(0,220);
-    liveSpeak(reply, function(){
-      live.busy = false;
-      if(sendBtn) sendBtn.disabled = false;
-      if(live.on){ setOrb('listening'); liveListen(); }
-    });
+    live.transcript.push({ role:'assistant', content:reply });
+    liveCaption(reply, 'bot');
+    live.busy = false;
+    live.abort = null;
+    liveSpeak(reply);
   }catch(e){
     live.busy = false;
-    if(sendBtn) sendBtn.disabled = false;
-    liveSpeak('Sorry, I could not reach the server right now.', function(){ if(live.on){ liveListen(); } });
+    live.abort = null;
+    if(e && e.name === 'AbortError') return;
+    liveSpeak('Sorry, I could not reach the server just then.');
   }
 }
-function openLive(){
-  live.on = true;
-  document.getElementById('liveOverlay').classList.add('show');
-  var name = state.user && state.user.displayName ? state.user.displayName.split(' ')[0] : '';
-  var hello = name ? 'Hi ' + name + ', I am Pixel. How can I help you?' : 'Hi, I am Pixel. How can I help you?';
-  document.getElementById('liveText').textContent = '';
-  var cmd = document.getElementById('liveCommandInput');
-  if(cmd) cmd.value = '';
-  var sendBtn = document.getElementById('liveCommandBtn');
-  if(sendBtn) sendBtn.disabled = false;
+
+/* ---------- saving the session into Channels ---------- */
+function liveSessionTitle(){
+  var first = null;
+  for(var i=0;i<live.transcript.length;i++){
+    if(live.transcript[i].role === 'user'){ first = live.transcript[i].content; break; }
+  }
+  if(!first) return 'Voice session';
+  return cleanTitle(first).slice(0, 46) || 'Voice session';
+}
+function saveLiveSession(){
+  /* a real exchange only -- opening and closing the screen saves nothing */
+  var turns = live.transcript.filter(function(m){ return m.role === 'user'; }).length;
+  if(turns < 1) return null;
+  var chats = loadChats();
+  var entry = {
+    id: 'live' + Date.now().toString(36),
+    kind: 'live',
+    title: liveSessionTitle(),
+    titled: true,
+    ts: Date.now(),
+    durationMs: Date.now() - live.startedAt,
+    messages: live.transcript.slice(-60)
+  };
+  chats.unshift(entry);
+  saveChats(chats);
+  renderSidebar();
+  return entry;
+}
+function showLiveSaved(){
+  var el = document.createElement('div');
+  el.className = 'live-saved';
+  el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Session saved to Channels</span>';
+  document.body.appendChild(el);
+  requestAnimationFrame(function(){ el.classList.add('show'); });
+  setTimeout(function(){
+    el.classList.remove('show');
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 320);
+  }, 2600);
+}
+function endLiveWithFarewell(){
   live.busy = true;
-  liveSpeak(hello, function(){ live.busy = false; if(live.on){ setOrb('listening'); liveListen(); } });
+  liveStopListening();
+  var name = state.user && state.user.displayName ? state.user.displayName.split(' ')[0] : '';
+  liveSpeak(name ? ('Goodbye ' + name + '. Talk soon.') : 'Goodbye. Talk soon.', function(){
+    closeLive();
+  });
+  /* never leave the screen hanging if the voice never returns */
+  setTimeout(function(){ if(live.on) closeLive(); }, 4200);
+}
+
+/* ---------- open / close ---------- */
+function openLive(){
+  live.on = true; live.busy = true; live.muted = false;
+  live.transcript = []; live.startedAt = Date.now(); live.farewell = false;
+  live.speakToken = 0; live.abort = null;
+  document.getElementById('liveOverlay').classList.add('show');
+  liveCaption('', 'bot');
+  syncLiveMute.skip = true;
+  var b = document.getElementById('liveMute');
+  if(b){ b.classList.remove('muted'); b.setAttribute('aria-pressed','false'); }
+  orbStart();
+  setOrb('speaking');
+  haptic('start');
+  var name = state.user && state.user.displayName ? state.user.displayName.split(' ')[0] : '';
+  var hello = name ? ('Hi ' + name + ', I am Pixel. What can I do for you?') : 'Hi, I am Pixel. What can I do for you?';
+  liveCaption(hello, 'bot');
+  liveSpeak(hello, function(){
+    live.busy = false;
+    if(live.on){ setOrb('listening'); liveListen(); }
+  });
+  /* start listening straight away too -- you should be able to talk over the
+     greeting, exactly as you can over any other thing Pixel says */
+  setTimeout(function(){ if(live.on && !live.muted) liveListen(); }, 220);
 }
 function closeLive(){
+  if(!live.on) return;
   live.on = false; live.busy = false;
-  try{ if(live.rec) live.rec.abort(); }catch(e){}
-  if(window.speechSynthesis) speechSynthesis.cancel();
-  if(ttsAudio){ try{ ttsAudio.pause(); }catch(e){} ttsAudio = null; }
-  var cmd = document.getElementById('liveCommandInput');
-  if(cmd) cmd.value = '';
+  liveStopListening();
+  liveStopSpeaking();
+  orbStop();
   document.getElementById('liveOverlay').classList.remove('show');
+  var saved = saveLiveSession();
+  if(saved){ haptic('done'); showLiveSaved(); }
+  live.transcript = [];
 }
-document.getElementById('liveBtn').addEventListener('click', openLive);
-document.getElementById('liveClose').addEventListener('click', closeLive);
-document.getElementById('orb').addEventListener('click', function(){ if(!live.busy) liveListen(); });
 
-var liveCommandBtn = document.getElementById('liveCommandBtn');
-var liveCommandInput = document.getElementById('liveCommandInput');
-if(liveCommandBtn && liveCommandInput){
-  liveCommandBtn.addEventListener('click', function(){ liveAsk(liveCommandInput.value); });
-  liveCommandInput.addEventListener('keydown', function(e){
-    if(e.key === 'Enter'){ e.preventDefault(); liveAsk(liveCommandInput.value); }
-  });
-}
+document.getElementById('liveBtn').addEventListener('click', openLive);
+document.getElementById('liveClose').addEventListener('click', function(){ haptic('tap'); closeLive(); });
+document.getElementById('liveMute').addEventListener('click', function(){
+  live.muted = !live.muted;
+  haptic(live.muted ? 'warn' : 'select');
+  syncLiveMute();
+});
+var liveGearBtn = document.getElementById('liveGear');
+if(liveGearBtn) liveGearBtn.addEventListener('click', function(){
+  haptic('tap');
+  closeLive();
+  openSettingsPage();
+  renderSettings('general');
+});
 
 var lastImgUrl = null;
 
@@ -4342,6 +4983,23 @@ function hapticsMuted(){
   try{ return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
   catch(e){ return false; }
 }
+/* A rapid tick per character, which is what makes a typing animation feel
+   like the real thing rather than a video of one. Deliberately separate from
+   haptic(): those are discrete confirmations and are tuned to be felt on
+   their own, whereas this is a texture -- short, frequent, and only
+   meaningful as a train. iOS gets every other one, because flipping the
+   switch is slower than the typing is. */
+var hapticTickN = 0;
+function hapticTick(){
+  if(!hapticsOn || hapticsMuted()) return;
+  hapticTickN++;
+  if(vibrationApiSupported()){ try{ navigator.vibrate(15); }catch(e){} return; }
+  if(iosHapticSupported()){
+    if(hapticTickN % 2) return;
+    var el = ensureIosHapticEl();
+    if(el){ try{ el.checked = !el.checked; el.dispatchEvent(new Event('change')); }catch(e){} }
+  }
+}
 function haptic(kind){
   if(!hapticsOn || hapticsMuted()) return;
   var pattern = HAPTIC_PATTERNS[kind];
@@ -4725,21 +5383,87 @@ function md(src){
 
   var lines = text.split('\n'), out = [], list = null;
   function closeList(){ if(list){ out.push(list.tag === 'ul' ? '</ul>' : '</ol>'); list = null; } }
-  lines.forEach(function(ln){
+
+  /* ---- tables ----
+     A markdown table left unparsed is the single ugliest thing an answer can
+     contain: rows of pipes, dashes and literal <br> tags running off the edge
+     of a phone. Parse them properly instead. */
+  function isTableRow(l){ return /^\s*\|.*\|\s*$/.test(l); }
+  function isTableRule(l){ return /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(l) && l.indexOf('-') !== -1 && l.indexOf('|') !== -1; }
+  function splitRow(l){
+    return l.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(function(c){ return c.trim(); });
+  }
+  function cellHtml(c){
+    /* models write <br> inside cells; after escaping it is literal text, so
+       turn it back into a real break, and bullets into a real list */
+    var v = c.replace(/&lt;br\s*\/?&gt;/gi, '\n').replace(/&lt;\/?br&gt;/gi, '\n');
+    var parts = v.split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+    var isBullet = function(x){ return /^([\u2022*-]|\d+[.)])\s+/.test(x); };
+    /* A cell often reads "Primarily in the polar regions:" and then a couple of
+       bullets. Keep the lead-in as text and turn the rest into a real list,
+       rather than needing the whole cell to be bullets before it counts. */
+    var lead = [], items = [];
+    parts.forEach(function(x){
+      if(isBullet(x)) items.push(x.replace(/^([\u2022*-]|\d+[.)])\s+/, ''));
+      else if(!items.length) lead.push(x);
+      else items[items.length - 1] += ' ' + x;   /* a wrapped bullet continues it */
+    });
+    var html = lead.join('<br>');
+    if(items.length){
+      html += (html ? '' : '') + '<ul class="cell-list">' +
+        items.map(function(x){ return '<li>' + x + '</li>'; }).join('') + '</ul>';
+    }
+    return html || parts.join('<br>');
+  }
+  function alignOf(spec){
+    spec = spec.trim();
+    if(/^:.*:$/.test(spec)) return ' style="text-align:center"';
+    if(/:$/.test(spec)) return ' style="text-align:right"';
+    return '';
+  }
+
+  for(var li = 0; li < lines.length; li++){
+    var ln = lines[li];
+
+    if(isTableRow(ln) && li + 1 < lines.length && isTableRule(lines[li + 1])){
+      closeList();
+      var head = splitRow(ln);
+      var aligns = splitRow(lines[li + 1]).map(alignOf);
+      var body = [];
+      li += 2;
+      while(li < lines.length && isTableRow(lines[li])){ body.push(splitRow(lines[li])); li++; }
+      li--;
+      var t = '<div class="table-wrap"><table><thead><tr>';
+      head.forEach(function(c, ci){ t += '<th' + (aligns[ci] || '') + '>' + cellHtml(c) + '</th>'; });
+      t += '</tr></thead><tbody>';
+      body.forEach(function(row){
+        t += '<tr>';
+        for(var ci = 0; ci < head.length; ci++){
+          t += '<td' + (aligns[ci] || '') + ' data-label="' + head[ci].replace(/"/g,'') + '">' + cellHtml(row[ci] || '') + '</td>';
+        }
+        t += '</tr>';
+      });
+      t += '</tbody></table></div>';
+      out.push(t);
+      continue;
+    }
+
     var h = /^\s*(#{1,4})\s+(.*)$/.exec(ln);
-    var ul = /^\s*[-*]\s+(.*)$/.exec(ln);
+    var ul = /^\s*[-*\u2022]\s+(.*)$/.exec(ln);
     var ol = /^\s*\d+[.)]\s+(.*)$/.exec(ln);
     if(h){ closeList(); out.push('<h' + Math.min(4, h[1].length + 2) + '>' + h[2] + '</h' + Math.min(4, h[1].length + 2) + '>'); }
     else if(ul){ if(!list || list.tag !== 'ul'){ closeList(); out.push('<ul>'); list = { tag:'ul' }; } out.push('<li>' + ul[1] + '</li>'); }
     else if(ol){ if(!list || list.tag !== 'ol'){ closeList(); out.push('<ol>'); list = { tag:'ol' }; } out.push('<li>' + ol[1] + '</li>'); }
     else if(ln.trim() === ''){ closeList(); out.push('\u0000BR\u0000'); }
     else { closeList(); out.push(ln + '<br>'); }
-  });
+  }
   closeList();
   var html = out.join('');
   html = html.replace(/(<br>)?\u0000BR\u0000/g, '</p><p>');
   html = '<p>' + html + '</p>';
   html = html.replace(/<p>\s*<\/p>/g, '').replace(/<br><\/p>/g, '</p>');
+  /* block elements cannot live inside a paragraph -- close it around them */
+  html = html.replace(/<p>(\s*<div class="table-wrap">)/g, '$1').replace(/(<\/table><\/div>\s*)<\/p>/g, '$1');
   html = html.replace(/PRE\u0000<br>/g, 'PRE\u0000');
   html = html.replace(/\u0000PRE(\d+)PRE\u0000/g, function(_, idx){
     var block = codeBlocks[+idx];
@@ -5669,9 +6393,14 @@ function renderAgentsGrid(){
   if(!g) return;
   var list = loadAgents();
   g.innerHTML = '';
-  list.forEach(function(a){
+  /* With no agents the page was a heading and one dashed box above a screen
+     of nothing, which reads as broken rather than empty. Say what an agent is
+     instead. */
+  g.classList.toggle('is-empty', !list.length);
+  list.forEach(function(a, idx){
     var card = document.createElement('div');
     card.className = 'agent-card';
+    card.style.setProperty('--i', idx);
     card.innerHTML =
       '<button class="agent-menu-btn" type="button" aria-label="Edit agent"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>' +
       '<div class="agent-emoji">' + esc(a.emoji || '🤖') + '</div>' +
@@ -5685,9 +6414,23 @@ function renderAgentsGrid(){
   });
   var add = document.createElement('button');
   add.type = 'button'; add.className = 'agent-new';
+  add.style.setProperty('--i', list.length);
   add.innerHTML = '<span class="agent-new-plus">+</span><b>New agent</b><small>Create a new Agent</small>';
-  add.addEventListener('click', function(){ openAgentEditor(null); });
+  add.addEventListener('click', function(){ haptic('tap'); openAgentEditor(null); });
   g.appendChild(add);
+
+  if(!list.length){
+    var hint = document.createElement('div');
+    hint.className = 'agents-hint';
+    hint.style.setProperty('--i', 1);
+    hint.innerHTML =
+      '<div class="agents-hint-orbit" aria-hidden="true"><span></span><span></span><span></span><i>\ud83e\udd16</i></div>' +
+      '<b>Agents are Pixel with a job</b>' +
+      '<p>Give one a name, an emoji and a few lines of instructions — a maths tutor, a code reviewer, ' +
+      'a recipe helper — and it keeps that character for every message you send it. ' +
+      'Each agent gets its own conversation under Direct messages.</p>';
+    g.appendChild(hint);
+  }
 }
 function renderEmojiPicker(){
   var row = document.getElementById('agentEmojiRow');
@@ -5798,6 +6541,68 @@ function currentDisplayName(){
   if(custom) return custom;
   return (state.user && state.user.displayName) || 'Guest';
 }
+
+/* ================================================================
+   ASK FOR A LINE OF TEXT — replaces window.prompt().
+
+   prompt() is the reason renaming did not work in the Android app: a
+   Trusted Web Activity suppresses it, so the call returns null and the
+   rename silently does nothing. This is a normal dialog, so it behaves
+   the same everywhere and can be styled and given a keyboard.
+   ================================================================ */
+function askForText(opts, onDone){
+  opts = opts || {};
+  var wrap = document.createElement('div');
+  wrap.className = 'ask-modal';
+  wrap.innerHTML =
+    '<div class="ask-scrim"></div>' +
+    '<div class="ask-card" role="dialog" aria-modal="true">' +
+      '<h3></h3>' +
+      '<p class="ask-sub"></p>' +
+      '<input type="text" class="ask-input" autocomplete="off" spellcheck="false" />' +
+      '<div class="ask-actions">' +
+        '<button type="button" class="ask-cancel">Cancel</button>' +
+        '<button type="button" class="ask-save">Save</button>' +
+      '</div>' +
+    '</div>';
+  wrap.querySelector('h3').textContent = opts.title || 'Edit';
+  var sub = wrap.querySelector('.ask-sub');
+  if(opts.hint){ sub.textContent = opts.hint; } else { sub.remove(); }
+  var input = wrap.querySelector('.ask-input');
+  input.value = opts.value || '';
+  input.placeholder = opts.placeholder || '';
+  input.maxLength = opts.maxLength || 80;
+  wrap.querySelector('.ask-save').textContent = opts.confirm || 'Save';
+  document.body.appendChild(wrap);
+  requestAnimationFrame(function(){
+    wrap.classList.add('show');
+    try{ input.focus(); input.select(); }catch(e){}
+  });
+
+  var closed = false;
+  function close(val){
+    if(closed) return;
+    closed = true;
+    wrap.classList.remove('show');
+    setTimeout(function(){ if(wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 220);
+    document.removeEventListener('keydown', onKey, true);
+    if(onDone) onDone(val);
+  }
+  function save(){
+    var v = String(input.value || '').trim().slice(0, opts.maxLength || 80);
+    if(!v){ input.focus(); return; }        /* an empty name is not a rename */
+    haptic('success');
+    close(v);
+  }
+  function onKey(e){
+    if(e.key === 'Escape'){ e.preventDefault(); haptic('light'); close(null); }
+    else if(e.key === 'Enter'){ e.preventDefault(); save(); }
+  }
+  document.addEventListener('keydown', onKey, true);
+  wrap.querySelector('.ask-scrim').addEventListener('click', function(){ haptic('light'); close(null); });
+  wrap.querySelector('.ask-cancel').addEventListener('click', function(){ haptic('light'); close(null); });
+  wrap.querySelector('.ask-save').addEventListener('click', save);
+}
 function renderSettings(tab){
   var el = document.getElementById('settingsPanel');
   if(!el) return;
@@ -5820,11 +6625,23 @@ function renderSettings(tab){
       '</div>';
     var en = document.getElementById('setEditName');
     if(en) en.addEventListener('click', function(){
-      var v = prompt('Display name', currentDisplayName());
-      if(v === null) return;
-      v = v.trim().slice(0, 40);
-      try{ store(displayNameKey(), v); }catch(e){}
-      updateSidebarAccount(); renderSettings('profile');
+      haptic('tap');
+      askForText({
+        title:'Display name',
+        hint:'This is the name Pixel Pro greets you by.',
+        value: currentDisplayName(),
+        placeholder:'Your name',
+        maxLength: 40
+      }, function(v){
+        if(v === null) return;
+        try{ store(displayNameKey(), v); }catch(e){}
+        /* the name shows in four places; updating one of them was the bug */
+        updateSidebarAccount();
+        if(typeof personalizeHero === 'function') personalizeHero();
+        if(typeof cloudPush === 'function') cloudPush();
+        renderSettings('profile');
+        showToast('Name updated.');
+      });
     });
     var ce = document.getElementById('setChangeEmail');
     if(ce) ce.addEventListener('click', function(){
@@ -6294,7 +7111,7 @@ function wireSection(btnId, bodyId, key, defaultCollapsed){
   });
   apply();
 }
-wireSection('secChannels', 'bodyChannels', 'pp-sec-channels', true);
+wireSection('secChannels', 'bodyChannels', 'pp-sec-channels', false);
 wireSection('secDMs', 'bodyDMs', 'pp-sec-dms', true);
 wireSection('secChats', 'bodyChats', 'pp-sec-chats', false);
 
