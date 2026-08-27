@@ -3606,7 +3606,48 @@ if(window.speechSynthesis){ try{ speechSynthesis.onvoiceschanged = function(){};
 
 var LIVE_SETTLE_MS = 380;      /* let the speaker's tail die before listening */
 var LIVE_DUP_MS = 2500;        /* the same command inside this window is a repeat */
-var LIVE_FINAL_GRACE_MS = 1100;/* commit anyway if onend never arrives */
+/* Once the engine has produced a final transcript, `onend` normally follows
+   within a couple of hundred milliseconds. Waiting a full second for it was
+   dead time on every single turn -- and recCommit dedups, so committing early
+   and having `onend` arrive later costs nothing. */
+var LIVE_FINAL_GRACE_MS = 250; /* commit anyway if onend never arrives */
+
+/* ----------------------------------------------------------------
+   ENDING A TURN WITHOUT WAITING FOR THE BROWSER
+
+   The slowest part of a spoken turn was never Groq or Cartesia -- it was
+   waiting for Chrome to decide the user had stopped talking. Its endpointer
+   sits on a finished sentence for a second or more before marking it final,
+   and that second is pure silence to the person who just spoke.
+
+   So watch the interim transcript instead. When it stops changing, the
+   speaking has stopped, and we can commit without waiting for the browser to
+   agree. The risk is cutting someone off mid-thought, so two guards:
+   a phrase ending on a word that cannot end a sentence ("what is the", "and",
+   "because") is never committed early, and a very short phrase is given
+   longer to grow. If neither guard is satisfied we simply fall back to the
+   browser's own final, exactly as before.
+
+   Committing early is safe because recCommit is idempotent: the real final
+   arrives later, matches lastCommand inside LIVE_DUP_MS, and is dropped.
+   ---------------------------------------------------------------- */
+var VOICE_HOLD_MS = 620;       /* silence after a phrase that sounds finished */
+var VOICE_HOLD_SHORT_MS = 950; /* a two-or-three word phrase gets longer to grow */
+
+/* Words that almost never end a spoken sentence. If the interim stops here,
+   the speaker is mid-thought or the recogniser is mid-phrase. */
+var VOICE_INCOMPLETE_TAIL = new RegExp('\\b(a|an|and|are|as|at|because|but|by|can|could|did|do|does|for|from|had|has|have|how|i|if|in|is|it|its|my|of|on|or|our|should|so|than|that|the|their|then|there|they|this|to|was|we|were|what|when|where|which|who|whose|why|will|with|would|you|your|um|uh|umm|hmm|er|ah|like)$', 'i');
+
+/* How long to wait on an unchanged interim before treating it as the end of
+   the utterance. -1 means "do not commit early" -- wait for the browser. */
+function interimHoldMs(text){
+  var t = String(text || '').trim();
+  if(!t) return -1;
+  if(VOICE_INCOMPLETE_TAIL.test(t)) return -1;
+  var words = t.split(/\s+/).filter(Boolean);
+  if(words.length === 0) return -1;
+  return words.length <= 3 ? VOICE_HOLD_SHORT_MS : VOICE_HOLD_MS;
+}
 var LIVE_MAX_ERRORS = 3;       /* consecutive hard errors before giving up */
 var LIVE_MAX_QUIET = 4;        /* consecutive silent listens before resting */
 
@@ -3619,6 +3660,8 @@ var live = {
   locked:false,          /* command submission lock -- set synchronously */
   lastCommand:'', lastCommandAt:0,
   errorStreak:0, quietStreak:0,
+  heardAt:0,             /* when the current utterance was first heard */
+  lastListenMs:null,     /* how long the last listening phase took */
   fillerToken:0, queue:null,
   transcript:[], startedAt:0,
   abort:null,
@@ -3863,13 +3906,27 @@ function recEnsure(){
     finalText = got;
     var heard = (got + ' ' + interim).replace(/\s+/g,' ').trim();
     if(!heard) return;
+    if(!live.heardAt) live.heardAt = Date.now();
     live.quietStreak = 0;
     live.errorStreak = 0;          /* recognition is genuinely working again */
     if(live.state !== 'user'){ live.state = 'user'; liveRender(); }
     live.targetLevel = 0.7 + Math.min(0.5, heard.length / 90);
     liveCaption(heard, 'user');
     /* If the engine gives a final but never fires end, commit anyway. */
-    if(got.trim()) liveTimer('finalGrace', function(){ if(current()) recCommit(finalText, sid); }, LIVE_FINAL_GRACE_MS);
+    if(got.trim()){
+      liveClearTimer('interimHold');
+      liveTimer('finalGrace', function(){ if(current()) recCommit(finalText, sid); }, LIVE_FINAL_GRACE_MS);
+      return;
+    }
+    /* No final yet. Rearm the hold on every new interim, so the timer only
+       fires once the transcript has genuinely stopped moving. */
+    var hold = interimHoldMs(heard);
+    if(hold < 0){ liveClearTimer('interimHold'); return; }
+    var settled = heard;
+    liveTimer('interimHold', function(){
+      if(!current()) return;
+      recCommit(settled, sid);
+    }, hold);
   };
 
   r.onerror = function(e){
@@ -3937,6 +3994,11 @@ function recCommit(text, sid){
     return;
   }
   live.locked = true;
+  /* How long the listening phase actually took, from the first word heard to
+     the moment the utterance was accepted. This is the number the complaint
+     was about, so it belongs in the readout beside all the others. */
+  live.lastListenMs = live.heardAt ? (now - live.heardAt) : null;
+  live.heardAt = 0;
   live.lastCommand = q.toLowerCase();
   live.lastCommandAt = now;
   live.sessionId++;               /* orphan every callback from the engine that just ended */
@@ -4370,6 +4432,9 @@ var turnT = null;
 
 function turnStart(){
   turnT = { t0: Date.now(), marks: {} };
+  /* Measured before this turn began -- recognition finishes before asking
+     starts -- so it is carried in rather than marked. */
+  if(typeof live === 'object' && live && live.lastListenMs != null) turnT.listenMs = live.lastListenMs;
 }
 function turnMark(name){
   if(!turnT) return;
@@ -4420,6 +4485,7 @@ function formatTimings(){
     var m = t.marks || {};
     return (i === 0 ? 'latest  ' : ('-' + i + '      ').slice(0, 8)) +
            (t.path ? '[' + t.path + '] ' : '') + [
+      'listen ' + (t.listenMs != null ? t.listenMs + 'ms' : '—'),
       'search ' + (m.searchDone !== undefined ? m.searchDone + 'ms' : '—'),
       'first token ' + (m.firstToken !== undefined ? m.firstToken + 'ms' : '—'),
       'sent to voice ' + (m.firstChunkSent !== undefined ? m.firstChunkSent + 'ms' : '—'),
@@ -4466,13 +4532,18 @@ async function liveAsk(question){
        exchanges so a long conversation does not turn into a long prompt. */
     var history = live.transcript
       .slice(0, -1)                 /* the question just pushed is added below */
+      /* Ten turns, deliberately. Trimming this was tempting -- fewer
+         characters to read before the first token -- but Groq's prefill runs
+         at thousands of tokens a second, so the whole history costs on the
+         order of a millisecond. Cutting it would have traded the orb's memory,
+         which was asked for outright, for nothing worth measuring. The
+         redundant instructions in the system prompt were the right thing to
+         cut; the conversation itself is not. */
       .slice(-10)
       .map(function(m){ return { role:m.role, content:String(m.content).slice(0, 700) }; });
 
     var msgs = [
-      { role:'system', content: systemPrompt() +
-        ' This is voice mode: keep the spoken answer to 1–3 short sentences, plain speech, no markdown, no lists, no headings.' +
-        ' You are mid-conversation. Read short or vague replies as answers to what you just asked, resolve "it", "that" and "there" against the turns above, and never restart the topic unless the user does.' }
+      { role:'system', content: voiceSystemPrompt() }
     ].concat(history).concat([{ role:'user', content: question }]);
     /* pin the light Groq model for voice specifically, whatever text tier is
        selected -- a 1-3 sentence spoken answer does not need the 120b
@@ -6038,6 +6109,28 @@ function systemPrompt(){
     'Never reject useful live context merely because the source wording differs from the user wording. If sources conflict, clearly say so and use the newest/most authoritative evidence. ' +
     'For normal stable questions, answer from your general knowledge. Keep explanations easy to scan and practical. Never output citation markup, bracketed source references, or tool-internal reference IDs; source links are shown separately by the interface. ' +
     'Treat this conversation as continuous, not a series of isolated questions. If the user replies with a short or vague answer — "nothing", "yes", "no", "maybe", "not much", "idk", or similar — read it as their answer to YOUR most recent question, not as a new topic. Respond conversationally and follow up naturally on what they actually said; never explain the dictionary or general meaning of their reply as if it were a fresh, standalone question.' + projectContext + memoryContext() + (typeof locationContext === 'function' ? locationContext() : '');
+}
+
+/* The spoken counterpart of systemPrompt().
+
+   The full prompt is about 2,300 characters, and most of it is instructions
+   voice cannot use: markdown, bullets, headings, emoji, citation markup,
+   paragraph counts. Every one of those characters has to be read before the
+   model may emit its first token, so on a path where time-to-first-token is
+   the whole game they are pure cost. This keeps only what a spoken answer
+   actually needs -- who Pixel Pro is, what language to reply in, how long to
+   talk, how to treat live results, and how to stay in the conversation --
+   plus the user's own saved memory. */
+function voiceSystemPrompt(){
+  var today = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  return 'You are Pixel Pro, a friendly and accurate voice assistant. Today is ' + today + '. ' +
+    IDENTITY_LINE +
+    'Reply in the same language the user speaks (English, Hindi or Bengali). ' +
+    'This is a spoken conversation: answer in 1–3 short sentences of plain speech. No markdown, no lists, no headings, no emoji, no citations or source markers. ' +
+    'Answer the exact question first. Never guess at changing facts like dates, scores, prices or office-holders. ' +
+    'When LIVE WEB CONTEXT is supplied, it is fresh retrieval — answer from it and prefer the newest, most authoritative source. ' +
+    'You are mid-conversation. Read short or vague replies as answers to what you just asked, resolve "it", "that" and "there" against the turns above, and never restart the topic unless the user does.' +
+    memoryContext();
 }
 
 /* Streams the answer token-by-token into `onDelta`. Falls back to the classic

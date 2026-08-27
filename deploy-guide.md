@@ -588,3 +588,70 @@ Check the Voice timing rows. If every row says `[proxy]`, either the token
 endpoint is failing (open `/.netlify/functions/tts-token` — it returns
 Cartesia's own error text) or Cartesia is refusing the browser's origin, in
 which case the fallback is doing its job and voice still works.
+
+## The listening phase — not waiting for Chrome to make up its mind
+
+The slowest part of a spoken turn was never Groq and never Cartesia. It was
+waiting for the browser to decide the user had stopped talking. Chrome's
+endpointer sits on a finished sentence for a second or more before marking the
+result `isFinal`, and that second is dead silence to the person who just spoke.
+On top of it, `LIVE_FINAL_GRACE_MS` then waited another 1100ms in case `onend`
+never fired. Worst case that was over two seconds of nothing, after the
+sentence was already fully transcribed.
+
+**The fix is to watch the interim transcript instead of waiting for the final.**
+When the interim stops changing, the speaking has stopped — we do not need the
+browser to agree. `interimHoldMs(text)` decides how long to wait:
+
+| Situation | Hold | Why |
+|---|---|---|
+| A phrase that sounds finished ("what is the capital of France") | `VOICE_HOLD_MS` 620ms | Long enough to be a real pause, short enough not to be felt |
+| Three words or fewer ("play music", "hello") | `VOICE_HOLD_SHORT_MS` 950ms | A short phrase is often the start of a longer one |
+| Ends on a word that cannot end a sentence ("what is the", "…and", "…um") | `-1` — never commit early | The speaker is clearly mid-thought |
+
+Every new interim **rearms** the timer, so it fires only once the words have
+genuinely stopped. If the guards say `-1`, nothing changes from before: the
+browser's own final commits the turn exactly as it used to.
+
+**Why committing early is safe.** `recCommit` is idempotent. The browser's real
+final arrives a second later, matches `lastCommand` inside `LIVE_DUP_MS`, and is
+dropped. There is no path where a sentence is asked twice — that is asserted
+directly ("the browser's late final does not ask again").
+
+`LIVE_FINAL_GRACE_MS` also drops from 1100ms to **250ms**. Once a final exists,
+`onend` normally follows within a couple of hundred milliseconds, and the dedup
+makes an early commit free.
+
+Expected saving: roughly **0.7–1.5 seconds on every single spoken turn**, which
+is larger than everything the TTS work bought combined.
+
+## What was cut from the Groq prompt, and what deliberately was not
+
+`voiceSystemPrompt()` replaces `systemPrompt()` on the voice path. The full app
+prompt is ~1,900 characters, most of it instructions a spoken answer cannot use:
+markdown, bullets, headings, emoji, citation markup, paragraph counts. Voice
+then appended ~370 more characters on top of that. The spoken version is ~730
+characters and keeps only what matters — identity (including the "who created
+you" line), language, spoken length, live-context handling, conversational
+continuity, and the user's saved memory.
+
+**The conversation history was deliberately left alone at ten turns / 700
+characters.** Trimming it was tempting and I tried it, but Groq's prefill runs
+at thousands of tokens per second, so the entire history costs on the order of a
+millisecond. Cutting it would have traded away the orb's memory — which was
+asked for outright — in exchange for nothing measurable. Redundant instructions
+were the right thing to cut. The conversation is not.
+
+Be honest about the size of this one: the prompt trim is worth tens of
+milliseconds at best. The listening fix above is worth a hundred times more.
+
+## Reading the timing rows now
+
+    latest  [direct] listen 840ms · search — · first token 310ms · sent to voice 520ms · audio ready 760ms · speaking 775ms · total 3100ms
+
+`listen` is new and comes first: the time from the first word heard to the
+moment the utterance was accepted. It is measured in `recCommit` from
+`live.heardAt`, and carried into the turn record by `turnStart`. If that number
+is large, the endpointing guards are being conservative — a phrase ending on a
+word in `VOICE_INCOMPLETE_TAIL` falls back to the browser's own final, which is
+the slow path by design.
