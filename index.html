@@ -566,7 +566,11 @@ main{flex:1;overflow-y:auto;scroll-behavior:smooth}
 .retry:hover{transform:translateY(-1px)}
 
 /* ============ COMPOSER ============ */
-.composer-wrap{position:sticky;bottom:0;padding:8px clamp(14px,4vw,24px) 14px;background:var(--bg)}
+/* Deliberately `relative`, not `sticky`. This element is a flex sibling of
+   <main>, not a child of it, so it is already pinned to the bottom of the
+   column by the layout -- `sticky` added nothing except a second, viewport-
+   relative positioning mode for the browser to move it with. */
+.composer-wrap{position:relative;bottom:0;padding:8px clamp(14px,4vw,24px) 14px;background:var(--bg)}
 .composer-outer{max-width:800px;margin:0 auto;padding:0;border-radius:22px;background:transparent}
 .composer-outer.thinking .composer{border-color:var(--accent)}
 .composer{max-width:none;margin:0;display:flex;align-items:flex-end;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow-sm);transition:border-color .15s ease}
@@ -1974,8 +1978,12 @@ body.empty-state .suggests{display:flex}
    the chat has already moved. The textarea therefore declares `none` by
    default, and only opts back into panning once its own content actually
    overflows, which is the only time an internal pan is meaningful. */
-#main{overscroll-behavior:contain}
-.composer-wrap{touch-action:none}
+/* `contain` stops the bounce propagating to the page but still allows this
+   scroller its own rubber-band, and that local bounce is what let the whole
+   column -- composer included -- be dragged downward. `none` removes it. */
+#main{overscroll-behavior:none}
+html,body{overscroll-behavior:none}
+.composer-wrap{touch-action:none;overscroll-behavior:none}
 .pill textarea{overscroll-behavior:contain;touch-action:none}
 .pill textarea.can-scroll{touch-action:pan-y}
 
@@ -3410,6 +3418,8 @@ function hideStopBtn(){ document.getElementById('stopBtn').classList.remove('sho
 document.getElementById('stopBtn').addEventListener('click', function(){
   haptic('tap');
   if(currentAbort){ currentAbort.abort(); currentAbort = null; }
+  /* Stop means stop: the reading is part of the answer, not separate from it. */
+  stopChatSpeech();
   hideStopBtn();
 });
 
@@ -4308,12 +4318,23 @@ function splitSpeakable(text, from, atEnd, isFirst){
   return { chunks: chunks, next: i };
 }
 
+/* The sentence pipeline. Built for the voice orb, but nothing in it is
+   actually about the orb except three side effects at first audio, so those
+   are options. Read Aloud in the chat uses the same machinery: it is the
+   difference between speaking the first sentence while the rest is still
+   being written, and waiting for the whole answer before saying a word. */
 function makeSpeechQueue(sid, opts){
   opts = opts || {};
   var items = [], consumed = 0, playIdx = 0;
   var ended = false, cancelled = false, started = false, running = false;
 
-  function stale(){ return cancelled || sid !== live.sessionId; }
+  /* The orb's turns are invalidated by live.sessionId. A chat turn has its
+     own notion of being superseded, so it supplies its own test. */
+  function stale(){
+    if(cancelled) return true;
+    if(opts.isStale) return opts.isStale();
+    return sid !== live.sessionId;
+  }
 
   function enqueue(text){
     turnMark('firstChunkSent');
@@ -4347,10 +4368,12 @@ function makeSpeechQueue(sid, opts){
           started = true;
           turnMark('firstAudioPlay');
           turnEnd();
-          /* the filler, if one is playing, has served its purpose */
-          liveStopSpeaking();
-          liveGo('responding');
-          haptic('start');
+          if(opts.orb !== false){
+            /* the filler, if one is playing, has served its purpose */
+            liveStopSpeaking();
+            liveGo('responding');
+            haptic('start');
+          }
           if(opts.onFirst) opts.onFirst();
         }
         await playClip(item.audio);
@@ -4368,15 +4391,20 @@ function makeSpeechQueue(sid, opts){
       function finish(){ if(done) return; done = true; if(ttsAudio === audio) ttsAudio = null; resolve(); }
       audio.onended = finish;
       audio.onerror = finish;
-      audio.volume = 0;
+      /* The fade is here to stop a click at the clip boundary, not to be
+         heard. Starting from silence meant the first syllable arrived under
+         a ramp and read as lateness; a 0.45 floor is already well below the
+         discontinuity that causes the click, and reaches full level in about
+         40ms instead of 63. Same smoothness, audibly prompter onset. */
+      audio.volume = 0.45;
       audio.play().then(function(){
-        var steps = 7, n = 0;
+        var steps = 5, n = 0;
         var fade = setInterval(function(){
           n++;
           if(ttsAudio !== audio){ clearInterval(fade); return; }
-          audio.volume = Math.min(1, n / steps);
+          audio.volume = Math.min(1, 0.45 + (0.55 * n / steps));
           if(n >= steps) clearInterval(fade);
-        }, 9);
+        }, 8);
       }).catch(function(err){
         if(err && (err.name === 'NotAllowedError' || /gesture|interact/i.test(err.message || ''))){
           pendingTtsAudio = audio;
@@ -4703,7 +4731,22 @@ function warmFunctions(){
       body: JSON.stringify({ warm:true }),
       keepalive:true
     }).catch(function(){});
+    fetch('/.netlify/functions/groq', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ warm:true }),
+      keepalive:true
+    }).catch(function(){});
   }catch(e){}
+}
+
+/* Typing is several seconds of advance notice that a request is coming.
+   Spending one of them waking the functions costs the user nothing and takes
+   the cold container off the critical path of a typed message. Throttled by
+   lastFnCallAt, so a long message pings once, not once per keystroke. */
+function warmForTyping(){
+  if(ttsDirect !== 'off' && !ttsTokenFresh()) ttsFetchToken().catch(function(){});
+  warmFunctions();
 }
 
 /* ================= open / close ================= */
@@ -6015,7 +6058,9 @@ document.querySelectorAll('#acctThemeSubmenu .acct-subitem').forEach(function(b)
 document.getElementById('speakBtn').addEventListener('click', function(){
   state.speak = !state.speak;
   this.classList.toggle('on', state.speak);
-  if(!state.speak && window.speechSynthesis) speechSynthesis.cancel();
+  /* Turning it off has to silence a reading already in progress, including
+     any sentences queued behind the one currently playing. */
+  if(!state.speak) stopChatSpeech();
 });
 
 /* ---------- suggestion chips removed ---------- */
@@ -6586,6 +6631,44 @@ function removeThinking(){
 function scrollDown(){ requestAnimationFrame(function(){ $main.scrollTop = $main.scrollHeight; }); }
 
 /* ---------- text-to-speech ---------- */
+
+/* Read Aloud used to wait for the entire answer to finish, then make one
+   TTS call for the whole thing, then play it. On a six-sentence reply that
+   meant sitting in silence for the whole generation AND the whole synthesis
+   before hearing a word.
+
+   It now uses the same sentence pipeline as the voice orb: the first
+   sentence is synthesised and played while the rest is still being written.
+   Type, Enter, and the reading starts about as soon as the first sentence
+   exists. */
+var chatSpeechId = 0;
+var chatSpeech = null;
+
+function stopChatSpeech(){
+  chatSpeechId++;
+  if(chatSpeech){ try{ chatSpeech.cancel(); }catch(e){} chatSpeech = null; }
+  if(ttsAudio){ try{ ttsAudio.pause(); }catch(e){} ttsAudio = null; }
+  if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
+}
+
+/* Opens a reading for one answer. Feed it the growing text; call end() with
+   the final text. Returns null when Read Aloud is off, so callers can skip
+   the work entirely. */
+function startChatSpeech(){
+  if(!state.speak) return null;
+  stopChatSpeech();
+  var mine = chatSpeechId;
+  var q = makeSpeechQueue(0, {
+    orb: false,
+    isStale: function(){ return mine !== chatSpeechId; },
+    onDone: function(){ if(mine === chatSpeechId) chatSpeech = null; }
+  });
+  chatSpeech = q;
+  return q;
+}
+
+/* The old whole-answer path, kept for callers that only ever have the
+   finished text (the replay button on a bubble, for one). */
 function speak(text){
   if(!state.speak) return;
   speakAloud(text, null);
@@ -7208,6 +7291,9 @@ async function sendMessage(text){
        to come back as "I can't see the image": the real answer was computed
        and then overwritten by a model that never received the picture. */
     var bubbleEl = null, elapsedMs = 0, lastPaint = 0;
+    /* Opened before the first token so the very first sentence can be sent
+       for synthesis the moment it is complete. */
+    var chatQ = startChatSpeech();
     if(imgForThisTurn){
       elapsedMs = Date.now() - thinkingStartedAt;
       removeThinking();
@@ -7222,6 +7308,7 @@ async function sendMessage(text){
         bubbleEl = addMessage('bot', '', { sources: sources, searched: needsLive });
         haptic('start');           /* the answer has begun */
       }
+      if(chatQ) chatQ.feed(full);
       var now = Date.now();
       if(now - lastPaint > 55){          /* repaint at ~18fps, not per token */
         lastPaint = now;
@@ -7287,7 +7374,10 @@ async function sendMessage(text){
     appendToHistory('user', text);
     appendToHistory('assistant', reply);
     autoTitleChat(activeChatId, text, reply); /* names the chat once it exists */
-    speak(reply);
+    /* The stream fed every sentence as it arrived; end() flushes whatever
+       tail has no terminator. A photo turn never streamed, so it has nothing
+       queued and end() synthesises the whole reply in one go, as before. */
+    if(chatQ) chatQ.end(reply); else speak(reply);
     extractMemory(text, reply); /* fire-and-forget, never blocks the UI */
     if(mailToggleOn){ sendReplyAsEmail(text, reply); }
     state.history.push({ role:'user', content: text });
@@ -7295,6 +7385,7 @@ async function sendMessage(text){
     if(state.history.length > 16) state.history = state.history.slice(-16);
   }catch(e){
     removeThinking();
+    if(chatQ) chatQ.cancel();
     if(currentAbort === null){ /* user stopped — no error message */ }
     else {
       var rawErr = (e && e.message) ? String(e.message) : 'Unknown error';
@@ -7383,7 +7474,8 @@ function autoGrow(){
   $input.classList.toggle('can-scroll', $input.scrollHeight > $input.clientHeight + 1);
 }
 function updateSendVisual(){ if($send) $send.classList.toggle('empty', !$input.value.trim()); }
-$input.addEventListener('input', function(){ autoGrow(); updateSendVisual(); });
+$input.addEventListener('input', function(){ autoGrow(); updateSendVisual(); warmForTyping(); });
+$input.addEventListener('focus', warmForTyping);
 updateSendVisual();
 
 /* ================================================================
@@ -7805,16 +7897,58 @@ function openSettingsPage(){
   var vv = window.visualViewport;
   if(!vv) return;
   var raf = null;
+
+  /* Why the scroll correction below exists.
+
+     When a text field is focused, mobile Safari brings it into view by
+     scrolling the LAYOUT viewport -- the whole document slides up behind the
+     keyboard. That is the right behaviour for an ordinary page, and exactly
+     wrong for this one: the app is already sized to the visual viewport, so
+     the composer is above the keyboard before Safari does anything. Its
+     scroll is therefore pure displacement, and it is what makes the box
+     appear in the wrong place when tapped.
+
+     So undo it. The document must never be scrolled -- it has nowhere to go
+     with `overflow:hidden` -- and any non-zero scroll or visual-viewport
+     offset is Safari having moved something we did not ask it to move. */
+  function unscrollDocument(){
+    if(window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop){
+      window.scrollTo(0, 0);
+    }
+  }
+
   function apply(){
     raf = null;
     var h = Math.round(vv.height);
     document.documentElement.style.setProperty('--vvh', h + 'px');
+    unscrollDocument();
     var atBottom = ($main && $main.scrollHeight - $main.scrollTop - $main.clientHeight < 120);
     if(atBottom && typeof scrollDown === 'function') scrollDown();
   }
   function schedule(){ if(raf === null) raf = requestAnimationFrame(apply); }
   vv.addEventListener('resize', schedule);
   vv.addEventListener('scroll', schedule);
+
+  /* Focus is the moment the displacement happens, and it does not always
+     produce a visualViewport event -- so correct on focus directly, and
+     again a couple of frames later, after the keyboard animation has
+     settled and Safari has finished its own scrolling. */
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if(!t || !/^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+    unscrollDocument();
+    schedule();
+    setTimeout(function(){ unscrollDocument(); schedule(); }, 60);
+    setTimeout(function(){ unscrollDocument(); schedule(); }, 300);
+  });
+  /* Dismissing the keyboard leaves the same displacement behind. */
+  document.addEventListener('focusout', function(){
+    setTimeout(function(){ unscrollDocument(); schedule(); }, 60);
+  });
+  /* A stray document scroll at any other time is the same bug by another
+     route -- an autofocus, a scrollIntoView, a browser restoring position. */
+  window.addEventListener('scroll', unscrollDocument, { passive:true });
+
   apply();
 })();
 

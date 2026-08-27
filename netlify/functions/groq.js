@@ -54,6 +54,13 @@ exports.handler = async (event) => {
   try { payload = JSON.parse(event.body || "{}"); }
   catch (_) { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Bad JSON." }) }; }
 
+  // A warm-up ping: the point is only to have this container already running
+  // when the real request arrives, so it must return immediately and must not
+  // spend a Groq call doing it.
+  if (payload.warm === true) {
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ warm: true }) };
+  }
+
   if (payload.mode === "route") {
     const query = String(payload.query || "").trim().slice(0, 1200);
     if (!query) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "No query." }) };

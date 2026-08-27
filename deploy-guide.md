@@ -655,3 +655,87 @@ moment the utterance was accepted. It is measured in `recCommit` from
 is large, the endpointing guards are being conservative — a phrase ending on a
 word in `VOICE_INCOMPLETE_TAIL` falls back to the browser's own final, which is
 the slow path by design.
+
+## Read Aloud — the same pipeline the orb uses
+
+Read Aloud was the slowest voice path in the app, and for a structural reason:
+`speak(reply)` was called *after* the stream finished. On a six-sentence answer
+that meant waiting for the entire generation, then one TTS call for the whole
+text, then playback. Two silences back to back.
+
+It now uses `makeSpeechQueue` — the same sentence pipeline as the voice orb —
+so the first sentence is synthesised and played while the rest is still being
+written. Measured against the mock (a ~2.3s answer): **first audio at ~840ms
+instead of after the full 2.3s plus synthesis.**
+
+Making that reuse possible took two small changes to the queue rather than a
+copy of it:
+
+- `opts.isStale` — the orb invalidates its turns with `live.sessionId`; a chat
+  turn has its own notion of being superseded (`chatSpeechId`), so it supplies
+  its own test.
+- `opts.orb: false` — skips the three orb-only side effects at first audio
+  (`liveStopSpeaking`, `liveGo('responding')`, `haptic('start')`).
+
+`startChatSpeech()` opens a reading, `feed(full)` gets every delta from the
+stream, `end(reply)` flushes the tail. `stopChatSpeech()` is wired to the Stop
+button and to switching Read Aloud off, so both silence what is already queued
+rather than only what is currently playing.
+
+Read Aloud also inherits the direct-to-Cartesia path automatically, since it
+goes through the same `ttsClip`.
+
+A photo turn never streams, so it has nothing queued and falls back to the old
+whole-answer `speak(reply)`. That path is kept for exactly this reason.
+
+## Two smaller speed changes
+
+**Groq warm-up on typing.** Typing is several seconds of notice that a request
+is coming. `warmForTyping()` fires on focus and on input, waking `/chat-stream`,
+`/groq` and `/tts` and minting the Cartesia token. It is throttled by
+`lastFnCallAt`, so a long message pings once rather than once per keystroke.
+`groq.js` gained the same `{"warm": true}` early return the other two already
+had. This removes the cold container from the typed path; it does not make a
+warm request any faster.
+
+**The audio fade starts audible.** The fade at the start of each clip exists to
+stop a click at the boundary, not to be heard — but starting from zero meant the
+first syllable arrived under a ramp and read as lateness. It now starts at 0.45
+and reaches full level in ~40ms instead of 63. A 0.45 floor is already far below
+the discontinuity that causes a click, so this is prompter onset at identical
+quality.
+
+Both are small. Said plainly: the warm-up matters only on a cold container, and
+the fade change is perceptual rather than measured latency.
+
+## Mobile composer — pulled down, and displaced on tap
+
+Two separate bugs, two separate causes.
+
+**1. The composer could be dragged downward.** Two things allowed it:
+
+- `.composer-wrap` was `position: sticky; bottom: 0`, but it is a flex *sibling*
+  of `<main>`, not a child of it. The column layout already pins it to the
+  bottom, so `sticky` bought nothing — it only added a second, viewport-relative
+  positioning mode for the browser to move it with. It is now `relative`.
+- `#main` had `overscroll-behavior: contain`. `contain` stops a bounce
+  *propagating* to the page but still permits the scroller its own rubber-band,
+  and that local bounce is what dragged the whole column down. It is now `none`,
+  as are `html, body` and `.composer-wrap`.
+
+**2. The box appeared in the wrong place when tapped.** When a field is focused,
+mobile Safari brings it into view by scrolling the *layout* viewport — the
+document slides up behind the keyboard. That is right for an ordinary page and
+wrong for this one: the app is already sized to the visual viewport (`--vvh`),
+so the composer is above the keyboard before Safari does anything. Its scroll is
+pure displacement.
+
+`unscrollDocument()` undoes it. The document has `overflow: hidden` and nowhere
+to go, so any non-zero `pageYOffset` is the browser having moved something we
+did not ask it to. It runs on `focusin` (immediately, then at 60ms and 300ms,
+after the keyboard animation settles), on `focusout`, on every visual-viewport
+resize/scroll, and on any stray `scroll` event.
+
+Both are covered by `box.py`: a hard 240px downward drag starting on the
+composer, asserted mid-drag and after; tap-to-focus; a stray `scrollTo(0,180)`;
+and the keyboard-up case.
