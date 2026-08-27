@@ -739,3 +739,68 @@ resize/scroll, and on any stray `scroll` event.
 Both are covered by `box.py`: a hard 240px downward drag starting on the
 composer, asserted mid-drag and after; tap-to-focus; a stray `scrollTo(0,180)`;
 and the keyboard-up case.
+
+## Per-chat URLs
+
+Every conversation has its own address, `/c/<id>` — the same shape ChatGPT
+uses. Opening a chat puts that address in the bar, loading that address opens
+the chat, and Back/Forward walk the conversations you have looked at.
+
+**Be clear about what these links are: they are private.** A chat lives in this
+browser's storage and in the signed-in account's own Firestore data, so the URL
+opens it *for you, on your devices*. Sending it to someone else shows them
+nothing. That is exactly how ChatGPT's own `/c/` links behave — sharing a
+conversation there is a separate, explicit action. Pixel Pro's Share button,
+which sends the transcript itself, remains the way to show a chat to someone
+else.
+
+Ids are the existing `'c' + timestamp + 4 random chars`. They were already
+unique and URL-safe, so nothing about stored chats changed.
+
+### Serving it
+
+`netlify.toml` rewrites `/c/*` to `/index.html` with status 200. It is
+deliberately scoped to `/c/*` rather than a catch-all `/*`: a blanket SPA
+fallback would swallow genuine 404s and could shadow `/.netlify/functions/*` if
+rule ordering ever changed. The service worker needed no change — its navigate
+branch already falls back to the cached `/index.html`, which is the right
+response for any `/c/<id>`.
+
+One thing that had to be verified rather than assumed: every asset reference in
+`index.html` is root-absolute (`/manifest.json`, `/icons/...`, `/sw.js`). A
+relative one would resolve against `/c/` and 404 — or worse, match the rewrite
+and be served the HTML page instead.
+
+### Resolving an address is a race, not an event
+
+Three things can supply the chat named in the URL, and they finish in an order
+that varies: the synchronous boot pass, auth resolving, and the cloud chats
+arriving. `resolveChatUrl()` can be called from all three; `urlChatSettled`
+makes the losers no-ops. The cloud call is what makes "open my chat link on my
+other device" work — until that sync lands, the device has genuinely never seen
+the conversation.
+
+`giveUpOnChatUrl()` is the last word, on an 8-second deadline matching the
+existing boot safety net. Only then is an address declared missing, the toast
+shown, and the URL cleaned. Reporting earlier would be wrong, and clearing the
+URL earlier would destroy the id the cloud pass still needs.
+
+**Two rules keep history sane**, both of which are the usual way SPA routing
+gets broken:
+
+- Navigating *because of* a popstate must never push a new entry (`routingBack`
+  suppresses `setChatUrl`), or Back becomes impossible to escape.
+- Opening the chat already in the address bar replaces rather than pushes, so a
+  reload does not stack duplicate entries.
+
+### An address outranks "resume where you left off"
+
+This one was found by a test rather than by reading the code. The boot sequence
+already reopened the last in-progress conversation, and it ran after the URL
+pass — so opening `/c/<id>` for a chat not yet loaded would drop the user into a
+*different* conversation and overwrite the address, destroying the id before the
+cloud copy could arrive. `resumeActiveChat()` is now skipped entirely whenever
+the path names a chat, found or not.
+
+Signing in or out also clears the address, since it changes whose chats these
+are.

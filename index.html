@@ -2565,6 +2565,11 @@ async function cloudPull(){
   }
   cloudPulling = false;
   cloudReady = true;
+  /* The chats this account keeps in the cloud have only just arrived. If the
+     app was opened at /c/<id> for a conversation started on another device,
+     THIS is the first moment it can be found -- every earlier attempt looked
+     at a device that had never seen it. */
+  if(typeof resolveChatUrl === 'function') resolveChatUrl();
   if(typeof renderSidebar === 'function') renderSidebar();
   if(typeof renderAgentsGrid === 'function') renderAgentsGrid();
   if(typeof renderLibrary === 'function') renderLibrary();
@@ -2655,7 +2660,7 @@ function resumeActiveChat(){
   var chats = loadChats();
   for(var i=0;i<chats.length;i++){
     if(chats[i].id === id && chats[i].messages && chats[i].messages.length){
-      openChat(id);
+      openChat(id, { silent:true, replace:true });
       hideWelcome();
       return true;
     }
@@ -2663,6 +2668,62 @@ function resumeActiveChat(){
   return false;
 }
 function newChat(){ activeChatId = null; }
+
+/* Back and Forward walk the chats that have been opened. `routingBack`
+   suppresses setChatUrl for the duration, because writing history while
+   handling a history event is how Back stops working. */
+window.addEventListener('popstate', function(e){
+  var id = (e.state && e.state.chatId) || chatIdFromPath(location.pathname);
+  routingBack = true;
+  try{
+    if(id && openChat(id, { silent:true })) return;
+    /* Either "/" or a chat that no longer exists. Both land on a fresh view;
+       a missing one also gets its stale address cleared. */
+    activeChatId = null;
+    setActiveChatPointer(null);
+    if(typeof activeAgent !== 'undefined'){ activeAgent = null; if(typeof applyAgentUI === 'function') applyAgentUI(); }
+    startFreshView();
+    renderSidebar();
+  } finally {
+    routingBack = false;
+  }
+  if(id) setChatUrl(null, true);   /* the id was stale -- drop it from the bar */
+});
+
+/* Opening the app at /c/<id>. Runs once the chats for this account are
+   actually loaded, which is why it is called from the auth resolution and
+   not from the initial script. Returns true if it took over the view, so
+   the ordinary "resume where you left off" path can stand down. */
+/* Resolving /c/<id> is a race between three events -- the synchronous boot,
+   auth resolving, and the cloud chats arriving. Whichever gets there first
+   wins and the rest become no-ops. */
+var urlChatSettled = false;
+
+function resolveChatUrl(){
+  if(urlChatSettled) return true;
+  var id = chatIdFromPath(location.pathname);
+  if(!id){ urlChatSettled = true; return false; }
+  if(openChat(id, { silent:true, replace:true })){
+    urlChatSettled = true;
+    hideWelcome();
+    return true;
+  }
+  return false;   /* not here YET -- a later caller may still find it */
+}
+
+/* The last word. Called once the app has run out of places the chat could
+   still turn up, so an address that has not resolved by now is genuinely
+   not available on this device. */
+function giveUpOnChatUrl(){
+  if(urlChatSettled) return;
+  if(!chatIdFromPath(location.pathname)){ urlChatSettled = true; return; }
+  if(resolveChatUrl()) return;
+  urlChatSettled = true;
+  setChatUrl(null, true);
+  if(typeof showToast === 'function') showToast('That chat is not on this device.');
+}
+
+
 function createChatEntry(firstUserText){
   var chats = loadChats();
   var t = (firstUserText || 'New chat');
@@ -2674,6 +2735,10 @@ function createChatEntry(firstUserText){
   chats.unshift(chat); saveChats(chats);
   activeChatId = chat.id;
   setActiveChatPointer(chat.id);
+  /* Replace, not push: the user was at "/" composing, and Back should return
+     them to wherever they were before that -- not to an empty composer that
+     looks identical to the one they are in. */
+  setChatUrl(chat.id, true);
   return chat;
 }
 /* ChatGPT-style chat titles: after the first exchange the assistant names the
@@ -2752,7 +2817,12 @@ function deleteChat(id){
   var chats = loadChats(); var out = [];
   for(var i=0;i<chats.length;i++){ if(chats[i].id !== id) out.push(chats[i]); }
   saveChats(out);
-  if(activeChatId === id){ activeChatId = null; setActiveChatPointer(null); startFreshView(); }
+  if(activeChatId === id){
+    activeChatId = null; setActiveChatPointer(null); startFreshView();
+    /* Replace: the deleted chat's address must not stay in the history for
+       Back to return to, because there is nothing there any more. */
+    setChatUrl(null, true);
+  }
   renderSidebar();
 }
 /* ---------- sidebar UI ---------- */
@@ -3279,17 +3349,69 @@ function syncEmptyState(){
   var empty = !!($hero && $hero.style.display !== 'none' && $hero.offsetParent !== null);
   document.body.classList.toggle('empty-state', empty);
 }
+/* ================================================================
+   PER-CHAT URLS
+
+   Every conversation gets its own address, /c/<id>, the way ChatGPT and
+   the others do. Opening a chat puts that address in the bar; loading
+   that address opens the chat; Back and Forward walk the conversations
+   you have looked at.
+
+   Be clear about what these links are: they are private. A chat lives in
+   this browser's storage and in the signed-in account's own Firestore
+   data, so the URL opens it for you, on your devices. Sending it to
+   someone else shows them nothing -- they are not the shareable thing.
+   The Share button, which sends the transcript itself, still is. This is
+   exactly how ChatGPT's own /c/ links behave.
+
+   Two rules keep the history sane:
+     - navigating BECAUSE of a popstate must never push a new entry, or
+       Back becomes impossible to escape;
+     - opening the chat already in the address bar replaces rather than
+       pushes, so a reload does not stack duplicate entries.
+   ================================================================ */
+var CHAT_URL_PREFIX = '/c/';
+var routingBack = false;      /* true only while handling a popstate */
+
+/* Chat ids are generated as 'c' + timestamp + 4 random chars, so this is
+   also the guard against a hand-typed path reaching lookup code. */
+function chatIdFromPath(path){
+  path = String(path || location.pathname || '');
+  if(path.indexOf(CHAT_URL_PREFIX) !== 0) return null;
+  var id = path.slice(CHAT_URL_PREFIX.length).replace(/\/+$/, '');
+  return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
+}
+function chatUrl(id){ return CHAT_URL_PREFIX + encodeURIComponent(id); }
+
+/* replace: for the first paint and for landing on a URL we are already at.
+   push: for a navigation the user actually made, so Back returns. */
+function setChatUrl(id, replace){
+  if(routingBack) return;
+  /* Any deliberate write to the address bar means the app has taken charge
+     of where it is. A cloud sync landing later must not then drag the view
+     back to whatever the URL said when the page was opened. */
+  urlChatSettled = true;
+  var target = id ? chatUrl(id) : '/';
+  var here = location.pathname;
+  try{
+    if(here === target) history.replaceState({ chatId: id || null }, '', target);
+    else if(replace)    history.replaceState({ chatId: id || null }, '', target);
+    else                history.pushState({ chatId: id || null }, '', target);
+  }catch(e){ /* file:// and other opaque origins reject pushState */ }
+}
+
 function startFreshView(){
   $chat.innerHTML = '';
   if($hero){ $chat.appendChild($hero); $hero.style.display = ''; }
   state.history = [];
   syncEmptyState();
 }
-function openChat(id){
-  haptic('light');
+function openChat(id, opts){
+  opts = opts || {};
+  if(!opts.silent) haptic('light');
   var chats = loadChats(); var c = null;
   for(var i=0;i<chats.length;i++){ if(chats[i].id === id){ c = chats[i]; break; } }
-  if(!c) return;
+  if(!c) return false;
   activeChatId = id;
   activeAgent = null; applyAgentUI();
   setActiveChatPointer(id);
@@ -3304,6 +3426,8 @@ function openChat(id){
   });
   if(state.history.length > 16) state.history = state.history.slice(-16);
   closeSidebar(); renderSidebar();
+  setChatUrl(id, opts.replace === true);
+  return true;
 }
 document.getElementById('menuBtn').addEventListener('click', function(){ haptic('light'); openSidebar(); });
 document.getElementById('sbClose').addEventListener('click', function(){ haptic('light'); closeSidebar(); });
@@ -3312,6 +3436,7 @@ document.getElementById('sbNew').addEventListener('click', function(){
   haptic('tap');
   activeAgent = null; applyAgentUI();
   newChat(); setActiveChatPointer(null); startFreshView(); closeSidebar(); renderSidebar();
+  setChatUrl(null);
   renderMemoryChips();
   if(typeof personalizeHero === 'function') personalizeHero();
 });
@@ -5840,13 +5965,21 @@ function bindAuthState(){
     maybeShowWelcome();
     if(changed){
       activeChatId = null;
+      /* Signing in or out changes whose chats these are, so the address of
+         the previous account's conversation must not survive it. */
+      if(typeof setChatUrl === 'function') setChatUrl(null, true);
       if(typeof startFreshView === 'function') startFreshView();
       if(typeof renderSidebar === 'function') renderSidebar();
       if(typeof renderMemoryChips === 'function') renderMemoryChips();
-    } else if(typeof resumeActiveChat === 'function'){
-      /* first auth resolution after load — pick up this account's own
-         in-progress conversation now that we know their real uid key */
-      resumeActiveChat();
+    } else {
+      /* first auth resolution after load. An address in the bar is an
+         explicit request and outranks "resume where you left off"; only
+         when there is no chat in the URL do we fall back to the pointer. */
+      var tookOver = (typeof resolveChatUrl === 'function') && resolveChatUrl();
+      /* Same rule as at boot: an unresolved chat address still outranks the
+         resume pointer, because the cloud copy may be seconds away. */
+      var wantsUrlChat = (typeof chatIdFromPath === 'function') && chatIdFromPath(location.pathname);
+      if(!tookOver && !wantsUrlChat && typeof resumeActiveChat === 'function') resumeActiveChat();
     }
     if(u && typeof runPendingCommand === 'function'){
       if(typeof closeGate === 'function') closeGate();
@@ -8309,11 +8442,22 @@ if(hadUser()){
 /* Absolute safety net: if Firebase never answers at all and nothing was
    remembered, make sure the app is never stuck behind the splash. */
 setTimeout(function(){ finishBoot(); }, 8000);
+/* Same idea for a chat address. If auth never resolves and the cloud copy
+   never arrives, the address in the bar has to be answered one way or the
+   other rather than leaving a conversation apparently loading forever. */
+setTimeout(function(){ if(typeof giveUpOnChatUrl === 'function') giveUpOnChatUrl(); }, 8000);
 
 syncEmptyState();
 renderAgentsGrid();
 applyAgentUI();
-resumeActiveChat();   /* re-open the in-progress conversation if the app was relaunched mid-chat */
+/* An address in the bar outranks "resume where you left off" -- and outranks
+   it even when the chat cannot be found yet. Resuming a DIFFERENT conversation
+   would both drop the user somewhere they did not ask to be and overwrite the
+   address, destroying the id that the cloud copy is about to need. So resume
+   only when there is no chat in the URL at all. A chat named but not found
+   here may still turn up when auth resolves or when the cloud chats arrive;
+   giveUpOnChatUrl is what eventually reports a genuine miss. */
+if(!resolveChatUrl() && !chatIdFromPath(location.pathname)) resumeActiveChat();
 renderMemoryChips();
 /* ---------- voice input ---------- */
 var SR = window.SpeechRecognition || window.webkitSpeechRecognition;

@@ -15,6 +15,18 @@
     # and must keep failing the build if they ever appear in a file.
     SECRETS_SCAN_OMIT_KEYS = "CARTESIA_MODEL,CARTESIA_VOICE_ID,CARTESIA_VOICE_ID_MALE,CARTESIA_VOICE_ID_FEMALE,CARTESIA_FORMAT,CARTESIA_SAMPLE_RATE,CARTESIA_SPEED,CARTESIA_VERSION,CARTESIA_TOKEN_TTL,STABILITY_MODEL,BREVO_FROM,RESEND_FROM"
 
+# Per-chat URLs. /c/<id> is a client-side route -- there is no such file on
+# disk -- so the app itself has to be served for it and the router inside
+# index.html decides which conversation to open.
+#
+# Deliberately scoped to /c/* rather than a catch-all /*: a blanket SPA
+# fallback would swallow genuine 404s and, worse, shadow /.netlify/functions/*
+# if the ordering ever changed. Nothing else in the app needs rewriting.
+[[redirects]]
+  from = "/c/*"
+  to = "/index.html"
+  status = 200
+
 [functions]
   [functions."*"]
     node_bundler = "esbuild"
