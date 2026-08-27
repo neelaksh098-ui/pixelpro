@@ -887,3 +887,70 @@ environment, and shipping an unverified protocol on the path that currently
 works is a bad trade. Anyone picking it up should build it behind the same
 fallback shape as the direct/proxy split: try the socket, fall back to
 `/tts/bytes` on any failure, and make the fallback sticky for the session.
+
+## First-command latency, and a fix that had to be thrown away
+
+Everything a first command needs that a second one already has — a Cartesia
+token, three woken Netlify containers, a live AudioContext, an initialised
+audio decoder — is now done at page load by `warmEverything()`, on
+`requestIdleCallback` so it never competes with first paint. Previously the
+token was minted on composer focus and the containers woken on the first
+keystroke, which is late: on a phone, creating an AudioContext and running the
+first `decodeAudioData` are not free, and neither is a cold Netlify container.
+
+A token refresh is also scheduled at TTL minus 150s, so a long session cannot
+have a token expire under it and drop the next chunk onto the slow path.
+
+### The attempt that regressed, and why it is documented rather than deleted
+
+The obvious fix looked like this: when the first chunk needs a token and one is
+already in flight, wait up to 400ms for it rather than falling back to the
+proxy immediately. It was built, and then measured against a **cold** token
+endpoint (2.5s):
+
+    first command   919ms -> 1310ms   43% SLOWER
+
+The reason is the whole point. A cold endpoint is exactly when the token will
+not arrive inside any budget you pick — so the wait is spent *and* the proxy
+runs anyway. Waiting is only safe when you know the wait is short, and that is
+not knowable in advance. The code now says NEVER WAIT FOR A TOKEN in as many
+words, with this measurement as the reason, because it is an easy mistake to
+make twice.
+
+The real fix for a slow first command is to have the token already in hand,
+which is what the boot warm-up does — not to stall the first sentence hoping
+one turns up.
+
+### What the remaining measurements actually say
+
+Against a modelled phone-in-India network (250ms browser↔US, 30ms
+function↔Cartesia, 90ms synthesis, 900ms cold container):
+
+| Gap between page load and typing | Before | After |
+|---|---|---|
+| 0ms (types instantly) | 915ms, proxy | 908ms, proxy |
+| 1200ms | 910ms, proxy | 877ms, **direct** |
+| 3000ms | 908ms, proxy | 877ms, **direct** |
+
+So the honest reading: the boot warm-up reliably moves the first command onto
+the direct path once the token has had a moment to land, worth ~30ms there, and
+costs nothing when it has not. It is a variance fix more than a speed fix.
+
+**What this bench cannot see, and where the real gain likely is:** creating an
+AudioContext and initialising the audio decoder are close to free in headless
+Chromium and distinctly not free on a phone. Both moved to page load. If the
+first command still feels slower than the rest on the device, the Voice timing
+readout will now show which stage it is.
+
+## Recognition window
+
+    VOICE_HOLD_MS        620 -> 500    a phrase that sounds finished
+    VOICE_HOLD_SHORT_MS  950 -> 800    three words or fewer, room to grow
+    LIVE_FINAL_GRACE_MS  250 -> 120    a real final is the answer; commit it
+
+Roughly 120–150ms off every spoken turn, and it puts a finished command through
+in about a second including the browser's own interim lag — the 1–1.5s window
+that was asked for. Accuracy is protected by the tail check, not by waiting
+longer: a phrase ending on a word that cannot end a sentence
+(`VOICE_INCOMPLETE_TAIL`) is still never committed early, however long the
+silence runs.

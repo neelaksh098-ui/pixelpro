@@ -3903,7 +3903,11 @@ var LIVE_DUP_MS = 2500;        /* the same command inside this window is a repea
    within a couple of hundred milliseconds. Waiting a full second for it was
    dead time on every single turn -- and recCommit dedups, so committing early
    and having `onend` arrive later costs nothing. */
-var LIVE_FINAL_GRACE_MS = 250; /* commit anyway if onend never arrives */
+/* A final transcript IS the answer. This grace exists only to collect a
+   second final segment in the same utterance, which is rare with
+   continuous:false, so it can be short. `onend` normally follows within
+   a couple of hundred ms and commit is idempotent either way. */
+var LIVE_FINAL_GRACE_MS = 120; /* commit anyway if onend never arrives */
 
 /* ----------------------------------------------------------------
    ENDING A TURN WITHOUT WAITING FOR THE BROWSER
@@ -3924,8 +3928,17 @@ var LIVE_FINAL_GRACE_MS = 250; /* commit anyway if onend never arrives */
    Committing early is safe because recCommit is idempotent: the real final
    arrives later, matches lastCommand inside LIVE_DUP_MS, and is dropped.
    ---------------------------------------------------------------- */
-var VOICE_HOLD_MS = 620;       /* silence after a phrase that sounds finished */
-var VOICE_HOLD_SHORT_MS = 950; /* a two-or-three word phrase gets longer to grow */
+/* The listening window, measured from the last word to the command being
+   forwarded. 500ms is a real pause in speech -- long enough not to clip
+   someone drawing breath mid-sentence, short enough that the reply feels
+   immediate. Combined with the browser's own interim lag this puts a
+   finished command through in roughly a second.
+
+   Accuracy is protected by the tail check rather than by waiting longer:
+   a phrase ending on a word that cannot end a sentence is never
+   committed early no matter how long the silence runs. */
+var VOICE_HOLD_MS = 500;       /* silence after a phrase that sounds finished */
+var VOICE_HOLD_SHORT_MS = 800; /* a two-or-three word phrase gets longer to grow */
 
 /* Words that almost never end a spoken sentence. If the interim stops here,
    the speaker is mid-thought or the recogniser is mid-phrase. */
@@ -4413,6 +4426,21 @@ function ttsTokenFresh(){
   return !!(ttsTok.token && ttsTok.gender === voiceGender && Date.now() < ttsTok.expiresAt - 60000);
 }
 
+/* Re-mint before the current token expires rather than after. A token
+   that dies mid-session would put the next chunk back on the slow path,
+   which is the very problem this all exists to remove. */
+var ttsTokenTimer = null;
+function scheduleTokenRefresh(){
+  clearTimeout(ttsTokenTimer);
+  if(ttsDirect === 'off' || !ttsTok.expiresAt) return;
+  /* 90 seconds of margin on top of the 60 that ttsTokenFresh already
+     keeps, so the refresh happens while the old token still works. */
+  var wait = ttsTok.expiresAt - Date.now() - 150000;
+  ttsTokenTimer = setTimeout(function(){
+    ttsFetchToken().catch(function(){});
+  }, Math.max(30000, wait));
+}
+
 function ttsFetchToken(){
   if(ttsTokenFresh()) return Promise.resolve(ttsTok);
   if(ttsTok.inflight) return ttsTok.inflight;
@@ -4428,6 +4456,7 @@ function ttsFetchToken(){
       ttsTok.version = d.version; ttsTok.model = d.model; ttsTok.voiceId = d.voiceId;
       ttsTok.outputFormat = d.outputFormat; ttsTok.mime = d.mime; ttsTok.speed = d.speed;
       ttsTok.gender = want; ttsTok.inflight = null;
+      scheduleTokenRefresh();
       return ttsTok;
     })
     .catch(function(e){
@@ -4493,7 +4522,23 @@ async function ttsClipProxy(text, signal){
   return makeClip(b64ToArrayBuffer(d.audio), d.mime || 'audio/mpeg');
 }
 
+/* NEVER WAIT FOR A TOKEN.
+
+   This was tried the other way and measured: blocking even 400ms for a
+   token "about to arrive" made the first command 43% SLOWER whenever the
+   token endpoint was genuinely cold, because the wait was spent and THEN
+   the proxy ran anyway. A cold endpoint is precisely the case where you
+   cannot afford to wait for it, and it is not knowable in advance.
+
+   The fix for a slow first command is to have the token already in hand
+   -- see warmEverything(), which mints it at page load -- not to stall
+   the first sentence hoping one turns up. */
 async function ttsClip(text, signal){
+  if(ttsDirect !== 'off' && !ttsTokenFresh() && !ttsTok.inflight){
+    /* Start one for the NEXT chunk; this one is not going to wait. */
+    ttsFetchToken().catch(function(){});
+  }
+
   if(ttsDirect !== 'off' && ttsTokenFresh()){
     try{
       var a = await ttsClipDirect(text, signal);
@@ -4505,10 +4550,6 @@ async function ttsClip(text, signal){
       if(err && err.name === 'AbortError') throw err;
       ttsDirect = 'off';
     }
-  } else if(ttsDirect !== 'off' && !ttsTok.inflight){
-    /* No token yet -- do not wait for one. Warm it for the next sentence
-       and take the known-good path now. */
-    ttsFetchToken().catch(function(){});
   }
   if(turnT && turnT.path === undefined) turnT.path = 'proxy';
   return ttsClipProxy(text, signal);
@@ -8604,6 +8645,44 @@ setTimeout(function(){ if(typeof giveUpOnChatUrl === 'function') giveUpOnChatUrl
 syncEmptyState();
 renderAgentsGrid();
 applyAgentUI();
+/* ================================================================
+   COLD-START WARM-UP
+
+   Everything a first command needs that a second one already has: a
+   Cartesia token, three woken Netlify containers, a live AudioContext,
+   and an initialised audio decoder. None of it depends on what the user
+   is going to say, so none of it should be on the critical path of the
+   first thing they say.
+
+   Run on idle so it never competes with first paint.
+   ================================================================ */
+function warmEverything(){
+  try{
+    /* The token is the big one -- without it the first spoken chunk takes
+       the proxy's two extra network legs while every later chunk goes
+       direct, which is exactly what made command one feel slow. */
+    if(typeof ttsFetchToken === 'function' && ttsDirect !== 'off' && !ttsTokenFresh()){
+      ttsFetchToken().catch(function(){});
+    }
+    if(typeof warmFunctions === 'function') warmFunctions();
+    /* Create the AudioContext now (it starts suspended, which is
+       harmless) and push a few samples of silence through the decoder,
+       so the first real clip does not pay to initialise either. */
+    var c = (typeof audioCtx === 'function') ? audioCtx() : null;
+    if(c && c.decodeAudioData){
+      var wav = new Uint8Array([
+        0x52,0x49,0x46,0x46, 0x2c,0,0,0, 0x57,0x41,0x56,0x45,
+        0x66,0x6d,0x74,0x20, 0x10,0,0,0, 1,0, 1,0,
+        0x80,0x3e,0,0, 0,0x7d,0,0, 2,0, 0x10,0,
+        0x64,0x61,0x74,0x61, 8,0,0,0, 0,0,0,0,0,0,0,0
+      ]);
+      try{ c.decodeAudioData(wav.buffer.slice(0)).catch(function(){}); }catch(e){}
+    }
+  }catch(e){}
+}
+if(window.requestIdleCallback) requestIdleCallback(warmEverything, { timeout: 2500 });
+else setTimeout(warmEverything, 1200);
+
 /* An address in the bar outranks "resume where you left off" -- and outranks
    it even when the chat cannot be found yet. Resuming a DIFFERENT conversation
    would both drop the user somewhere they did not ask to be and overwrite the
