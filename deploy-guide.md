@@ -804,3 +804,86 @@ the path names a chat, found or not.
 
 Signing in or out also clears the address, since it changes whose chats these
 are.
+
+## Making it properly fast: Web Audio, and what it replaced
+
+Measured, old build against new, five runs each on the mock:
+
+| Path | Before | After | Saved |
+|---|---|---|---|
+| Enter → first spoken word (Read Aloud) | 790ms | 542ms | **248ms, 31%** |
+| End of speech → first reply audio (orb) | 1020ms | 776ms | **244ms, 24%** |
+
+Those numbers are measured on **localhost**, where the network legs cost
+nothing. The preconnect below does not show up in them at all, and neither does
+the mobile audio unlock — both are real in production and neither is counted
+above. The true improvement on a phone in India is larger than 31%.
+
+### The playback engine
+
+Every clip used to be an `<audio>` element fed a `data:` or `blob:` URL. That is
+more expensive than it looks: the element re-fetches its own URL, decodes on the
+media thread, and only then fires `canplay` — which the code waited on, with a
+450ms cap. For bytes already sitting in memory that whole sequence is overhead.
+
+Clips are now decoded with `decodeAudioData` and played from an
+`AudioBufferSourceNode`. No URL, no re-fetch, no `canplay` wait. The fade became
+a sample-accurate gain ramp instead of a `setInterval` nudging `.volume` every
+8ms.
+
+It also made playback **gapless**. The next sentence is scheduled against the
+audio clock at the exact moment the previous one ends (`nextAt`), rather than
+waiting for an `ended` event to bubble through the DOM before starting the next
+element. Measured scheduling drift between consecutive clips: 2×10⁻¹⁶ seconds.
+Those inter-sentence gaps were audible, and they read as slowness.
+
+`<audio>` remains as `ElementClip`, used when Web Audio is unavailable or cannot
+decode a codec the media element can. Both expose the same Clip surface —
+`play(at)`, `pause()`, `onended`, `duration` — so nothing downstream knows which
+engine it got.
+
+**Two failure modes that had to be handled, because Web Audio fails differently
+from `<audio>`:**
+
+- A **suspended context does not advance its clock**, so a source started on one
+  never fires `ended`. Left alone that stalls the queue forever and the turn
+  never completes — worse than no audio. `WebClip.play()` resumes the context
+  first and, if the browser still refuses, throws a `NotAllowedError` so the
+  existing "tap to hear the reply" path takes over exactly as it did for a
+  blocked `<audio>.play()`.
+- A **lost `ended` event** (a tab backgrounded mid-clip) would stall the same
+  way, so every clip carries a timeout guard at its own duration plus 900ms of
+  slack.
+
+### Three more things on the critical path
+
+- **`<link rel="preconnect">` to `api.cartesia.ai`.** The browser talks to
+  Cartesia directly now, so the first spoken clip of a session would otherwise
+  pay DNS + TCP + TLS before a single byte of audio moved. Doing it during page
+  load costs nothing. This is invisible to the localhost measurement and one of
+  the larger real-world wins.
+- **`primeAudio()` on the actual gesture** — Enter, the send button, the landing
+  submit, the orb tap. A suspended context is resumed and iOS is handed a silent
+  one-sample buffer, which is what genuinely unlocks audio output there. Paying
+  the unlock on the keypress means the first real clip does not pay it.
+- **`SPEAK_FIRST_MIN`, 60 → 26 characters.** The opening fragment is the only
+  chunk whose latency is not hidden behind speech already playing, so it is the
+  single biggest lever on "when does it start talking". At 60 the code was
+  frequently waiting for a comma that had not arrived yet; at 26 it breaks on
+  the last word boundary in the window instead. Everything after the first
+  fragment still waits for real sentence ends, so mid-reply speech is unchanged.
+
+### Note for whoever works on this next
+
+The remaining lever is Cartesia's **WebSocket** (`wss://api.cartesia.ai/tts/websocket`),
+which would overlap synthesis with generation instead of waiting for a complete
+fragment and paying a round trip per chunk. It is now *possible* — it was not
+before, because it needs the API key in the browser, and the short-lived token
+solves exactly that. Cartesia documents `?api_key=` and `?cartesia_version=`
+query parameters specifically because browser WebSockets cannot send headers.
+
+It was not built here because the frame format could not be verified from this
+environment, and shipping an unverified protocol on the path that currently
+works is a bad trade. Anyone picking it up should build it behind the same
+fallback shape as the direct/proxy split: try the socket, fall back to
+`/tts/bytes` on any failure, and make the fallback sticky for the session.

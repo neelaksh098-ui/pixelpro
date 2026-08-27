@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#2743EE" />
 <title>Pixel Pro — Fast AI Assistant</title>
+<!-- The browser now talks to Cartesia directly, so the FIRST spoken clip of
+     a session would otherwise pay for DNS, TCP and a TLS handshake before a
+     single byte of audio moves. Doing that during page load costs nothing and
+     takes it off the critical path of the first thing the user hears. -->
+<link rel="preconnect" href="https://api.cartesia.ai" crossorigin />
+<link rel="dns-prefetch" href="https://api.cartesia.ai" />
 <link rel="manifest" href="/manifest.json" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -3308,6 +3314,7 @@ function submitFromLanding(){
   var el = document.getElementById('landingInput');
   var v = el.value.trim();
   if(!v) return;
+  primeAudio();
   el.value = '';
   if(!state.user){
     setPendingCommand(v);
@@ -3572,67 +3579,216 @@ document.querySelectorAll('#voiceGender button').forEach(function(b){
   b.addEventListener('click', function(){ setVoiceGender(b.dataset.gender); });
 });
 
+/* ================================================================
+   AUDIO PLAYBACK
+
+   Every clip used to be an <audio> element fed a data: or blob: URL. That
+   costs more than it looks: the element re-fetches its own URL, runs the
+   decoder on the media thread, and only then fires `canplay` -- which the
+   code then waited on, with a 450ms cap. On a clip whose bytes are already
+   sitting in memory, that entire sequence is overhead.
+
+   Web Audio decodes the ArrayBuffer we already hold and plays it from a
+   buffer source. No URL, no re-fetch, no `canplay` wait, and the fade
+   becomes a sample-accurate gain ramp instead of a setInterval nudging
+   `volume` every 8ms.
+
+   It also makes playback gapless: the next sentence is scheduled against
+   the audio clock at the exact moment the previous one ends, rather than
+   waiting for an `ended` event to bubble through the DOM and start the next
+   element. Those inter-sentence gaps were audible and read as slowness.
+
+   <audio> remains as the fallback, because Web Audio can be unavailable
+   (old browsers) or refuse to decode (a codec the AudioContext lacks but
+   the media element has). Both produce the same Clip surface, so nothing
+   downstream knows which engine it got.
+   ================================================================ */
+
+var actx = null;
+function audioCtx(){
+  if(actx) return actx;
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return null;
+  try{ actx = new AC(); }catch(e){ actx = null; }
+  return actx;
+}
+
+/* Called from a real user gesture -- Enter, the orb tap, the send button.
+   Two things happen here that cannot happen later: a suspended context is
+   resumed, and iOS is handed a silent buffer, which is what actually
+   unlocks audio output on that platform. Doing it on the gesture means the
+   first real clip plays immediately instead of paying for the unlock. */
+var audioPrimed = false;
+function primeAudio(){
+  var c = audioCtx();
+  if(!c) return;
+  try{ if(c.state === 'suspended') c.resume().catch(function(){}); }catch(e){}
+  if(audioPrimed) return;
+  audioPrimed = true;
+  try{
+    var b = c.createBuffer(1, 1, 22050);
+    var s = c.createBufferSource();
+    s.buffer = b; s.connect(c.destination); s.start(0);
+  }catch(e){}
+}
+
+/* The common surface: play(), pause(), onended, duration. */
+function WebClip(buf, ctx){
+  this.buffer = buf; this.ctx = ctx;
+  this.src = null; this.gain = null;
+  this.onended = null; this.onerror = null;
+  this.duration = buf.duration;
+  this.started = false; this.dead = false;
+}
+/* `at` is an AudioContext timestamp. Passing the previous clip's end time
+   is what makes consecutive sentences seamless. */
+WebClip.prototype.play = function(at){
+  var self = this;
+  if(this.dead) return Promise.resolve();
+  var c = this.ctx;
+  /* A suspended context does not advance its clock, so a source started on
+     it never fires `ended` -- the queue would wait forever and the turn
+     would never finish. Resume first, and if the browser refuses because
+     there has been no gesture yet, report it the same way a blocked
+     <audio>.play() does so the existing "tap to hear" path takes over. */
+  var ready = (c.state === 'running')
+    ? Promise.resolve()
+    : (function(){ try{ return c.resume(); }catch(e){ return Promise.reject(e); } })();
+  return ready.catch(function(){}).then(function(){
+    if(c.state !== 'running'){
+      var blocked = new Error('audio context suspended');
+      blocked.name = 'NotAllowedError';
+      throw blocked;
+    }
+    return new Promise(function(resolve, reject){
+    try{
+      var g = c.createGain();
+      var s = c.createBufferSource();
+      s.buffer = self.buffer;
+      s.connect(g); g.connect(c.destination);
+      var t = Math.max(c.currentTime, at || 0);
+      /* Same intent as the old fade: prevent a click at the edit point
+         without making the first syllable arrive under a ramp. */
+      g.gain.setValueAtTime(0.5, t);
+      g.gain.linearRampToValueAtTime(1, t + 0.03);
+      var d = self.buffer.duration;
+      if(d > 0.2) {
+        g.gain.setValueAtTime(1, t + d - 0.08);
+        g.gain.linearRampToValueAtTime(0.0001, t + d);
+      }
+      function done(){
+        if(self.dead) return;
+        self.dead = true;
+        clearTimeout(self.guard);
+        if(self.onended) self.onended();
+      }
+      s.onended = done;
+      s.start(t);
+      /* Belt and braces: if `ended` is ever lost -- a context suspended
+         mid-clip by a backgrounded tab, a browser quirk -- the queue must
+         not stall behind it. The slack is generous because firing early
+         would cut a sentence off. */
+      self.guard = setTimeout(done, Math.max(500, (t - c.currentTime + d) * 1000 + 900));
+      self.src = s; self.gain = g; self.started = true;
+      self.endsAt = t + d;
+      resolve();
+    }catch(err){ reject(err); }
+    });
+  });
+};
+WebClip.prototype.pause = function(){
+  this.dead = true;
+  clearTimeout(this.guard);
+  try{ if(this.src){ this.src.onended = null; this.src.stop(0); } }catch(e){}
+  this.src = null;
+};
+
+/* The <audio> fallback, wrapped so it presents the identical surface. */
+function ElementClip(audio, url){
+  this.audio = audio; this.url = url;
+  this.onended = null; this.onerror = null;
+  this.duration = 0; this.dead = false;
+  var self = this;
+  audio.addEventListener('ended', function(){ if(!self.dead){ self.dead = true; if(self.onended) self.onended(); } });
+  audio.addEventListener('error', function(){ if(!self.dead){ self.dead = true; if(self.onended) self.onended(); } });
+}
+ElementClip.prototype.play = function(){
+  var a = this.audio;
+  a.volume = 0.45;
+  var p = a.play();
+  if(p && p.then){
+    p.then(function(){
+      var steps = 5, n = 0;
+      var fade = setInterval(function(){
+        n++;
+        a.volume = Math.min(1, 0.45 + (0.55 * n / steps));
+        if(n >= steps) clearInterval(fade);
+      }, 8);
+    }).catch(function(){});
+  }
+  return p || Promise.resolve();
+};
+ElementClip.prototype.pause = function(){
+  this.dead = true;
+  try{ this.audio.pause(); this.audio.currentTime = 0; }catch(e){}
+  if(this.url){ try{ URL.revokeObjectURL(this.url); }catch(e){} }
+};
+
+/* Build a clip from raw bytes. Web Audio first; the element only if the
+   AudioContext is missing or cannot decode this codec. */
+function makeClip(arrayBuffer, mime){
+  var c = audioCtx();
+  if(c && arrayBuffer && arrayBuffer.byteLength){
+    /* decodeAudioData detaches the buffer it is given, so hand it a copy --
+       the fallback still needs the original bytes if decoding fails. */
+    var copy = arrayBuffer.slice(0);
+    return c.decodeAudioData(copy)
+      .then(function(buf){ return new WebClip(buf, c); })
+      .catch(function(){ return elementClipFrom(arrayBuffer, mime); });
+  }
+  return Promise.resolve(elementClipFrom(arrayBuffer, mime));
+}
+function elementClipFrom(arrayBuffer, mime){
+  var url = URL.createObjectURL(new Blob([arrayBuffer], { type: mime || 'audio/wav' }));
+  var audio = new Audio(url);
+  audio.preload = 'auto';
+  var clip = new ElementClip(audio, url);
+  return new Promise(function(resolve){
+    var settled = false;
+    function go(){ if(settled) return; settled = true; clearTimeout(guard); resolve(clip); }
+    var guard = setTimeout(go, 450);
+    audio.addEventListener('canplay', go, { once:true });
+    audio.addEventListener('loadeddata', go, { once:true });
+    try{ audio.load(); }catch(e){ go(); }
+  });
+}
+function b64ToArrayBuffer(b64){
+  var bin = atob(b64), n = bin.length, out = new Uint8Array(n);
+  for(var i = 0; i < n; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
 var ttsAudio = null;
+/* The whole-answer path, for callers that only ever have finished text.
+   Read Aloud no longer uses this -- it goes through the sentence pipeline
+   like the orb -- but a photo turn never streams, so it still does. */
 async function speakAloud(text, done){
   noteFnCall();
   if(ttsAudio){ try{ ttsAudio.pause(); }catch(e){} ttsAudio = null; }
   if(window.speechSynthesis) speechSynthesis.cancel();
   try{
-    var r = await fetch('/.netlify/functions/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text, gender: voiceGender, lang: state.lang || 'hi' })
-    });
-    var d = await r.json();
-    if(!r.ok || !d.audio) { var err = new Error(d.error || 'No audio returned'); err.serverSide = true; throw err; }
-    var audio = new Audio('data:' + (d.mime || 'audio/mpeg') + ';base64,' + d.audio);
-    audio.preload = 'auto';
-    ttsAudio = audio;
-    audio.onended = function(){ ttsAudio = null; if(done) done(); };
-    audio.onerror = function(){ ttsAudio = null; if(done) done(); };
-    /* Playing the instant the element exists is what made the voice sound
-       like it was buffering: the first syllables start before the decoder
-       has enough data. Wait for a playable buffer (bounded, so a slow
-       decode can never hang the turn), then ease the volume in and out so
-       neither edge clicks. */
-    await new Promise(function(resolve){
-      var settled = false;
-      function go(){ if(settled) return; settled = true; cleanup(); resolve(); }
-      function cleanup(){
-        audio.removeEventListener('canplay', go);
-        audio.removeEventListener('loadeddata', go);
-        clearTimeout(guard);
-      }
-      var guard = setTimeout(go, 450);
-      audio.addEventListener('canplay', go, { once:true });
-      audio.addEventListener('loadeddata', go, { once:true });
-      try{ audio.load(); }catch(e){ go(); }
-    });
-    if(ttsAudio !== audio) return;      /* a newer turn replaced it while loading */
-    audio.volume = 0;
+    var clip = await ttsClip(text);
+    ttsAudio = clip;
+    clip.onended = function(){ if(ttsAudio === clip) ttsAudio = null; if(done) done(); };
+    clip.onerror = clip.onended;
     try{
-      await audio.play();
-      /* 90ms fade in; the tail fades over the last 120ms */
-      (function(){
-        var steps = 9, i = 0;
-        var fade = setInterval(function(){
-          i++;
-          if(!ttsAudio || ttsAudio !== audio){ clearInterval(fade); return; }
-          audio.volume = Math.min(1, i / steps);
-          if(i >= steps) clearInterval(fade);
-        }, 10);
-        audio.addEventListener('timeupdate', function(){
-          if(!audio.duration || !isFinite(audio.duration)) return;
-          var left = audio.duration - audio.currentTime;
-          if(left < 0.12) audio.volume = Math.max(0, left / 0.12);
-        });
-      })();
+      await clip.play(0);
     }catch(playErr){
       /* Autoplay was blocked by the browser -- the Cartesia audio is fine,
          so keep it and let the next tap play it rather than dropping to the
          robotic browser voice. */
       if(playErr && (playErr.name === 'NotAllowedError' || /gesture|interact/i.test(playErr.message || ''))){
-        pendingTtsAudio = audio;
+        pendingTtsAudio = clip;
         reportVoiceIssue('Tap anywhere to hear the reply — your browser blocked autoplay.', true);
         if(done) done();
         return;
@@ -3657,10 +3813,12 @@ function reportVoiceIssue(msg, always){
   if(typeof showToast === 'function') showToast(msg);
 }
 document.addEventListener('click', function(){
+  /* A real gesture: unlock output first, then play what was held back. */
+  primeAudio();
   if(pendingTtsAudio){
     var a = pendingTtsAudio; pendingTtsAudio = null;
     ttsAudio = a;
-    a.play().catch(function(){});
+    a.play(0).catch(function(){});
   }
 }, true);
 
@@ -4170,7 +4328,9 @@ function isFarewell(t){
 
 /* ================= speaking ================= */
 function liveStopSpeaking(){
-  if(ttsAudio){ try{ ttsAudio.pause(); ttsAudio.currentTime = 0; }catch(e){} ttsAudio = null; }
+  /* pause() on a Clip already rewinds; currentTime belonged to the raw
+     <audio> element and does not exist on the Web Audio path. */
+  if(ttsAudio){ try{ ttsAudio.pause(); }catch(e){} ttsAudio = null; }
   if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
 }
 /* Recognition is already stopped by the transition into 'responding'.
@@ -4293,27 +4453,6 @@ function ttsCleanText(text){
     .slice(0, 900);
 }
 
-/* Buffering. A blob URL beats a data: URI here -- no base64 on the wire and
-   no base64 decode on a phone -- and `canplay` (enough to start) fires far
-   sooner than `canplaythrough` (enough to finish). The timeout is only a
-   bound on a pathological decode, not the normal path. */
-function ttsBuffer(audio, url){
-  audio.preload = 'auto';
-  if(url){
-    var drop = function(){ try{ URL.revokeObjectURL(url); }catch(e){} };
-    audio.addEventListener('ended', drop, { once:true });
-    audio.addEventListener('error', drop, { once:true });
-  }
-  return new Promise(function(resolve){
-    var settled = false;
-    function go(){ if(settled) return; settled = true; clearTimeout(guard); resolve(); }
-    var guard = setTimeout(go, 450);
-    audio.addEventListener('canplay', go, { once:true });
-    audio.addEventListener('loadeddata', go, { once:true });
-    try{ audio.load(); }catch(err){ go(); }
-  });
-}
-
 async function ttsClipDirect(text, signal){
   var t = ttsTok;
   var body = {
@@ -4338,10 +4477,7 @@ async function ttsClipDirect(text, signal){
   if(!r.ok) throw new Error('cartesia direct HTTP ' + r.status);
   var buf = await r.arrayBuffer();
   if(!buf || !buf.byteLength) throw new Error('empty audio');
-  var url = URL.createObjectURL(new Blob([buf], { type: t.mime || 'audio/wav' }));
-  var audio = new Audio(url);
-  await ttsBuffer(audio, url);
-  return audio;
+  return makeClip(buf, t.mime || 'audio/wav');
 }
 
 async function ttsClipProxy(text, signal){
@@ -4354,9 +4490,7 @@ async function ttsClipProxy(text, signal){
   });
   var d = await r.json();
   if(!r.ok || !d.audio){ var e = new Error(d.error || 'No audio returned'); e.serverSide = true; throw e; }
-  var audio = new Audio('data:' + (d.mime || 'audio/mpeg') + ';base64,' + d.audio);
-  await ttsBuffer(audio, null);
-  return audio;
+  return makeClip(b64ToArrayBuffer(d.audio), d.mime || 'audio/mpeg');
 }
 
 async function ttsClip(text, signal){
@@ -4386,13 +4520,23 @@ async function ttsClip(text, signal){
    broken at a comma rather than being allowed to grow unbounded. */
 var SPEAK_MIN_LATER_CHUNK = 130;   /* chars: below this, merge rather than pay a round trip */
 
+/* How much text the opening fragment waits for. This is the single biggest
+   lever on "how long until it starts talking", because everything after it
+   overlaps with speech already playing. 26 characters is roughly four or
+   five words -- enough to be a speakable phrase, and far short of the 60 the
+   code used to insist on while a comma it might never see failed to arrive. */
+var SPEAK_FIRST_MIN = 26;
+
 function splitSpeakable(text, from, atEnd, isFirst){
   var chunks = [], i = from;
-  if(isFirst && text.length - from >= 60){
+  if(isFirst && text.length - from >= SPEAK_FIRST_MIN){
     var head = text.slice(from, from + 90);
     var brk = head.search(/[,;:] /);
-    if(brk === -1) brk = head.lastIndexOf(' ', 60);
-    if(brk > 20){
+    /* No punctuation yet: break at the last word boundary inside the window
+       rather than waiting for one. A clause break is nicer when it exists,
+       but waiting for it is what made the voice feel slow to start. */
+    if(brk === -1) brk = head.lastIndexOf(' ', SPEAK_FIRST_MIN + 12);
+    if(brk > 12){
       var piece0 = text.slice(from, from + brk + 1).trim();
       var lastTok0 = piece0.split(/\s+/).pop() || '';
       if(!/^([A-Za-z]\.){1,3}$/.test(lastTok0)){
@@ -4509,30 +4653,32 @@ function makeSpeechQueue(sid, opts){
     if(ended && playIdx >= items.length && !stale() && opts.onDone) opts.onDone();
   }
 
-  function playClip(audio){
+  /* Where the next sentence should begin on the audio clock. Scheduling
+     against this rather than waiting for the previous clip's `ended` event
+     is what removes the gap between sentences: the DOM event arrives some
+     milliseconds after the audio actually stopped, and those milliseconds
+     were audible on every sentence boundary. */
+  var nextAt = 0;
+
+  function playClip(clip){
     return new Promise(function(resolve){
-      ttsAudio = audio;
+      ttsAudio = clip;
       var done = false;
-      function finish(){ if(done) return; done = true; if(ttsAudio === audio) ttsAudio = null; resolve(); }
-      audio.onended = finish;
-      audio.onerror = finish;
-      /* The fade is here to stop a click at the clip boundary, not to be
-         heard. Starting from silence meant the first syllable arrived under
-         a ramp and read as lateness; a 0.45 floor is already well below the
-         discontinuity that causes the click, and reaches full level in about
-         40ms instead of 63. Same smoothness, audibly prompter onset. */
-      audio.volume = 0.45;
-      audio.play().then(function(){
-        var steps = 5, n = 0;
-        var fade = setInterval(function(){
-          n++;
-          if(ttsAudio !== audio){ clearInterval(fade); return; }
-          audio.volume = Math.min(1, 0.45 + (0.55 * n / steps));
-          if(n >= steps) clearInterval(fade);
-        }, 8);
+      function finish(){ if(done) return; done = true; if(ttsAudio === clip) ttsAudio = null; resolve(); }
+      clip.onended = finish;
+      clip.onerror = finish;
+      var at = 0;
+      if(clip instanceof WebClip && clip.ctx){
+        /* Only chain when the previous clip is genuinely still playing;
+           otherwise start now, or a pause between sentences would push
+           every later one further into the future. */
+        at = (nextAt > clip.ctx.currentTime) ? nextAt : clip.ctx.currentTime;
+      }
+      clip.play(at).then(function(){
+        if(clip instanceof WebClip && clip.endsAt) nextAt = clip.endsAt;
       }).catch(function(err){
         if(err && (err.name === 'NotAllowedError' || /gesture|interact/i.test(err.message || ''))){
-          pendingTtsAudio = audio;
+          pendingTtsAudio = clip;
           reportVoiceIssue('Tap anywhere to hear the reply — your browser blocked autoplay.', true);
         }
         finish();
@@ -4559,6 +4705,7 @@ function makeSpeechQueue(sid, opts){
     },
     cancel: function(){
       cancelled = true;
+      nextAt = 0;
       items.forEach(function(it){ if(it.audio){ try{ it.audio.pause(); }catch(e){} } });
       items = [];
     },
@@ -4877,6 +5024,7 @@ function warmForTyping(){
 /* ================= open / close ================= */
 function openLive(){
   if(live.on) return;                 /* re-activating must not start a second session */
+  primeAudio();                       /* opened from a tap -- unlock output now */
   /* First thing, before the greeting: the token takes one round trip to
      mint, and the greeting is the soonest thing that will want it. This
      still never blocks -- whatever is not ready in time simply uses the
@@ -7547,9 +7695,12 @@ async function sendMessage(text){
   state.busy = false; $send.disabled = false; refocusComposer();
 }
 
-$send.addEventListener('click', function(){ sendMessage(); });
+$send.addEventListener('click', function(){ primeAudio(); sendMessage(); });
 $input.addEventListener('keydown', function(e){
-  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+  /* Enter is a real user gesture, and the last one before audio needs to
+     play. Unlocking the output here means the first clip starts immediately
+     instead of paying for the unlock when it arrives. */
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); primeAudio(); sendMessage(); }
 });
 
 /* ================================================================
@@ -7956,9 +8107,12 @@ function renderSettings(tab){
           showToast('Cartesia: ' + (d.error || ('HTTP ' + r.status)));
         } else {
           out.textContent = 'Premium voice working';
-          var a = new Audio('data:audio/mpeg;base64,' + d.audio);
-          ttsAudio = a;
-          a.play().catch(function(){ showToast('Audio ready but the browser blocked playback — tap the screen.'); });
+          /* Fired straight from the tap, so the context is unlocked and
+             this plays through the same engine the real voice uses. */
+          primeAudio();
+          var clip = await makeClip(b64ToArrayBuffer(d.audio), d.mime || 'audio/mpeg');
+          ttsAudio = clip;
+          clip.play(0).catch(function(){ showToast('Audio ready but the browser blocked playback — tap the screen.'); });
         }
       }catch(e){
         out.textContent = 'Could not reach the server';
