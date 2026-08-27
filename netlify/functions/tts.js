@@ -83,6 +83,13 @@ exports.handler = async (event) => {
   try { payload = JSON.parse(event.body || '{}'); }
   catch (_) { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Bad JSON.' }) }; }
 
+  // A warm-up ping: the point is only to have this container already running
+  // when the first real sentence arrives, so it must return immediately and
+  // must not spend a Cartesia call doing it.
+  if (payload.warm === true) {
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ warm: true }) };
+  }
+
   const text = cleanText(payload.text);
   if (!text) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'No text to speak.' }) };
 

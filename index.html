@@ -836,6 +836,11 @@ body.empty-state .composer-wrap{transform:translate3d(0,-15vh,0)}
 .settings-row-val{font-size:15.5px;color:var(--ink);text-align:right;word-break:break-word}
 .settings-row-btn{flex:none;padding:10px 20px;border-radius:10px;border:1px solid var(--line-strong);background:var(--card);color:var(--ink);font-size:15px;font-weight:500}
 .settings-row-btn:hover{background:var(--hover)}
+/* Diagnostic readout: monospace so the columns line up, and selectable so
+   the numbers can be copied by hand if the clipboard is blocked. */
+.timing-block{margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:13px;background:var(--card);
+  font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);
+  white-space:pre;overflow-x:auto;-webkit-user-select:text;user-select:text}
 .settings-avatar{width:96px;height:96px;border-radius:50%;overflow:hidden;background:var(--bg-2);border:1px solid var(--line);display:grid;place-items:center;font-size:34px;font-weight:700;color:var(--muted);margin:30px auto 0}
 .settings-avatar img{width:100%;height:100%;object-fit:cover}
 .settings-support{text-align:center;font-size:14.5px;color:var(--muted);margin-top:46px}
@@ -3434,6 +3439,7 @@ document.querySelectorAll('#voiceGender button').forEach(function(b){
 
 var ttsAudio = null;
 async function speakAloud(text, done){
+  noteFnCall();
   if(ttsAudio){ try{ ttsAudio.pause(); }catch(e){} ttsAudio = null; }
   if(window.speechSynthesis) speechSynthesis.cancel();
   try{
@@ -3778,6 +3784,11 @@ function liveGo(next){
   var shouldListen = (next === 'listening' || next === 'user') && !live.muted && live.on;
   if(shouldListen) recEnsure();
   else recStop();
+  /* The moment listening starts, the user is about to speak -- several
+     seconds of free time in which to have the containers ready. Warming at
+     screen-open instead was useless: the greeting warmed them anyway, and
+     they had gone cold again by the time the first real sentence arrived. */
+  if(next === 'listening') warmFunctions();
   liveRender();
 }
 /* kept for older call sites and tests */
@@ -4016,6 +4027,7 @@ function speakFiller(){
 
 /* Fetch one clip. Resolves to a ready-to-play <audio>, or null. */
 async function ttsClip(text, signal){
+  noteFnCall();
   var r = await fetch('/.netlify/functions/tts', {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
@@ -4041,6 +4053,8 @@ async function ttsClip(text, signal){
    A full stop only ends a sentence when whitespace follows it, so "3.5"
    and "e.g." stay whole. A long stretch with no punctuation at all is
    broken at a comma rather than being allowed to grow unbounded. */
+var SPEAK_MIN_LATER_CHUNK = 130;   /* chars: below this, merge rather than pay a round trip */
+
 function splitSpeakable(text, from, atEnd, isFirst){
   var chunks = [], i = from;
   if(isFirst && text.length - from >= 60){
@@ -4070,7 +4084,16 @@ function splitSpeakable(text, from, atEnd, isFirst){
         var isAbbrev = /^([A-Za-z]\.){1,3}$/.test(lastTok) ||
                        /^(mr|mrs|ms|dr|prof|st|jr|sr|vs|etc|approx|no|fig|vol|est)\.$/i.test(lastTok) ||
                        /^[A-Za-z]\.$/.test(lastTok);
-        if(piece.length >= 8 && !isAbbrev){ chunks.push(piece); i = p + 1; }
+        if(piece.length >= 8 && !isAbbrev){
+          /* after the opening chunk, hold a short sentence back and let the
+             next one join it -- unless this is the end of the reply, where
+             there is nothing left to merge with */
+          if(!isFirst && !atEnd && chunks.length === 0 && piece.length < SPEAK_MIN_LATER_CHUNK &&
+             text.length - (p + 1) < 40){
+            continue;
+          }
+          chunks.push(piece); i = p + 1;
+        }
       }
     }
   }
@@ -4097,9 +4120,18 @@ function makeSpeechQueue(sid, opts){
   function stale(){ return cancelled || sid !== live.sessionId; }
 
   function enqueue(text){
+    turnMark('firstChunkSent');
     var item = { text:text, audio:null, failed:false, ready:null };
-    item.ready = ttsClip(text).then(function(a){ item.audio = a; })
-                              .catch(function(){ item.failed = true; });
+    /* One retry. A cold Netlify container can time out the first call, and
+       without this the chunk was silently dropped -- the listener heard a
+       sentence simply missing from the middle of the answer, which is worse
+       than waiting for it. */
+    item.ready = ttsClip(text)
+      .then(function(a){ item.audio = a; turnMark('firstAudioReady'); })
+      .catch(function(){
+        return ttsClip(text).then(function(a){ item.audio = a; turnMark('firstAudioReady'); })
+                            .catch(function(){ item.failed = true; });
+      });
     items.push(item);
     pump();
   }
@@ -4117,6 +4149,8 @@ function makeSpeechQueue(sid, opts){
         if(item.failed || !item.audio) continue;
         if(!started){
           started = true;
+          turnMark('firstAudioPlay');
+          turnEnd();
           /* the filler, if one is playing, has served its purpose */
           liveStopSpeaking();
           liveGo('responding');
@@ -4183,6 +4217,84 @@ function makeSpeechQueue(sid, opts){
   };
 }
 
+
+/* ================================================================
+   TURN TIMING
+
+   "Sometimes faster, sometimes slower" is not something anyone can fix
+   by reasoning about it, because the variance lives in three services
+   this code does not control -- Groq's queue depth, Cartesia's queue
+   depth, and the mobile network. Guessing which one is responsible and
+   optimising it is how you spend a week making no difference.
+
+   So measure instead. Every voice turn records where its time actually
+   went, and Settings shows the last few. The numbers come from the
+   device that is being slow, not from a mock.
+   ================================================================ */
+var turnTimings = [];
+var turnT = null;
+
+function turnStart(){
+  turnT = { t0: Date.now(), marks: {} };
+}
+function turnMark(name){
+  if(!turnT) return;
+  if(turnT.marks[name] === undefined) turnT.marks[name] = Date.now() - turnT.t0;
+}
+function turnEnd(){
+  if(!turnT) return;
+  turnT.total = Date.now() - turnT.t0;
+  turnTimings.unshift(turnT);
+  if(turnTimings.length > 8) turnTimings.pop();
+  try{ store('pp-turn-timings', JSON.stringify(turnTimings.slice(0,8))); }catch(e){}
+  turnT = null;
+}
+function loadTurnTimings(){
+  try{ return JSON.parse(store('pp-turn-timings') || '[]'); }catch(e){ return []; }
+}
+/* One place that decides which set of rows is current: the in-memory list
+   if this session has recorded anything, otherwise whatever the last
+   session left behind. Both the count and the text must agree. */
+function timingRows(){
+  return turnTimings.length ? turnTimings : loadTurnTimings();
+}
+/* Clipboard, with the execCommand fallback that TWA and older iOS still
+   need -- otherwise the one number we asked the user for can't leave the
+   phone. */
+function copyPlain(text, okMsg){
+  var fallback = function(){
+    try{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(ok ? okMsg : 'Could not copy — select the text below instead.');
+    }catch(e){ showToast('Could not copy — select the text below instead.'); }
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ showToast(okMsg); }).catch(fallback);
+  } else fallback();
+}
+function formatTimings(){
+  var rows = timingRows();
+  if(!rows.length) return 'No voice turns recorded yet.';
+  return rows.map(function(t, i){
+    var m = t.marks || {};
+    return (i === 0 ? 'latest  ' : ('-' + i + '      ').slice(0, 8)) + [
+      'search ' + (m.searchDone !== undefined ? m.searchDone + 'ms' : '—'),
+      'first token ' + (m.firstToken !== undefined ? m.firstToken + 'ms' : '—'),
+      'sent to voice ' + (m.firstChunkSent !== undefined ? m.firstChunkSent + 'ms' : '—'),
+      'audio ready ' + (m.firstAudioReady !== undefined ? m.firstAudioReady + 'ms' : '—'),
+      'speaking ' + (m.firstAudioPlay !== undefined ? m.firstAudioPlay + 'ms' : '—'),
+      'total ' + (t.total || 0) + 'ms'
+    ].join(' · ');
+  }).join('\n');
+}
+
 /* ================= asking ================= */
 async function liveAsk(question){
   question = String(question || '').trim();
@@ -4196,6 +4308,7 @@ async function liveAsk(question){
   }
   live.transcript.push({ role:'user', content:question });
   liveCaption(question, 'user');
+  turnStart();
   liveGo('processing');
   live.abort = new AbortController();
   var signal = live.abort.signal;
@@ -4257,6 +4370,7 @@ async function liveAsk(question){
           return '['+(i+1)+'] '+(it.title||'')+'\nURL: '+(it.url||'')+'\nPublished: '+(it.published_date||'unknown')+'\nSnippet: '+String(it.content||'').slice(0,1200);
         }).join('\n\n');
       if(sid !== live.sessionId) return;
+      turnMark('searchDone');
       liveGo('processing');
     }
 
@@ -4273,6 +4387,7 @@ async function liveAsk(question){
 
     reply = await streamAI(msgs, signal, lc, function(piece, full){
       if(sid !== live.sessionId) return;
+      turnMark('firstToken');
       liveCaption(full, 'bot');
       queue.feed(full);
     }, { lite: voiceLite });
@@ -4332,6 +4447,51 @@ function endLiveWithFarewell(){
   var name = state.user && state.user.displayName ? state.user.displayName.split(' ')[0] : '';
   liveSpeak(name ? ('Goodbye ' + name + '. Talk soon.') : 'Goodbye. Talk soon.', function(){ closeLive(); });
   liveTimer('farewellNet', function(){ if(live.on) closeLive(); }, 4500);
+}
+
+
+/* ================================================================
+   KEEPING THE FUNCTIONS WARM
+
+   This is the single biggest source of the "sometimes fast, sometimes
+   slow" feeling. Netlify Functions are containers that are destroyed
+   after a period of inactivity; the next call has to start one, which
+   costs anywhere from 200ms to well over a second. Nothing in the code
+   is slower on those turns -- the container simply was not there yet.
+
+   The old single-call setup hit this once per reply. Sentence
+   pipelining makes several calls per reply, so without this it hits the
+   cold path more often, not less: faster when warm, worse when cold.
+   That is exactly the inconsistency to remove.
+
+   So the moment the voice screen opens -- while the greeting is still
+   being spoken and the user has not said anything yet -- both functions
+   are pinged with a request that does no work. By the time the first
+   real sentence needs synthesising, the container is up.
+   ================================================================ */
+var lastFnCallAt = 0;          /* any call, real or warming */
+function noteFnCall(){ lastFnCallAt = Date.now(); }
+function warmFunctions(){
+  /* Keyed off the last call of ANY kind. Keying it off the last ping was a
+     bug: the ping fired when the screen opened blocked the one at listening,
+     which is the only one that matters. A real synthesis leaves the container
+     just as warm as a ping, so a recent one means there is nothing to do. */
+  if(Date.now() - lastFnCallAt < 8000) return;
+  noteFnCall();
+  try{
+    fetch('/.netlify/functions/tts', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ warm:true }),
+      keepalive:true
+    }).catch(function(){});
+    fetch('/.netlify/functions/chat-stream', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ warm:true }),
+      keepalive:true
+    }).catch(function(){});
+  }catch(e){}
 }
 
 /* ================= open / close ================= */
@@ -4419,6 +4579,13 @@ function closeLive(){
   wrap.addEventListener('keydown', function(e){
     if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); tap(); }
   });
+})();
+(function(){
+  var lb = document.getElementById('liveBtn');
+  if(!lb) return;
+  /* the gap between reaching for the button and speaking is free time */
+  lb.addEventListener('pointerenter', warmFunctions, { passive:true });
+  lb.addEventListener('touchstart', warmFunctions, { passive:true });
 })();
 document.getElementById('liveBtn').addEventListener('click', openLive);
 document.getElementById('liveClose').addEventListener('click', function(){ haptic('tap'); closeLive(); });
@@ -7271,7 +7438,12 @@ function renderSettings(tab){
         '<div class="settings-row"><div class="settings-row-meta"><b>Voice</b><small>Checks the premium voice and reports the exact problem</small></div>' +
           '<div class="settings-row-val" id="voiceDiag">Not tested</div>' +
           '<button class="settings-row-btn" id="setTestVoice" type="button">Test voice</button></div>' +
-      '</div>';
+        '<div class="settings-row"><div class="settings-row-meta"><b>Voice timing</b><small>Where each voice turn actually spent its time</small></div>' +
+          '<div class="settings-row-val">' + timingRows().length + ' turn' + (timingRows().length === 1 ? '' : 's') + '</div>' +
+          '<button class="settings-row-btn" id="setCopyTiming" type="button">Copy</button>' +
+          '<button class="settings-row-btn" id="setClearTiming" type="button">Clear</button></div>' +
+      '</div>' +
+      '<pre class="timing-block" id="timingBlock">' + esc(formatTimings()) + '</pre>';
     document.getElementById('setCycleTheme').addEventListener('click', function(){
       var order = ['system','light','dark'];
       var cur = 'system';
@@ -7333,6 +7505,15 @@ function renderSettings(tab){
     document.getElementById('setClearMem').addEventListener('click', function(){
       try{ store(memKey(currentUid()), '[]'); }catch(e){}
       renderSettings('general'); showToast('Memory cleared.');
+    });
+    document.getElementById('setCopyTiming').addEventListener('click', function(){
+      if(!timingRows().length){ showToast('No voice turns recorded yet — ask the orb something first.'); return; }
+      copyPlain(formatTimings(), 'Timing copied.');
+    });
+    document.getElementById('setClearTiming').addEventListener('click', function(){
+      turnTimings = [];
+      try{ store('pp-turn-timings', '[]'); }catch(e){}
+      renderSettings('general'); showToast('Timing cleared.');
     });
   } else if(tab === 'archived'){
     var chats = loadChats();

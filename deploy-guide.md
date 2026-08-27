@@ -466,3 +466,60 @@ network hop, not model choice or buffering, is the largest remaining cost,
 and removing it needs the WebSocket architecture described above — a
 long-lived host holding both the Groq stream and the Cartesia socket open at
 once, which Netlify Functions structurally cannot do.
+
+## "Sometimes faster, sometimes slower" — the consistency work
+
+The complaint that mattered most was not raw speed but *variance*: the same
+question sometimes answered sooner than the old ElevenLabs path and sometimes
+later. Three changes address that, and one of them is honestly a hedge.
+
+**1. Every TTS chunk gets one retry.** Previously a failed `/tts` call marked
+the chunk `failed` and the queue skipped it — meaning a single transient error
+silently dropped a whole sentence from the middle of a spoken answer. A
+dropped sentence reads as "it went weird again", and a retried one costs a few
+hundred milliseconds. The retry is one attempt only; a second failure still
+skips, so a genuinely broken chunk cannot stall the queue.
+
+**2. Short sentences are merged instead of sent separately.**
+`SPEAK_MIN_LATER_CHUNK = 130` in `index.html`. After the opening fragment, a
+sentence shorter than 130 characters is held back and joined to the next one,
+provided there is not already a lot of text waiting. A three-sentence reply
+used to mean four Netlify round trips, each an independent chance to hit a
+cold container; now it is typically two. The opening fragment is deliberately
+exempt — that one is about starting to speak as early as possible, and paying
+a round trip for it is the point.
+
+**3. `warmFunctions()` pings `/tts` and `/chat-stream` when the orb starts
+listening.** Both functions early-return on `{"warm": true}` without calling
+Groq or Cartesia, so the ping costs nothing but a container wake. Be clear
+about the status of this one: **a cold-start simulation did not reproduce a
+benefit** (1565ms with warm-up vs 1566ms without), because by the time a
+question is asked the greeting's own TTS call has already warmed the
+container. It is kept because it is free and cannot hurt, not because it is
+proven.
+
+## Voice timing readout (Settings → General)
+
+Rather than keep guessing at the cause of the variance, every voice turn now
+records where its time actually went, and Settings shows the last eight turns:
+
+    latest  search 412ms · first token 690ms · sent to voice 1180ms · audio ready 1602ms · speaking 1655ms · total 4120ms
+
+- **search** — the live-web lookup finished (a dash means the turn did not search)
+- **first token** — Groq's first streamed character arrived
+- **sent to voice** — the first speakable chunk was handed to Cartesia
+- **audio ready** — the first clip finished downloading and buffering
+- **speaking** — playback actually started
+- **total** — end of the turn
+
+The gaps between the stages are what matters. A large *first token* gap is
+Groq; a large gap between *sent to voice* and *audio ready* is the Cartesia
+round trip (and is where a cold container would show up); a large *speaking*
+gap after *audio ready* is browser buffering.
+
+Implementation: `turnStart` / `turnMark` / `turnEnd` / `formatTimings` in
+`index.html`, persisted to `pp-turn-timings` in `localStorage`, capped at
+eight turns. **Copy** puts the whole block on the clipboard (with an
+`execCommand` fallback, because clipboard writes are unreliable inside the
+TWA); **Clear** empties both memory and storage. The numbers come from the
+device that is being slow, not from a mock.

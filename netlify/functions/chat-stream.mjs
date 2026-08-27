@@ -26,6 +26,12 @@ export default async (req) => {
   try { payload = await req.json(); }
   catch { return new Response(JSON.stringify({ error: "Bad JSON." }), { status: 400, headers: { ...CORS, "Content-Type": "application/json" } }); }
 
+  // Warm-up ping — see warmFunctions() in index.html. Returns instantly and
+  // spends no Groq tokens; its only job is to leave this container running.
+  if (payload.warm === true) {
+    return new Response(JSON.stringify({ warm: true }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+  }
+
   let messages = Array.isArray(payload.messages) ? payload.messages.slice() : [];
   if (!messages.length) {
     return new Response(JSON.stringify({ error: "No messages." }), { status: 400, headers: { ...CORS, "Content-Type": "application/json" } });
