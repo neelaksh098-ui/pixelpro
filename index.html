@@ -4026,7 +4026,128 @@ function speakFiller(){
    ================================================================ */
 
 /* Fetch one clip. Resolves to a ready-to-play <audio>, or null. */
-async function ttsClip(text, signal){
+/* ================================================================
+   SPEAKING A SENTENCE
+
+   Every spoken sentence used to make the round trip browser -> Netlify ->
+   Cartesia -> Netlify -> browser. Two of those legs exist only to keep the
+   API key secret, and they are expensive: an extra ocean crossing each way,
+   plus a Netlify container that might be cold. That hop was the largest and
+   least predictable part of the wait.
+
+   So the browser now talks to Cartesia directly, using a short-lived
+   tts-only token minted by /tts-token. One leg instead of three.
+
+   The rule that makes this safe to ship: the direct path is used only when
+   a valid token is ALREADY in hand. It is never waited for. If there is no
+   token yet, or the direct call fails for any reason (CORS, an expired
+   token, a network blip), the sentence goes down the old proxy path
+   immediately and the session stops trying the direct one. Worst case this
+   change does nothing; it cannot make a turn slower than it was.
+   ================================================================ */
+
+var ttsTok = { token:null, expiresAt:0, version:null, model:null, voiceId:null,
+               outputFormat:null, mime:null, speed:null, gender:null, inflight:null };
+var ttsDirect = 'unknown';   /* 'unknown' -> 'ok' | 'off' (off is sticky for the session) */
+
+/* A minute of headroom: a token that expires mid-request is a failed
+   request, and the retry costs far more than refreshing early. */
+function ttsTokenFresh(){
+  return !!(ttsTok.token && ttsTok.gender === voiceGender && Date.now() < ttsTok.expiresAt - 60000);
+}
+
+function ttsFetchToken(){
+  if(ttsTokenFresh()) return Promise.resolve(ttsTok);
+  if(ttsTok.inflight) return ttsTok.inflight;
+  var want = voiceGender;
+  ttsTok.inflight = fetch('/.netlify/functions/tts-token', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ gender: want })
+    })
+    .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.error || 'token'); return d; }); })
+    .then(function(d){
+      if(!d.token) throw new Error('no token');
+      ttsTok.token = d.token; ttsTok.expiresAt = d.expiresAt || 0;
+      ttsTok.version = d.version; ttsTok.model = d.model; ttsTok.voiceId = d.voiceId;
+      ttsTok.outputFormat = d.outputFormat; ttsTok.mime = d.mime; ttsTok.speed = d.speed;
+      ttsTok.gender = want; ttsTok.inflight = null;
+      return ttsTok;
+    })
+    .catch(function(e){
+      ttsTok.inflight = null;
+      /* A token we cannot mint is not an error the user should ever see --
+         the proxy path still works. Remember not to keep asking. */
+      ttsDirect = 'off';
+      throw e;
+    });
+  return ttsTok.inflight;
+}
+
+/* The proxy strips markdown server-side. Talking to Cartesia directly means
+   doing it here instead, or the voice reads asterisks and pipes aloud. */
+function ttsCleanText(text){
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, ' code block ')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#*`>_~|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 900);
+}
+
+/* Buffering. A blob URL beats a data: URI here -- no base64 on the wire and
+   no base64 decode on a phone -- and `canplay` (enough to start) fires far
+   sooner than `canplaythrough` (enough to finish). The timeout is only a
+   bound on a pathological decode, not the normal path. */
+function ttsBuffer(audio, url){
+  audio.preload = 'auto';
+  if(url){
+    var drop = function(){ try{ URL.revokeObjectURL(url); }catch(e){} };
+    audio.addEventListener('ended', drop, { once:true });
+    audio.addEventListener('error', drop, { once:true });
+  }
+  return new Promise(function(resolve){
+    var settled = false;
+    function go(){ if(settled) return; settled = true; clearTimeout(guard); resolve(); }
+    var guard = setTimeout(go, 450);
+    audio.addEventListener('canplay', go, { once:true });
+    audio.addEventListener('loadeddata', go, { once:true });
+    try{ audio.load(); }catch(err){ go(); }
+  });
+}
+
+async function ttsClipDirect(text, signal){
+  var t = ttsTok;
+  var body = {
+    model_id: t.model,
+    transcript: ttsCleanText(text),
+    voice: { mode:'id', id: t.voiceId },
+    output_format: t.outputFormat,
+    language: state.lang === 'hi' ? 'hi' : state.lang === 'bn' ? 'bn' : 'en'
+  };
+  if(t.speed !== null && t.speed !== undefined) body.speed = t.speed;
+
+  var r = await fetch('https://api.cartesia.ai/tts/bytes', {
+    method:'POST',
+    headers:{
+      'Authorization': 'Bearer ' + t.token,
+      'Cartesia-Version': t.version || '2024-06-10',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body),
+    signal: signal
+  });
+  if(!r.ok) throw new Error('cartesia direct HTTP ' + r.status);
+  var buf = await r.arrayBuffer();
+  if(!buf || !buf.byteLength) throw new Error('empty audio');
+  var url = URL.createObjectURL(new Blob([buf], { type: t.mime || 'audio/wav' }));
+  var audio = new Audio(url);
+  await ttsBuffer(audio, url);
+  return audio;
+}
+
+async function ttsClipProxy(text, signal){
   noteFnCall();
   var r = await fetch('/.netlify/functions/tts', {
     method:'POST',
@@ -4037,16 +4158,29 @@ async function ttsClip(text, signal){
   var d = await r.json();
   if(!r.ok || !d.audio){ var e = new Error(d.error || 'No audio returned'); e.serverSide = true; throw e; }
   var audio = new Audio('data:' + (d.mime || 'audio/mpeg') + ';base64,' + d.audio);
-  audio.preload = 'auto';
-  await new Promise(function(resolve){
-    var settled = false;
-    function go(){ if(settled) return; settled = true; clearTimeout(guard); resolve(); }
-    var guard = setTimeout(go, 450);
-    audio.addEventListener('canplay', go, { once:true });
-    audio.addEventListener('loadeddata', go, { once:true });
-    try{ audio.load(); }catch(err){ go(); }
-  });
+  await ttsBuffer(audio, null);
   return audio;
+}
+
+async function ttsClip(text, signal){
+  if(ttsDirect !== 'off' && ttsTokenFresh()){
+    try{
+      var a = await ttsClipDirect(text, signal);
+      ttsDirect = 'ok';
+      if(turnT && turnT.path === undefined) turnT.path = 'direct';
+      return a;
+    }catch(err){
+      /* An abort is the user interrupting, not the direct path failing. */
+      if(err && err.name === 'AbortError') throw err;
+      ttsDirect = 'off';
+    }
+  } else if(ttsDirect !== 'off' && !ttsTok.inflight){
+    /* No token yet -- do not wait for one. Warm it for the next sentence
+       and take the known-good path now. */
+    ttsFetchToken().catch(function(){});
+  }
+  if(turnT && turnT.path === undefined) turnT.path = 'proxy';
+  return ttsClipProxy(text, signal);
 }
 
 /* Pull every complete sentence out of the text produced so far.
@@ -4284,7 +4418,8 @@ function formatTimings(){
   if(!rows.length) return 'No voice turns recorded yet.';
   return rows.map(function(t, i){
     var m = t.marks || {};
-    return (i === 0 ? 'latest  ' : ('-' + i + '      ').slice(0, 8)) + [
+    return (i === 0 ? 'latest  ' : ('-' + i + '      ').slice(0, 8)) +
+           (t.path ? '[' + t.path + '] ' : '') + [
       'search ' + (m.searchDone !== undefined ? m.searchDone + 'ms' : '—'),
       'first token ' + (m.firstToken !== undefined ? m.firstToken + 'ms' : '—'),
       'sent to voice ' + (m.firstChunkSent !== undefined ? m.firstChunkSent + 'ms' : '—'),
@@ -4472,6 +4607,12 @@ function endLiveWithFarewell(){
 var lastFnCallAt = 0;          /* any call, real or warming */
 function noteFnCall(){ lastFnCallAt = Date.now(); }
 function warmFunctions(){
+  /* The token is minted BEFORE the throttle, not after it. A warm container
+     does not imply a fresh token, and the greeting's own synthesis leaves
+     lastFnCallAt recent enough that everything below this line is skipped --
+     which would mean no token existed until a sentence needed one, defeating
+     the whole point of having it ready in advance. */
+  if(ttsDirect !== 'off' && !ttsTokenFresh()) ttsFetchToken().catch(function(){});
   /* Keyed off the last call of ANY kind. Keying it off the last ping was a
      bug: the ping fired when the screen opened blocked the one at listening,
      which is the only one that matters. A real synthesis leaves the container
@@ -4497,6 +4638,11 @@ function warmFunctions(){
 /* ================= open / close ================= */
 function openLive(){
   if(live.on) return;                 /* re-activating must not start a second session */
+  /* First thing, before the greeting: the token takes one round trip to
+     mint, and the greeting is the soonest thing that will want it. This
+     still never blocks -- whatever is not ready in time simply uses the
+     proxy -- it just gives the very first clip a chance at the fast path. */
+  if(ttsDirect !== 'off' && !ttsTokenFresh()) ttsFetchToken().catch(function(){});
   live.on = true;
   live.muted = false;
   live.locked = true;                 /* the greeting owns the turn */

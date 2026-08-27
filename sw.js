@@ -1,6 +1,6 @@
-const CACHE_VERSION = "pixelpro-v30";
+const CACHE_VERSION = "pixelpro-v31";
 const SHELL = ["/", "/index.html", "/privacy.html", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
-const NEVER_CACHE = ["/.netlify/functions/", "api.groq.com", "api.tavily.com", "identitytoolkit.googleapis", "securetoken.googleapis", "firebaseapp.com/__/auth"];
+const NEVER_CACHE = ["/.netlify/functions/", "api.cartesia.ai", "api.groq.com", "api.tavily.com", "identitytoolkit.googleapis", "securetoken.googleapis", "firebaseapp.com/__/auth"];
 function isNeverCache(url){ return NEVER_CACHE.some(function(f){ return url.indexOf(f) !== -1; }); }
 self.addEventListener("install", function(event){
   event.waitUntil(caches.open(CACHE_VERSION).then(function(cache){

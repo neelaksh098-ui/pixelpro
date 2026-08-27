@@ -523,3 +523,68 @@ eight turns. **Copy** puts the whole block on the clipboard (with an
 `execCommand` fallback, because clipboard writes are unreliable inside the
 TWA); **Clear** empties both memory and storage. The numbers come from the
 device that is being slow, not from a mock.
+
+## The big one: the browser now talks to Cartesia directly
+
+Every spoken sentence used to travel:
+
+    browser -> Netlify function -> Cartesia -> Netlify function -> browser
+
+Two of those four legs exist for exactly one reason: to keep `CARTESIA_API_KEY`
+off the client. They are not free. Each adds an ocean crossing, and the Netlify
+container in the middle can be cold — which made that hop both the largest
+slice of the wait and the least predictable one. It is the most likely cause of
+"sometimes faster, sometimes slower".
+
+Cartesia's answer is a scoped, short-lived access token. `tts-token.js` is now
+the only thing that ever sees the API key; it calls
+`POST https://api.cartesia.ai/access-token` with `grants: {tts: true}` and
+`expires_in`, and hands the browser a token that can do nothing but synthesise
+speech and expires in ten minutes. The browser then calls
+`https://api.cartesia.ai/tts/bytes` itself:
+
+    browser -> Cartesia -> browser
+
+**The rule that makes this safe to ship:** the direct path is used *only when a
+valid token is already in hand*. It is never waited for. If no token has
+arrived yet, or the direct call fails for any reason — CORS, an expired token,
+a network blip — the sentence goes down the old proxy path immediately, and the
+session stops attempting the direct one (`ttsDirect = 'off'`, sticky). Worst
+case this change does nothing at all; it cannot make a turn slower than it was.
+
+Tokens are minted at two points, both chosen so nobody is ever waiting on one:
+`openLive()` (so even the greeting has a chance at the fast path) and
+`warmFunctions()` on entering LISTENING. The mint in `warmFunctions` sits
+**above** the 8-second throttle, deliberately: a warm container does not imply a
+fresh token, and the greeting's own synthesis leaves `lastFnCallAt` recent
+enough that everything below that line is skipped — which would have meant no
+token existed until a sentence needed one, defeating the entire point.
+
+Two smaller wins ride along:
+
+- **Blob URLs instead of base64 data URIs.** The proxy path base64-encodes the
+  audio on the server and the phone decodes it back. Going direct means raw
+  bytes into a `Blob` — no encode, no decode, ~33% fewer bytes on the wire.
+  Blob URLs are revoked on `ended` and on `error` so nothing leaks.
+- **Markdown stripping moved client-side** (`ttsCleanText`), mirroring what the
+  proxy did server-side, so the voice does not read asterisks and pipes aloud.
+
+The Voice timing readout now tags each row `[direct]` or `[proxy]`, so it is
+visible at a glance which path a turn actually took.
+
+### Security note
+
+A leaked token buys a few minutes of text-to-speech and nothing else: no
+account access, no key, no other Cartesia capability. `tts-token` sets
+`Cache-Control: no-store`, and `/.netlify/functions/` was already in the
+service worker's `NEVER_CACHE` list (`api.cartesia.ai` is now listed too,
+though the cross-origin guard already covered it). Set `CARTESIA_TOKEN_TTL` to
+change the lifetime; it is in `SECRETS_SCAN_OMIT_KEYS` alongside the other
+non-secret Cartesia config.
+
+### If the direct path never engages
+
+Check the Voice timing rows. If every row says `[proxy]`, either the token
+endpoint is failing (open `/.netlify/functions/tts-token` — it returns
+Cartesia's own error text) or Cartesia is refusing the browser's origin, in
+which case the fallback is doing its job and voice still works.
