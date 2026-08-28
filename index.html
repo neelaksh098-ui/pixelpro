@@ -5608,7 +5608,7 @@ function specStart(text){
         /* Deliberately silent: the filler belongs to the real turn, and a
            speculation that is never adopted must never have made a sound. */
         var web = await runSearchPlan(text, buildSearchPlan(text, resolved.route), s.abort.signal);
-        s.lc = buildLiveContext(web);
+        s.lc = buildLiveContext(web, text);
       }
       s.searchDone = true;
       if(spec !== s && !s.adopted) throw new DOMException('superseded','AbortError');
@@ -5770,6 +5770,7 @@ async function liveAsk(question){
        the web toggle, and the rule that an unsure "no" loses to a local lean
        toward searching. */
     var resolved = await resolveRoute(question, signal);
+    turnMark('routeDone');
     if(sid !== live.sessionId) return;
     var needsWeb = resolved.needsWeb;
     routeLastDecision = needsWeb ? 'web' : 'direct';   /* spoken follow-ups inherit it too */
@@ -5781,8 +5782,11 @@ async function liveAsk(question){
       speakFiller();
       var plan = buildSearchPlan(question, resolved.route);
       var liveWeb = await runSearchPlan(question, plan, signal);
-      lc = buildLiveContext(liveWeb);
+      lc = buildLiveContext(liveWeb, question);
       if(sid !== live.sessionId) return;
+      /* Evidence size is a latency input, not a curiosity: time to first
+         token scales with it. It belongs beside the timings it explains. */
+      if(turnT){ turnT.ctxChars = lc.length; turnT.sources = (liveWeb.results || []).length; }
       turnMark('searchDone');
       liveGo('processing');
     }
@@ -8069,38 +8073,215 @@ function buildSearchPlan(text, route){
   };
 }
 
-/* Runs the plan, including the one retry that rescues a query the rewrite
-   made worse. Returns the raw Tavily payload. */
+/* Two formulations of the same question, issued together and merged.
+
+   The rewrite is usually better than the raw sentence -- it is what the
+   classifier is for -- but not always, and a spoken question arrives with
+   whatever the recogniser made of it. The old code handled that with a
+   RETRY: run the rewrite, and if it came back empty, run the raw text
+   afterwards. That only rescues the total failure, never the merely worse
+   result, and it pays for the rescue in series, which on a live question is
+   the one thing there is no time for.
+
+   Running both at once costs no wall clock over running one, and the merge
+   is strictly better evidence: a page either formulation found is a page the
+   model gets to read.
+
+   The second call is only made when it can actually pay for itself -- the
+   question is about something current AND the two formulations genuinely
+   differ. An ordinary grounded question still costs exactly one search. */
+function mergeSearches(payloads){
+  var seen = {}, merged = [], answer = '';
+  payloads.forEach(function(web){
+    if(!web) return;
+    if(!answer && web.answer) answer = web.answer;
+    (web.results || []).forEach(function(it){
+      var url = String(it.url || '').replace(/[#?].*$/, '').replace(/\/+$/, '');
+      if(!url) return;
+      var prev = seen[url];
+      if(prev){
+        /* The same page found twice is a stronger signal, not a duplicate to
+           discard: keep whichever formulation scored it higher, and keep the
+           extracted text if only one of them fetched it. */
+        if((Number(it.score) || 0) > (Number(prev.score) || 0)) prev.score = it.score;
+        if(!prev.raw_content && it.raw_content) prev.raw_content = it.raw_content;
+        if((it.content || '').length > (prev.content || '').length) prev.content = it.content;
+        return;
+      }
+      var copy = {};
+      for(var k in it) copy[k] = it[k];
+      copy.url = url;
+      seen[url] = copy;
+      merged.push(copy);
+    });
+  });
+  return { answer: answer, results: merged };
+}
+
 async function runSearchPlan(text, plan, signal){
   var opts = {};
   for(var k in plan.options) opts[k] = plan.options[k];
   opts.signal = signal;
-  var web = await tavilySearch(plan.searchQuery, opts);
-  if((!web.results || !web.results.length) && plan.searchQuery !== text){
-    web = await tavilySearch(text, opts);
+
+  var alt = String(text || '').trim();
+  var wantAlt = plan.current && alt && alt !== plan.searchQuery;
+
+  var calls = [tavilySearch(plan.searchQuery, opts)];
+  if(wantAlt){
+    /* Its failure must not take the primary down with it. */
+    calls.push(tavilySearch(alt, opts).catch(function(){ return null; }));
+  }
+  var payloads = await Promise.all(calls);
+  var web = mergeSearches(payloads);
+
+  /* Both formulations found nothing. The raw sentence is the last thing
+     left to try, and only now is it worth waiting for. */
+  if(!web.results.length && !wantAlt && alt && alt !== plan.searchQuery){
+    web = mergeSearches([await tavilySearch(alt, opts)]);
   }
   return web;
 }
 
-/* Everything that decides what the MODEL gets to read. The orb's old
-   version passed half the snippet length, no extracted page text, no
-   relevance scores and five results instead of ten -- so even when the
-   search was right, the evidence was thin enough to answer from memory
-   instead. */
-function buildLiveContext(web){
+/* ================================================================
+   WHAT THE MODEL ACTUALLY READS
+
+   This used to hand over ten sources at up to 7,600 characters each: the
+   whole Tavily snippet plus the first 5,000 characters of the fetched page.
+   A measured grounded turn sent 69,360 characters -- roughly seventeen
+   thousand tokens -- and the first five thousand characters of a web page
+   are its navigation, its cookie banner and its newsletter box. The answer,
+   when the page had one, was usually further down than that.
+
+   So the size was not buying evidence. It was buying boilerplate, and
+   paying for it twice: once in time to first token, which scales with input,
+   and once in accuracy, because the sentence that answers the question was
+   competing with sixty thousand characters of chrome.
+
+   The fix is not "send less". It is to send the PASSAGES THAT ANSWER THE
+   QUESTION: score every window of every page against the question's own
+   terms, keep the windows that hit, drop the rest, and spend a fixed budget
+   on the sources that scored best. Same evidence, an order of magnitude
+   less of it.
+   ================================================================ */
+var GROUND_MAX_CHARS   = 9000;  /* whole evidence block, hard ceiling */
+var GROUND_ANSWER_MAX  = 1200;  /* Tavily's own summary, if it gave one */
+var GROUND_DEEP        = 4;     /* sources that get passage extraction */
+var GROUND_DEEP_CHARS  = 1200;  /* ...and how much each of them may spend */
+var GROUND_THIN_CHARS  = 420;   /* every other source: its snippet, trimmed */
+var GROUND_MAX_SOURCES = 8;
+
+var GROUND_STOP = ('a am an and are as at be by do does did for from go had has have he how i if in is it its '+
+  'me my no of on or so that the their then there they this to up was we were what when where which who whose '+
+  'why will with would you your about into over under can could should would tell give show find get').split(' ');
+
+/* The words in the question that are worth matching a page against.
+
+   Two characters, not three. "who is the pm of india" reduces to nothing but
+   "india" under a three-character floor -- the single most important word in
+   the question is thrown away for being short, and then no passage on the
+   page matches the thing the page is about. Short words that survive the
+   stop list are exactly the acronyms questions are built from: pm, ai, gdp,
+   us, un, ev. */
+function groundKeywords(query){
+  var stop = {};
+  GROUND_STOP.forEach(function(w){ stop[w] = 1; });
+  var seen = {}, keys = [];
+  String(query || '').toLowerCase().split(/[^a-z0-9]+/).forEach(function(w){
+    if(w.length < 2 || stop[w] || seen[w]) return;
+    seen[w] = 1; keys.push(w);
+  });
+  return keys;
+}
+
+/* The parts of one page that are about the question, in the order they
+   appeared, up to a character budget.
+
+   Windows rather than sentences: a fact is often split across a heading and
+   the line under it, and a window keeps them together. Distinct keywords
+   rather than total hits, so a page that repeats one word in its navigation
+   cannot outrank a page that actually contains the answer. */
+/* Returns '' when the page is long and NOTHING in it matches the question.
+   That is deliberate and it is the difference between compact evidence and
+   compact noise: a page whose every window scores zero has no passage worth
+   sending, and its first twelve hundred characters are its cookie banner.
+   The caller falls back to the search engine's own curated snippet, which
+   at least was chosen for this query. */
+function bestPassages(text, keys, budget){
+  text = String(text || '').replace(/\s+/g, ' ').trim();
+  if(!text) return '';
+  if(text.length <= budget) return text;
+  if(!keys.length) return text.slice(0, budget);
+
+  var W = 420, windows = [];
+  for(var at = 0; at < text.length; at += W){
+    var chunk = text.substr(at, W);
+    var low = chunk.toLowerCase(), hits = 0;
+    for(var k = 0; k < keys.length; k++){ if(low.indexOf(keys[k]) >= 0) hits++; }
+    if(hits) windows.push({ at: at, text: chunk, hits: hits });
+  }
+  if(!windows.length) return '';
+
+  windows.sort(function(a, b){
+    if(b.hits !== a.hits) return b.hits - a.hits;
+    return a.at - b.at;               /* a tie goes to the earlier passage */
+  });
+
+  var take = [], used = 0;
+  for(var i = 0; i < windows.length && used < budget; i++){
+    take.push(windows[i]);
+    used += windows[i].text.length;
+  }
+  take.sort(function(a, b){ return a.at - b.at; });
+
+  var out = '', prev = -1;
+  take.forEach(function(w){
+    if(prev >= 0 && w.at !== prev) out += ' … ';
+    out += w.text;
+    prev = w.at + w.text.length;
+  });
+  return out.slice(0, budget);
+}
+
+function buildLiveContext(web, query){
+  var keys = groundKeywords(query);
   var ctx = '';
-  if(web && web.answer) ctx += 'TAVILY ANSWER:\n' + String(web.answer).slice(0, 2500) + '\n\n';
+  if(web && web.answer) ctx += 'TAVILY ANSWER:\n' + String(web.answer).slice(0, GROUND_ANSWER_MAX) + '\n\n';
+
   var ranked = (web && web.results ? web.results : []).slice()
-    .sort(function(a,b){ return (Number(b.score)||0) - (Number(a.score)||0); });
-  ctx += ranked.slice(0,10).map(function(it,i){
-    return '[' + (i+1) + '] ' + (it.title || '') +
-      '\nURL: ' + (it.url || '') +
-      '\nPublished: ' + (it.published_date || 'unknown') +
-      '\nRelevance score: ' + (typeof it.score === 'number' ? it.score.toFixed(3) : 'unknown') +
-      '\nSnippet: ' + (it.content || '').slice(0,2600) +
-      '\nExtracted: ' + (it.raw_content || '').slice(0,5000);
-  }).join('\n\n');
-  return ctx;
+    .sort(function(a, b){ return (Number(b.score) || 0) - (Number(a.score) || 0); });
+
+  /* Two pages with the same opening sentence are one page. Syndicated wire
+     copy is the common case, and it used to occupy four of the ten slots. */
+  var fingerprints = {}, kept = [];
+  for(var i = 0; i < ranked.length && kept.length < GROUND_MAX_SOURCES; i++){
+    var it = ranked[i];
+    var fp = String(it.content || it.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 110);
+    if(fp && fingerprints[fp]) continue;
+    if(fp) fingerprints[fp] = 1;
+    kept.push(it);
+  }
+
+  var blocks = [], total = ctx.length;
+  for(var n = 0; n < kept.length; n++){
+    var src = kept[n];
+    var deep = n < GROUND_DEEP;
+    var cap = deep ? GROUND_DEEP_CHARS : GROUND_THIN_CHARS;
+    /* Best passages from the fetched page; failing that, best passages from
+       the snippet; failing that, the snippet itself. Never raw page text
+       that matched nothing. */
+    var body = deep ? bestPassages(src.raw_content, keys, cap) : '';
+    if(!body) body = bestPassages(src.content, keys, cap);
+    if(!body) body = String(src.content || '').replace(/\s+/g, ' ').trim().slice(0, GROUND_THIN_CHARS);
+    var block = '[' + (n + 1) + '] ' + (src.title || '') +
+      '\nURL: ' + (src.url || '') +
+      '\nPublished: ' + (src.published_date || 'unknown') +
+      '\nRelevance score: ' + (typeof src.score === 'number' ? src.score.toFixed(3) : 'unknown') +
+      '\nEvidence: ' + body;
+    if(total + block.length > GROUND_MAX_CHARS && blocks.length) break;
+    blocks.push(block);
+    total += block.length + 2;
+  }
+  return ctx + blocks.join('\n\n');
 }
 function rankedSources(web){
   return (web && web.results ? web.results : []).slice()
@@ -8632,7 +8813,7 @@ async function sendMessage(text){
       var plan = buildSearchPlan(text, route);
       var web = await runSearchPlan(text, plan, currentAbort ? currentAbort.signal : null);
       sources = rankedSources(web);
-      var liveContext = buildLiveContext(web);
+      var liveContext = buildLiveContext(web, text);
       var liveMessages = [{ role:'system', content: systemPrompt() +
         ' You have been given live web results retrieved seconds ago. Answer ONLY from that evidence for anything time-sensitive. Lead with the direct answer in the first sentence. Give exact figures, names and dates as reported, and say when the information is from. If sources disagree, say so and give the most recent. If the evidence does not actually answer the question, say that plainly instead of guessing.' }]
         .concat(state.history.slice(-8))
