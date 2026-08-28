@@ -3960,10 +3960,14 @@ if(window.speechSynthesis){ try{ speechSynthesis.onvoiceschanged = function(){};
    be long. 260ms still clears the tail and takes a tenth of a second off
    every single exchange. */
 var LIVE_SETTLE_MS = 260;      /* let the speaker's tail die before listening */
-var LIVE_DUP_MS = 2500;        /* the same command inside this window is a repeat */
-/* ...and the same command this soon after the microphone reopens is the tail
-   of the one that has just been answered, however long the answer took. */
-var LIVE_REOPEN_DUP_MS = 1500;
+/* Duplicate submission is prevented by session identity, not by time -- see
+   recCommit. This window covers only the case identity cannot: two callbacks
+   from two different sessions in the same instant. It is deliberately far too
+   short to reach somebody genuinely saying the same thing twice. */
+var LIVE_RACE_MS = 350;
+/* How long the tail of the last command is still arriving, and so still
+   counts as echo rather than as speech. Used by the echo guard only. */
+var LIVE_DUP_MS = 2500;
 /* Once the engine has produced a final transcript, `onend` normally follows
    within a couple of hundred milliseconds. Waiting a full second for it was
    dead time on every single turn -- and recCommit dedups, so committing early
@@ -4086,9 +4090,61 @@ var LIVE_BARGE_MIN_WORDS = 2;  /* one stray word is noise, not an interruption *
    in which nobody said anything it comes back a little less eagerly. Any
    speech at all resets it to instant, so the case that matters -- somebody
    about to talk, or just finished a turn -- is never slowed. */
+/* ================================================================
+   VOICE DIAGNOSTICS
+
+   A fixed-size ring of what the recogniser actually did, in order, with
+   timings. Answering "why did that command fire twice" from a description
+   is guesswork; answering it from this is not. It costs one array push per
+   event and never writes to the console, so it can stay in production --
+   `voiceDiag()` prints it, `voiceDiag(true)` returns the raw rows.
+   ================================================================ */
+var VOICE_LOG_MAX = 220;
+var voiceLog = [];
+function vlog(event, detail){
+  try{
+    voiceLog.push({
+      t: Date.now(),
+      ev: event,
+      ep: live.recEpoch,
+      sid: live.sessionId,
+      st: live.state,
+      lk: live.locked ? 1 : 0,
+      d: detail === undefined ? null : detail
+    });
+    if(voiceLog.length > VOICE_LOG_MAX) voiceLog.shift();
+  }catch(e){}
+}
+function voiceDiag(raw){
+  if(raw) return voiceLog.slice();
+  var t0 = voiceLog.length ? voiceLog[0].t : 0;
+  return voiceLog.map(function(r){
+    return String(r.t - t0).padStart(6) + 'ms  ep' + r.ep + ' s' + r.sid +
+           ' ' + String(r.st).padEnd(10) + (r.lk ? 'LOCK ' : '     ') + r.ev +
+           (r.d === null ? '' : '  ' + (typeof r.d === 'string' ? JSON.stringify(r.d) : JSON.stringify(r.d)));
+  }).join('\n');
+}
+
+/* Android is not desktop Chrome wearing a smaller screen, and the two
+   differences that matter here are both invisible from the API surface:
+   every recognition session start plays a notification tone that no web API
+   can mute, and `continuous` is ignored, so a session ends by itself after a
+   single utterance. Together those mean a policy that keeps recognition
+   alive by restarting it -- correct and silent on a laptop -- turns an idle
+   phone into a metronome. */
+function isAndroidVoice(){
+  try{ return /Android/i.test(navigator.userAgent || ''); }catch(e){ return false; }
+}
+
 var LIVE_QUIET_RESTARTS = 2;   /* silent windows restarted with no delay */
 var LIVE_QUIET_BACKOFF = [0, 0, 700, 1400, 2200];
 var LIVE_QUIET_MAX_MS = 2200;
+/* Silent windows Android will start a new session for before resting. Each
+   one is roughly the platform's own no-speech timeout, so two is on the order
+   of ten seconds of nobody saying anything -- long enough to cover thinking
+   about the reply, short enough that the tone is heard twice and then never
+   again. */
+var LIVE_ANDROID_REST_AFTER = 2;
 
 var live = {
   on:false,
@@ -4110,6 +4166,7 @@ var live = {
   errorStreak:0, quietStreak:0,
   heardAt:0,             /* when the current utterance was first heard */
   listeningSince:0,      /* when the microphone last reopened */
+  committedEpoch:-1,     /* the recognition session that has already spoken */
   lastListenMs:null,     /* how long the last listening phase took */
   fillerToken:0, queue:null,
   transcript:[], startedAt:0,
@@ -4419,6 +4476,7 @@ function recStop(){
   liveClearTimer('interimHold');
   liveClearTimer('bargeHold');
   live.recEpoch++;                 /* orphan this engine's callbacks */
+  vlog('rec.stop');
   var r = live.rec;
   live.rec = null;
   live.recRunning = false;
@@ -4438,6 +4496,7 @@ function recEnsure(){
   /* The ENGINE's clock, not the turn's. Restarting recognition must not
      invalidate an answer that is still being generated. */
   var ep = ++live.recEpoch;
+  vlog('rec.start');
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var r = new SR();
   live.rec = r;
@@ -4460,7 +4519,8 @@ function recEnsure(){
   var current = function(){ return ep === live.recEpoch && live.on; };
 
   r.onstart = function(){
-    if(!current()) return;
+    if(!current()){ vlog('onstart.stale', ep); return; }
+    vlog('onstart');
     /* Starting is not succeeding. Resetting the streak here meant every
        restart wiped the evidence, so a permanently failing engine could
        never reach the give-up threshold -- it just restarted forever. The
@@ -4469,7 +4529,7 @@ function recEnsure(){
   };
 
   r.onresult = function(e){
-    if(!current()) return;
+    if(!current()){ vlog('onresult.stale', ep); return; }
     var interim = '', got = '';
     /* rebuild from the whole result list rather than appending, so a
        re-delivered result replaces rather than duplicates; and start at
@@ -4499,6 +4559,7 @@ function recEnsure(){
     }
     finalText = got;
     var heard = (got + ' ' + interim).replace(/\s+/g,' ').trim();
+    vlog('onresult', { n:e.results.length, base:baseIdx, fin:got.trim(), int:interim });
     if(!heard) return;
 
     /* Heard while Pixel has the floor. Either it is Pixel's own voice
@@ -4586,8 +4647,9 @@ function recEnsure(){
   };
 
   r.onerror = function(e){
-    if(!current()) return;
+    if(!current()){ vlog('onerror.stale', ep); return; }
     var err = e && e.error;
+    vlog('onerror', err);
     if(err === 'aborted') return;                    /* we caused it */
     /* A quiet room is not an error. It used to be counted toward giving up;
        now onend simply starts another engine, so there is nothing to count. */
@@ -4604,7 +4666,8 @@ function recEnsure(){
   };
 
   r.onend = function(){
-    if(!current()) return;
+    if(!current()){ vlog('onend.stale', ep); return; }
+    vlog('onend', { fin:finalText.trim() });
     live.recRunning = false;
     var text = finalText.trim();
     /* An engine that ends holding a final the user is waiting on. Only ever
@@ -4639,6 +4702,30 @@ function recEnsure(){
         wait = 400 * Math.pow(2, live.errorStreak - 1);
       }else{
         live.quietStreak++;
+        /* ANDROID RESTS INSTEAD OF RINGING.
+
+           Every session start is an audible tone there and no web API can
+           mute it, so a policy of restarting after each no-speech window --
+           silent and correct on a laptop -- makes an idle phone chime every
+           few seconds forever. Backing the restarts off only made it slower,
+           not quiet.
+
+           So after a short run of windows in which nobody has said anything,
+           Android stops starting sessions and rests. The orb says so and a
+           tap resumes it instantly, which is the same gesture that already
+           interrupts and already resumes from idle. Nothing is lost except
+           the noise: a conversation in progress never reaches this, because
+           every reply returns to listening with the count reset.
+
+           Desktop keeps listening indefinitely. It has no tone to avoid. */
+        if(isAndroidVoice() && live.quietStreak > LIVE_ANDROID_REST_AFTER){
+          vlog('rest.android', live.quietStreak);
+          live.quietStreak = 0;
+          liveGo('idle');
+          var rst = document.getElementById('liveStatus');
+          if(rst) rst.textContent = 'Tap the orb to speak';
+          return;
+        }
         wait = live.quietStreak <= LIVE_QUIET_RESTARTS ? 0
              : (LIVE_QUIET_BACKOFF[Math.min(live.quietStreak, LIVE_QUIET_BACKOFF.length - 1)] || LIVE_QUIET_MAX_MS);
       }
@@ -4676,8 +4763,8 @@ function collapseRepeats(q){
 }
 
 function recCommit(text, ep){
-  if(ep !== live.recEpoch || !live.on) return;
-  if(live.locked) return;
+  if(ep !== live.recEpoch || !live.on){ vlog('commit.stale', ep); return; }
+  if(live.locked){ vlog('commit.locked'); return; }
   liveClearTimer('finalGrace');
   liveClearTimer('interimHold');
   liveClearTimer('bargeHold');
@@ -4685,20 +4772,33 @@ function recCommit(text, ep){
   if(!q) return;
 
   var now = Date.now();
-  /* Two clocks guard against the same utterance being submitted twice, and
-     they answer different questions.
 
-     lastCommandAt is when the command was accepted, which catches two
-     callbacks racing in the same moment. But a reply can take longer than
-     that window, and the recogniser that reopens afterwards may still be
-     holding the tail of the question that produced it -- by then the first
-     guard has expired. listeningSince catches that: the same words, again,
-     within a moment of the microphone reopening, are the previous utterance
-     arriving late rather than a new one. */
-  var dup = q.toLowerCase() === live.lastCommand &&
-            ((now - live.lastCommandAt) < LIVE_DUP_MS ||
-             (live.listeningSince && (now - live.listeningSince) < LIVE_REOPEN_DUP_MS));
-  if(dup) return;
+  /* ONE RECOGNITION SESSION COMMITS AT MOST ONE COMMAND.
+
+     This is the guarantee, and it is structural rather than heuristic. Every
+     duplicate the platform can produce -- a final handed back at a new index,
+     a queued result arriving after abort(), onend firing with a transcript
+     already committed, a timer landing after the fact -- comes from the
+     session that already spoke, and is refused by identity. No string
+     comparison, no window, nothing to tune.
+
+     It is also what makes repetition safe. The previous guard compared text
+     against the last command inside a time window, and that is wrong twice
+     over: it cannot tell a duplicate callback from somebody saying the same
+     thing again, and "hi" said twice in a conversation is completely
+     ordinary. Measured, it swallowed nine of ten repeated commands. A new
+     session means a new utterance, whatever the words are. */
+  if(ep === live.committedEpoch){ vlog('commit.sameSession', q); return; }
+
+  /* A narrow race remains: two callbacks from DIFFERENT sessions in the same
+     instant, which the epoch cannot separate. The old text-and-time test is
+     right for exactly that and is kept for it, at a fraction of the window so
+     it can never reach a genuine repeat. */
+  if(q.toLowerCase() === live.lastCommand && (now - live.lastCommandAt) < LIVE_RACE_MS){
+    vlog('commit.race', q); return;
+  }
+  vlog('commit', q);
+  live.committedEpoch = ep;      /* this session has now had its one command */
   live.locked = true;
   specCount = 0;                 /* a new utterance gets a fresh budget */
   /* How long the listening phase actually took, from the first word heard to
@@ -4720,6 +4820,38 @@ function recCommit(text, ep){
   }
   liveAsk(q);
 }
+
+/* ANDROID LIFECYCLE.
+
+   A WebView that goes to the background loses the microphone without always
+   telling the page: the session is killed by the system, `onend` may arrive
+   late or not at all, and the engine object is left believing it is running.
+   Coming back to the foreground then finds stale state and, in the worst
+   case, starts a second session over the first.
+
+   So the transition is handled explicitly rather than being discovered.
+   Hidden: stop cleanly, which bumps the epoch and orphans anything the system
+   still has in flight. Visible again: start one fresh session, but only if
+   the orb is still open and still expecting speech. */
+function liveVisibility(){
+  if(typeof live !== 'object' || !live || !live.on) return;
+  if(document.hidden){
+    vlog('page.hidden');
+    recStop();
+    return;
+  }
+  vlog('page.visible');
+  live.quietStreak = 0;          /* be eager again: somebody just came back */
+  if(recWanted() && !live.recRunning) liveTimer('recRestart', function(){
+    if(recWanted() && !live.recRunning) recEnsure();
+  }, 120);
+}
+document.addEventListener('visibilitychange', liveVisibility);
+/* Android fires pagehide on some background transitions without ever setting
+   document.hidden, so the microphone has to be released here too. */
+window.addEventListener('pagehide', function(){
+  if(typeof live === 'object' && live && live.on){ vlog('page.hide'); recStop(); }
+});
 
 function syncLiveMute(){
   var b = document.getElementById('liveMute');
@@ -6335,6 +6467,7 @@ function openLive(){
   live.sessionId++;
   liveClearAllTimers();
 
+  try{ window.dispatchEvent(new Event('pixel-live-open')); }catch(e){}
   document.getElementById('liveOverlay').classList.add('show');
   var b = document.getElementById('liveMute');
   if(b){ b.classList.remove('muted'); b.setAttribute('aria-pressed','false'); }
@@ -10294,12 +10427,29 @@ else setTimeout(warmEverything, 1200);
 if(!resolveChatUrl() && !chatIdFromPath(location.pathname)) resumeActiveChat();
 renderMemoryChips();
 /* ---------- voice input ---------- */
+/* The composer's dictation button. It is a SECOND recogniser and a SECOND
+   place commands are dispatched from, and until now it knew nothing about the
+   orb: tapping it while the orb was live started a second engine on the same
+   microphone. Measured on an Android-shaped recogniser, one live engine
+   became two.
+
+   A phone has one microphone and the platform gives it to one session, so two
+   engines is not merely untidy -- it is two transcripts of the same speech,
+   arriving at two different dispatchers. Whichever one the platform decides to
+   starve, the result is wrong.
+
+   The orb is authoritative whenever it is open. */
 var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 if(SR){
   var rec = new SR(); rec.interimResults = false; rec.maxAlternatives = 1;
   var listening = false;
   $mic.addEventListener('click', function(){
     if(listening){ rec.stop(); return; }
+    /* The orb owns the microphone while it is open. */
+    if(typeof live === 'object' && live && live.on){
+      if(typeof vlog === 'function') vlog('composerMic.blocked');
+      return;
+    }
     rec.lang = state.lang === 'hi' ? 'hi-IN' : state.lang === 'bn' ? 'bn-IN' : 'en-IN';
     try{ rec.start(); }catch(e){}
   });
@@ -10307,9 +10457,17 @@ if(SR){
   rec.onend = function(){ listening = false; $mic.classList.remove('rec'); haptic('light'); };
   rec.onerror = function(){ listening = false; $mic.classList.remove('rec'); haptic('error'); };
   rec.onresult = function(e){
+    /* A late result from a session the orb has since taken over must not be
+       dispatched: it would be a second command for speech the orb is already
+       handling. */
+    if(typeof live === 'object' && live && live.on) return;
     var t = e.results[0][0].transcript;
     $input.value = t; autoGrow(); sendMessage(t);
   };
+  /* Opening the orb takes the microphone from this one. */
+  window.addEventListener('pixel-live-open', function(){
+    if(listening){ try{ rec.abort(); }catch(e){} listening = false; $mic.classList.remove('rec'); }
+  });
 }else{
   $mic.style.display = 'none';
 }
