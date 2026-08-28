@@ -4478,9 +4478,28 @@ function recEnsure(){
     if(live.state !== 'user'){ live.state = 'user'; liveRender(); }
     live.targetLevel = 0.7 + Math.min(0.5, heard.length / 90);
     liveCaption(heard, 'user');
-    /* If the engine gives a final but never fires end, commit anyway. */
+    /* The engine has produced a final. Measured, this path cost 121.5ms
+       from the final arriving to the question being sent -- the grace below,
+       spent in full, on every turn that ends this way.
+
+       The grace exists to collect a SECOND final segment in the same
+       utterance, which is real: continuous recognition splits a long
+       sentence at its pauses. But whether that is going to happen is
+       readable from the text already in hand. "what is the weather in" ends
+       on a word no sentence ends on, and more is certainly coming. "what is
+       the weather in Kolkata" does not, and waiting on it is waiting for
+       nothing.
+
+       That is the same test the interim path already uses to decide whether
+       someone has stopped speaking, so this is not a new judgement -- it is
+       the existing one, applied to a final instead of an interim. A complete
+       final commits now; an incomplete one still gets the grace. */
     if(got.trim()){
       liveClearTimer('interimHold');
+      if(interimHoldMs(finalText.trim()) >= 0){
+        recCommit(finalText, ep);
+        return;
+      }
       liveTimer('finalGrace', function(){ if(current()) recCommit(finalText, ep); }, LIVE_FINAL_GRACE_MS);
       return;
     }
@@ -4851,6 +4870,7 @@ function StreamClip(ctx){
   this.ctx = ctx;
   this.onended = null; this.onerror = null;
   this.onfirst = null;      /* fired once, on the first decoded chunk */
+  this.onfail = null;       /* fired once, when this clip cannot be served */
   this.duration = 0;
   this.dead = false; this.started = false; this.complete = false;
   this.cursor = 0;          /* where the next chunk goes on the audio clock */
@@ -4974,9 +4994,27 @@ var CARTESIA_WS = 'wss://api.cartesia.ai/tts/websocket';
    cold synthesis, so it keeps the generous deadline. Once a chunk has come
    back, the socket is known good, and a stall is a stall: fail fast to HTTP
    rather than spending most of a second finding out. */
-var TTS_WS_FIRST_AUDIO_MS = 900;        /* unproven socket */
-var TTS_WS_STALL_MS = 350;              /* socket that has already delivered */
+/* Three values, because there are three different questions.
+
+   The PROBE runs in dead time -- nobody is waiting on it -- so it can afford
+   to be patient, and being patient is exactly what makes it useful: it is
+   where a cold first synthesis and a protocol mismatch get told apart, once,
+   for free. It keeps the generous deadline.
+
+   A real sentence never gets that. By the time one exists the probe has
+   normally already settled the question, so a sentence waiting the better
+   part of a second is not being careful, it is being slow. Unproven, it gets
+   400ms; proven, 250ms, because then a stall is just a stall.
+
+   None of these are usually reached at all: the failures that matter -- an
+   error frame, a socket that closes -- now report themselves the instant
+   they happen instead of being waited out. These are the net under the one
+   failure that cannot announce itself, which is silence. */
+var TTS_WS_PROBE_MS = 900;              /* the warm-up probe, in dead time */
+var TTS_WS_FIRST_AUDIO_MS = 400;        /* a real sentence, unproven socket */
+var TTS_WS_STALL_MS = 250;              /* a real sentence, proven socket */
 var ttsWsProven = false;                /* a chunk has been received this session */
+var ttsWsBinary = false;                /* audio arrives as binary frames, not JSON */
 var ttsWs = null;              /* the live socket, or null */
 var ttsWsState = 'idle';       /* idle | opening | open | off  ('off' is sticky) */
 var ttsWsWaiters = [];         /* resolvers waiting for the socket to open */
@@ -5091,7 +5129,14 @@ function ttsWsOpen(deadlineMs){
       ttsWsState = neverOpened ? 'off' : 'idle';
       var w = ttsWsWaiters; ttsWsWaiters = [];
       w.forEach(function(fn){ fn(false); });
-      for(var k in ttsWsClips){ try{ ttsWsClips[k].done(); }catch(e){} }
+      for(var k in ttsWsClips){
+        try{
+          var dying = ttsWsClips[k];
+          dying.failed = true;
+          if(dying.onfail){ var fc = dying.onfail; dying.onfail = null; fc(); }
+          dying.done();
+        }catch(e){}
+      }
       ttsWsClips = {};
       /* Cartesia closes an idle socket, which is ordinary and expected. The
          damage was never the close: it was discovering it at the moment a
@@ -5117,10 +5162,32 @@ function ttsWsOpen(deadlineMs){
 
 function ttsWsMessage(ev){
   var d = ev.data;
-  /* Binary frames are audio for the only context in flight. */
+  /* Binary frames carry no context id, so they can only be attributed when
+     exactly one context is in flight.
+
+     That is not a rare corner: the sentence queue synthesises ahead of
+     playback and routinely has three contexts open at once, so under binary
+     transport the frames for two of them would have been dropped on the
+     floor -- silently, leaving those clips to wait out their deadline before
+     falling back. Recording that the transport is binary lets ttsClipSocket
+     stop overlapping contexts, which makes every later frame attributable.
+     We ask for base64 JSON and Cartesia sends it, so this is a defence
+     rather than a live path; it is here so that if the transport ever does
+     change, the result is a slower reply and not a silent one. */
   if(d instanceof ArrayBuffer || (typeof Blob !== 'undefined' && d instanceof Blob)){
+    ttsWsBinary = true;
     var ids = Object.keys(ttsWsClips);
-    if(ids.length !== 1) return;
+    if(ids.length !== 1){
+      /* Unattributable. Fail the waiting clips now so they fall back at
+         once, rather than discovering it on a timeout. */
+      for(var bk in ttsWsClips){
+        var bc = ttsWsClips[bk];
+        if(bc.duration > 0 || bc.pending.length) continue;   /* already served */
+        bc.failed = true;
+        if(bc.onfail){ var bf = bc.onfail; bc.onfail = null; try{ bf(); }catch(e){} }
+      }
+      return;
+    }
     var clipB = ttsWsClips[ids[0]];
     var handle = function(ab){
       var c = audioCtx(); if(!c) return;
@@ -5149,6 +5216,7 @@ function ttsWsMessage(ev){
   } else if(type === 'error'){
     delete ttsWsClips[msg.context_id];
     clip.failed = true;
+    if(clip.onfail){ var fe = clip.onfail; clip.onfail = null; try{ fe(); }catch(e){} }
     clip.done();
   }
   /* 'timestamps' and anything else are ignored rather than treated as an
@@ -5170,7 +5238,7 @@ function ttsWsProbe(){
   if(ttsWsProbed || ttsWsState === 'off' || !window.WebSocket) return;
   if(!ttsTokenFresh()) return;
   ttsWsProbed = true;
-  ttsClipSocket('Ready.').then(function(clip){
+  ttsClipSocket('Ready.', true).then(function(clip){
     /* Whatever came back is thrown away -- only whether it came back matters.
        ttsClipSocket has already set ttsWsState to 'off' if it did not. */
     if(clip){ try{ clip.pause(); }catch(e){} }
@@ -5179,7 +5247,7 @@ function ttsWsProbe(){
 
 /* Returns a StreamClip, or null if the socket cannot serve this sentence --
    in which case the caller falls back to HTTP with nothing lost. */
-async function ttsClipSocket(text){
+async function ttsClipSocket(text, isProbe){
   var c = audioCtx();
   if(!c) return null;
   var ok = await ttsWsOpen(250);
@@ -5187,6 +5255,13 @@ async function ttsClipSocket(text){
 
   var rate = 16000;
   try{ if(ttsTok.outputFormat && ttsTok.outputFormat.sample_rate) rate = ttsTok.outputFormat.sample_rate; }catch(e){}
+
+  /* Under binary transport a second concurrent context cannot be told apart
+     from the first, so it goes over HTTP instead. Costs nothing in the
+     normal JSON case, where this is never true. */
+  if(ttsWsBinary){
+    for(var busy in ttsWsClips) return null;
+  }
 
   var id = 'pp-' + (++ttsWsSeq) + '-' + Date.now();
   var clip = new StreamClip(c);
@@ -5221,24 +5296,26 @@ async function ttsClipSocket(text){
      for it. A 10ms poll meant up to 10ms of dead time in front of the first
      word of every single reply -- small, constant, and entirely avoidable
      for something the socket already knows the moment it happens. */
-  var deadline = ttsWsProven ? TTS_WS_STALL_MS : TTS_WS_FIRST_AUDIO_MS;
+  var deadline = isProbe ? TTS_WS_PROBE_MS
+               : (ttsWsProven ? TTS_WS_STALL_MS : TTS_WS_FIRST_AUDIO_MS);
   var got = await new Promise(function(resolve){
     var settled = false;
     function go(v){
       if(settled) return;
       settled = true;
-      clip.onfirst = null;
-      clearInterval(poll); clearTimeout(t);
+      clip.onfirst = null; clip.onfail = null;
+      clearTimeout(t);
       resolve(v);
     }
     /* Already arrived while this was being set up. */
     if(clip.duration > 0 || clip.pending.length) return go(true);
     if(clip.failed) return go(false);
     clip.onfirst = function(){ go(true); };
+    /* An error frame, or the socket closing under this clip, is a definite
+       answer. It used to be found by polling every 50ms, which put up to
+       50ms of nothing in front of a fallback that was already decided. */
+    clip.onfail = function(){ go(false); };
     var t = setTimeout(function(){ go(false); }, deadline);
-    /* A slow safety net for the one thing onfirst cannot report: an error
-       frame, which fails the clip without ever pushing audio. */
-    var poll = setInterval(function(){ if(clip.failed) go(false); }, 50);
   });
   if(got) ttsWsProven = true;
   if(!got){
