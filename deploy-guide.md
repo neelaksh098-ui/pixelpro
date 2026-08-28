@@ -1085,3 +1085,73 @@ There is no further client-side win of any size left in playback. The remaining
 time is Cartesia's synthesis and the round trip to it. The only lever that
 touches either is the WebSocket, worth an estimated 50–100ms, and its frame
 format still cannot be verified from this environment.
+
+## The streaming socket
+
+The HTTP path asks Cartesia for a sentence and waits for **all** of its audio
+before playing a sample. The socket plays the first fragment the moment it
+arrives, while the rest of the same sentence is still being generated. That is
+the entire difference, and it is worth an estimated **50–100ms** on first audio.
+
+It is small *because* the opening fragment is already small. At the 60-character
+threshold this code used to have, the socket would have been worth several times
+more. The earlier optimisation ate most of its benefit — which is the honest
+reason not to expect much from it.
+
+    wss://api.cartesia.ai/tts/websocket?api_key=<token>&cartesia_version=…
+
+Query parameters, not headers, because browser WebSockets cannot send headers —
+Cartesia documents them for exactly this reason. This was impossible before the
+short-lived token existed, because the socket needs a key in the browser.
+
+`StreamClip` presents the identical surface to `WebClip` — `play(at)`,
+`pause()`, `onended`, `endsAt` — so the speech queue cannot tell them apart and
+still chains sentences gaplessly against the audio clock. Chunks are scheduled
+`STREAM_LEAD` (90ms) ahead of the clock so a late chunk does not tear a word in
+half, and an underrun resets the cursor to the present rather than scheduling
+into the past.
+
+### Every way it can fail, and what each costs
+
+The frame format could not be verified from this environment — Cartesia's docs
+are unreachable here — so the failure modes matter more than the happy path.
+All are tested:
+
+| Failure | Behaviour | Cost |
+|---|---|---|
+| No `WebSocket`, no token | never attempted | 0 |
+| Socket refuses to open | HTTP, socket off for the session | 0 |
+| Socket never finishes opening | abandoned on a 250ms deadline | ≤250ms, once |
+| Socket opens, sends an error frame | HTTP for that sentence | ~0 |
+| **Socket opens and stays silent** | **the protocol mismatch case** | see below |
+
+That last one is the realistic risk: the URL and auth are right, so it connects,
+but the message shape is wrong so nothing ever comes back. Two things keep it
+off the user's path entirely:
+
+- **A 900ms first-audio deadline**, not the 3s it started at. Sonic produces
+  audio in tens of milliseconds and one round trip adds a couple of hundred;
+  past 900ms it is not slow, it is not answering.
+- **`ttsWsProbe()` runs during page load.** It synthesises one short word over
+  the socket and throws the audio away — only whether it arrived matters. So a
+  broken socket is discovered while the page is still loading, and
+  `ttsWsState` is already `off` before any sentence needs it. Measured: the
+  first real sentence pays **9ms** instead of 920ms.
+
+The probe costs one synthesis of a single word per page load. That is a fraction
+of a normal reply, and it buys certainty about the path every later sentence
+takes.
+
+Settings → General now shows which path is live — "streaming socket", "direct"
+or "proxy" — so whether the socket engaged against the real service is visible
+on the device rather than assumed.
+
+### What to expect
+
+If the frame format is right, first audio should improve by roughly 50–100ms:
+a 4–8% change on a ~1300ms turn, which is below the 10–20% where a duration
+difference is reliably felt. It is unlikely to be noticeable.
+
+If the frame format is wrong, the readout will say "direct", nothing will be
+slower, and the fix is to correct the message shape in `ttsClipSocket()`
+against Cartesia's live documentation.

@@ -4577,6 +4577,337 @@ function ttsCleanText(text){
    measured.
    ---------------------------------------------------------------- */
 
+/* ================================================================
+   STREAMED SPEECH
+
+   The HTTP path asks Cartesia for a sentence and waits for all of its
+   audio to come back before playing a sample. The socket path plays the
+   first fragment of audio the moment it arrives, while the rest of the
+   same sentence is still being generated.
+
+   That is the entire difference, and it is worth roughly 50-100ms -- the
+   time to synthesise the remainder of a short opening fragment. It is
+   small precisely BECAUSE the opening fragment is already small; at the
+   60-character threshold this code used to have it would have been worth
+   several times more.
+
+   StreamClip presents the same surface as WebClip so the speech queue
+   cannot tell them apart: play(at), pause(), onended, endsAt.
+   ================================================================ */
+
+/* Audio is scheduled this far ahead of the clock so a chunk arriving a
+   little late does not produce a gap mid-word. It is the one deliberate
+   delay here, and it is the difference between streaming and stuttering. */
+var STREAM_LEAD = 0.09;
+
+function StreamClip(ctx){
+  this.ctx = ctx;
+  this.onended = null; this.onerror = null;
+  this.duration = 0;
+  this.dead = false; this.started = false; this.complete = false;
+  this.cursor = 0;          /* where the next chunk goes on the audio clock */
+  this.endsAt = 0;
+  this.pending = [];        /* buffers that arrived before play() */
+  this.sources = [];
+  this.guard = null;
+}
+
+/* Called by the socket for every decoded chunk. */
+StreamClip.prototype.push = function(buf){
+  if(this.dead || this.complete || !buf) return;
+  this.duration += buf.duration;
+  if(!this.started){ this.pending.push(buf); return; }
+  this._schedule(buf);
+};
+
+StreamClip.prototype._schedule = function(buf){
+  var c = this.ctx;
+  /* An underrun -- the network fell behind playback. Restart the cursor at
+     the clock rather than scheduling in the past, which would drop audio. */
+  if(this.cursor < c.currentTime) this.cursor = c.currentTime + 0.005;
+  var s = c.createBufferSource();
+  s.buffer = buf;
+  s.connect(c.destination);
+  try{ s.start(this.cursor); }catch(e){ return; }
+  this.sources.push(s);
+  this.cursor += buf.duration;
+  this.endsAt = this.cursor;
+  var self = this;
+  s.onended = function(){ self._maybeDone(); };
+};
+
+StreamClip.prototype._maybeDone = function(){
+  if(this.dead || !this.complete) return;
+  if(this.ctx.currentTime + 0.02 < this.endsAt) return;   /* more still queued */
+  this.dead = true;
+  clearTimeout(this.guard);
+  if(this.onended) this.onended();
+};
+
+/* The socket has said this sentence is finished. */
+StreamClip.prototype.done = function(){
+  this.complete = true;
+  if(this.dead) return;
+  if(!this.started || !this.sources.length){
+    /* nothing ever played -- treat as finished so the queue moves on */
+    this.dead = true;
+    if(this.onended) this.onended();
+    return;
+  }
+  var self = this;
+  var wait = Math.max(60, (this.endsAt - this.ctx.currentTime) * 1000 + 250);
+  clearTimeout(this.guard);
+  this.guard = setTimeout(function(){
+    if(self.dead) return;
+    self.dead = true;
+    if(self.onended) self.onended();
+  }, wait);
+};
+
+StreamClip.prototype.play = function(at){
+  var self = this;
+  if(this.dead) return Promise.resolve();
+  var c = this.ctx;
+  var ready = (c.state === 'running')
+    ? Promise.resolve()
+    : (function(){ try{ return c.resume(); }catch(e){ return Promise.reject(e); } })();
+  return ready.catch(function(){}).then(function(){
+    if(c.state !== 'running'){
+      var blocked = new Error('audio context suspended');
+      blocked.name = 'NotAllowedError';
+      throw blocked;
+    }
+    self.started = true;
+    self.cursor = Math.max(at || 0, c.currentTime + STREAM_LEAD);
+    var queued = self.pending; self.pending = [];
+    for(var i = 0; i < queued.length; i++) self._schedule(queued[i]);
+    if(self.complete) self.done();
+  });
+};
+
+StreamClip.prototype.pause = function(){
+  this.dead = true;
+  clearTimeout(this.guard);
+  for(var i = 0; i < this.sources.length; i++){
+    try{ this.sources[i].onended = null; this.sources[i].stop(0); }catch(e){}
+  }
+  this.sources = []; this.pending = [];
+};
+
+/* ---------------- the socket itself ---------------- */
+
+var CARTESIA_WS = 'wss://api.cartesia.ai/tts/websocket';
+/* Sonic begins producing audio in tens of milliseconds; one round trip adds
+   a couple of hundred. 900ms is generous for the first chunk and still far
+   below the point where waiting costs more than the socket can ever save. */
+var TTS_WS_FIRST_AUDIO_MS = 900;
+var ttsWs = null;              /* the live socket, or null */
+var ttsWsState = 'idle';       /* idle | opening | open | off  ('off' is sticky) */
+var ttsWsWaiters = [];         /* resolvers waiting for the socket to open */
+var ttsWsClips = {};           /* context_id -> StreamClip */
+var ttsWsSeq = 0;
+
+/* Raw PCM frames carry no header, so the parser above cannot be reused --
+   these are bare little-endian 16-bit samples at a known rate. */
+function pcmFramesToBuffer(bytes, ctx, rate){
+  var n = Math.floor(bytes.byteLength / 2);
+  if(!n) return null;
+  var view = new DataView(bytes);
+  var buf = ctx.createBuffer(1, n, rate || 16000);
+  var out = buf.getChannelData(0);
+  for(var i = 0; i < n; i++) out[i] = view.getInt16(i * 2, true) / 32768;
+  return buf;
+}
+function b64ToBytes(b64){
+  var bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+  for(var i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+  return u.buffer;
+}
+
+function ttsWsClose(){
+  try{ if(ttsWs) { ttsWs.onclose = null; ttsWs.close(); } }catch(e){}
+  ttsWs = null;
+  if(ttsWsState !== 'off') ttsWsState = 'idle';
+  for(var k in ttsWsClips){ try{ ttsWsClips[k].done(); }catch(e){} }
+  ttsWsClips = {};
+  var w = ttsWsWaiters; ttsWsWaiters = [];
+  w.forEach(function(fn){ fn(false); });
+}
+
+/* Resolves true once a socket is open, false if it cannot be had. Never
+   throws, never waits longer than the deadline: a socket that is slow to
+   open must not delay the sentence, because the HTTP path is right there. */
+function ttsWsOpen(deadlineMs){
+  if(ttsWsState === 'off') return Promise.resolve(false);
+  if(ttsWsState === 'open' && ttsWs && ttsWs.readyState === 1) return Promise.resolve(true);
+  if(!window.WebSocket || !ttsTokenFresh()) return Promise.resolve(false);
+
+  if(ttsWsState !== 'opening'){
+    ttsWsState = 'opening';
+    var url = CARTESIA_WS +
+      '?api_key=' + encodeURIComponent(ttsTok.token) +
+      '&cartesia_version=' + encodeURIComponent(ttsTok.version || '2024-06-10');
+    try{
+      ttsWs = new WebSocket(url);
+    }catch(e){
+      ttsWsState = 'off';
+      return Promise.resolve(false);
+    }
+    ttsWs.onopen = function(){
+      ttsWsState = 'open';
+      var w = ttsWsWaiters; ttsWsWaiters = [];
+      w.forEach(function(fn){ fn(true); });
+    };
+    ttsWs.onmessage = function(ev){ ttsWsMessage(ev); };
+    ttsWs.onerror = function(){ /* onclose follows */ };
+    ttsWs.onclose = function(){
+      /* Never opened at all: the protocol or the origin is not going to
+         work here, so stop trying for this session. A socket that opened
+         and later dropped is just a reconnect. */
+      var neverOpened = (ttsWsState === 'opening');
+      ttsWs = null;
+      ttsWsState = neverOpened ? 'off' : 'idle';
+      var w = ttsWsWaiters; ttsWsWaiters = [];
+      w.forEach(function(fn){ fn(false); });
+      for(var k in ttsWsClips){ try{ ttsWsClips[k].done(); }catch(e){} }
+      ttsWsClips = {};
+    };
+  }
+
+  return new Promise(function(resolve){
+    var settled = false;
+    function go(ok){ if(settled) return; settled = true; clearTimeout(t); resolve(ok); }
+    var t = setTimeout(function(){ go(false); }, deadlineMs || 250);
+    ttsWsWaiters.push(go);
+  });
+}
+
+function ttsWsMessage(ev){
+  var d = ev.data;
+  /* Binary frames are audio for the only context in flight. */
+  if(d instanceof ArrayBuffer || (typeof Blob !== 'undefined' && d instanceof Blob)){
+    var ids = Object.keys(ttsWsClips);
+    if(ids.length !== 1) return;
+    var clipB = ttsWsClips[ids[0]];
+    var handle = function(ab){
+      var c = audioCtx(); if(!c) return;
+      var buf = pcmFramesToBuffer(ab, c, clipB.rate);
+      if(buf) clipB.push(buf);
+    };
+    if(d instanceof ArrayBuffer) handle(d);
+    else d.arrayBuffer().then(handle).catch(function(){});
+    return;
+  }
+  var msg;
+  try{ msg = JSON.parse(d); }catch(e){ return; }
+  var clip = ttsWsClips[msg.context_id];
+  if(!clip) return;
+
+  var type = msg.type;
+  if(type === 'chunk' && msg.data){
+    var c2 = audioCtx();
+    if(c2){
+      var buf2 = pcmFramesToBuffer(b64ToBytes(msg.data), c2, clip.rate);
+      if(buf2) clip.push(buf2);
+    }
+  } else if(type === 'done'){
+    delete ttsWsClips[msg.context_id];
+    clip.done();
+  } else if(type === 'error'){
+    delete ttsWsClips[msg.context_id];
+    clip.failed = true;
+    clip.done();
+  }
+  /* 'timestamps' and anything else are ignored rather than treated as an
+     error, so an extra message type cannot break the stream. */
+}
+
+/* Settles whether the socket works BEFORE any sentence needs it.
+
+   The dangerous failure is a socket that connects and accepts a request but
+   never answers, because the message shape it was sent is not one it
+   understands. Discovered on a real sentence that costs the user most of a
+   second, once per session. Discovered here it costs them nothing.
+
+   The price is one synthesis of a single short word per page load. That is
+   a fraction of a normal reply, and it buys certainty about the path every
+   later sentence will take. */
+var ttsWsProbed = false;
+function ttsWsProbe(){
+  if(ttsWsProbed || ttsWsState === 'off' || !window.WebSocket) return;
+  if(!ttsTokenFresh()) return;
+  ttsWsProbed = true;
+  ttsClipSocket('Ready.').then(function(clip){
+    /* Whatever came back is thrown away -- only whether it came back matters.
+       ttsClipSocket has already set ttsWsState to 'off' if it did not. */
+    if(clip){ try{ clip.pause(); }catch(e){} }
+  }).catch(function(){});
+}
+
+/* Returns a StreamClip, or null if the socket cannot serve this sentence --
+   in which case the caller falls back to HTTP with nothing lost. */
+async function ttsClipSocket(text){
+  var c = audioCtx();
+  if(!c) return null;
+  var ok = await ttsWsOpen(250);
+  if(!ok || !ttsWs || ttsWs.readyState !== 1) return null;
+
+  var rate = 16000;
+  try{ if(ttsTok.outputFormat && ttsTok.outputFormat.sample_rate) rate = ttsTok.outputFormat.sample_rate; }catch(e){}
+
+  var id = 'pp-' + (++ttsWsSeq) + '-' + Date.now();
+  var clip = new StreamClip(c);
+  clip.rate = rate;
+  ttsWsClips[id] = clip;
+
+  try{
+    ttsWs.send(JSON.stringify({
+      model_id: ttsTok.model,
+      transcript: ttsCleanText(text),
+      voice: { mode:'id', id: ttsTok.voiceId },
+      /* raw PCM: over an already-open socket there is no encode to skip
+         paying for, and no container to parse on arrival */
+      output_format: { container:'raw', encoding:'pcm_s16le', sample_rate: rate },
+      language: state.lang === 'hi' ? 'hi' : state.lang === 'bn' ? 'bn' : 'en',
+      context_id: id,
+      continue: false,
+      add_timestamps: false
+    }));
+  }catch(e){
+    delete ttsWsClips[id];
+    return null;
+  }
+
+  /* Wait only for the FIRST audio, and not for long. Synthesis starts in
+     tens of milliseconds and one round trip is a couple of hundred more,
+     so anything past this is not a slow socket -- it is a socket that is
+     never going to answer. The point of the socket is to be faster; a slow
+     one is worse than none. */
+  var got = await new Promise(function(resolve){
+    var settled = false;
+    function go(v){ if(settled) return; settled = true; clearInterval(poll); clearTimeout(t); resolve(v); }
+    var t = setTimeout(function(){ go(false); }, TTS_WS_FIRST_AUDIO_MS);
+    var poll = setInterval(function(){
+      if(clip.failed) go(false);
+      else if(clip.duration > 0 || clip.pending.length) go(true);
+    }, 10);
+  });
+  if(!got){
+    delete ttsWsClips[id];
+    try{ clip.pause(); }catch(e){}
+    /* A socket that connects, accepts the request and then produces no
+       audio is a protocol mismatch, not bad luck -- the message shape it
+       was sent is not one it understands. Retrying that on every sentence
+       would put this delay in front of every sentence, so it is paid once
+       and then the session stays on HTTP. */
+    ttsWsState = 'off';
+    ttsWsClose();
+    ttsWsState = 'off';
+    return null;
+  }
+  return clip;
+}
+
 async function ttsClipDirect(text, signal){
   var t = ttsTok;
   var body = {
@@ -4632,6 +4963,25 @@ async function ttsClip(text, signal){
   if(ttsDirect !== 'off' && !ttsTokenFresh() && !ttsTok.inflight){
     /* Start one for the NEXT chunk; this one is not going to wait. */
     ttsFetchToken().catch(function(){});
+  }
+
+  /* The socket, when it is available and working. It plays the first
+     fragment of audio while the rest of the same sentence is still being
+     generated, which the HTTP path cannot do. Everything about it is
+     optional: no socket, a refused socket, a silent socket or a slow one
+     all end up here on the line below with nothing lost. */
+  if(ttsWsState !== 'off' && ttsDirect !== 'off' && ttsTokenFresh()){
+    try{
+      var sc = await ttsClipSocket(text);
+      if(sc){
+        if(turnT && turnT.path === undefined) turnT.path = 'socket';
+        return sc;
+      }
+    }catch(wsErr){
+      if(wsErr && wsErr.name === 'AbortError') throw wsErr;
+      /* fall through to HTTP; ttsWsOpen has already decided whether to
+         keep trying for the rest of the session */
+    }
   }
 
   if(ttsDirect !== 'off' && ttsTokenFresh()){
@@ -4804,14 +5154,15 @@ function makeSpeechQueue(sid, opts){
       clip.onended = finish;
       clip.onerror = finish;
       var at = 0;
-      if(clip instanceof WebClip && clip.ctx){
+      var scheduled = (clip instanceof WebClip) || (typeof StreamClip !== 'undefined' && clip instanceof StreamClip);
+      if(scheduled && clip.ctx){
         /* Only chain when the previous clip is genuinely still playing;
            otherwise start now, or a pause between sentences would push
            every later one further into the future. */
         at = (nextAt > clip.ctx.currentTime) ? nextAt : clip.ctx.currentTime;
       }
       clip.play(at).then(function(){
-        if(clip instanceof WebClip && clip.endsAt) nextAt = clip.endsAt;
+        if(scheduled && clip.endsAt) nextAt = clip.endsAt;
       }).catch(function(err){
         if(err && (err.name === 'NotAllowedError' || /gesture|interact/i.test(err.message || ''))){
           pendingTtsAudio = clip;
@@ -5258,6 +5609,11 @@ function closeLive(){
   recStop();
   if(live.queue){ live.queue.cancel(); live.queue = null; }
   liveStopSpeaking();
+  /* Any half-streamed sentence belongs to a session that no longer exists. */
+  if(typeof ttsWsClips === 'object'){
+    for(var wk in ttsWsClips){ try{ ttsWsClips[wk].pause(); }catch(e){} }
+    ttsWsClips = {};
+  }
   if(live.abort){ try{ live.abort.abort(); }catch(e){} live.abort = null; }
   orbStop();
   live.state = 'idle';
@@ -8325,7 +8681,8 @@ function renderSettings(tab){
         '<div class="settings-row"><div class="settings-row-meta"><b>Voice</b><small>Checks the premium voice and reports the exact problem</small></div>' +
           '<div class="settings-row-val" id="voiceDiag">Not tested</div>' +
           '<button class="settings-row-btn" id="setTestVoice" type="button">Test voice</button></div>' +
-        '<div class="settings-row"><div class="settings-row-meta"><b>Voice timing</b><small>Where each voice turn actually spent its time</small></div>' +
+        '<div class="settings-row"><div class="settings-row-meta"><b>Voice timing</b><small>Where each voice turn actually spent its time · path now: ' +
+          esc(ttsWsState === 'open' ? 'streaming socket' : (ttsDirect === 'off' ? 'proxy' : 'direct')) + '</small></div>' +
           '<div class="settings-row-val">' + timingRows().length + ' turn' + (timingRows().length === 1 ? '' : 's') + '</div>' +
           '<button class="settings-row-btn" id="setCopyTiming" type="button">Copy</button>' +
           '<button class="settings-row-btn" id="setClearTiming" type="button">Clear</button></div>' +
@@ -8893,7 +9250,13 @@ function warmEverything(){
        the proxy's two extra network legs while every later chunk goes
        direct, which is exactly what made command one feel slow. */
     if(typeof ttsFetchToken === 'function' && ttsDirect !== 'off' && !ttsTokenFresh()){
-      ttsFetchToken().catch(function(){});
+      /* The socket probe needs the token, so it is chained onto it rather
+         than raced against it. */
+      ttsFetchToken().then(function(){
+        if(typeof ttsWsProbe === 'function') ttsWsProbe();
+      }).catch(function(){});
+    } else if(typeof ttsWsProbe === 'function'){
+      ttsWsProbe();
     }
     if(typeof warmFunctions === 'function') warmFunctions();
     /* Create the AudioContext now (it starts suspended, which is
