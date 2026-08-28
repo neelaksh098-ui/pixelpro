@@ -4017,13 +4017,58 @@ function interimHoldMs(text){
   return words.length <= 3 ? VOICE_HOLD_SHORT_MS : VOICE_HOLD_MS;
 }
 var LIVE_MAX_ERRORS = 3;       /* consecutive hard errors before giving up */
-var LIVE_MAX_QUIET = 4;        /* consecutive silent listens before resting */
+
+/* ----------------------------------------------------------------
+   THE MICROPHONE STAYS OPEN
+
+   Two things used to close it, and both of them read as "it stopped
+   listening to me":
+
+   1. Four quiet windows in a row and the orb went idle, waiting to be
+      tapped. That is a reasonable thing for a push-to-talk button to do
+      and the wrong thing entirely for a hands-free assistant -- you look
+      away for twenty seconds, look back, speak, and nothing happens.
+      Silence is not a reason to stop listening. Chrome ends the engine on
+      its own no-speech timeout; we just start another one, forever, until
+      the session is closed or muted.
+
+   2. `continuous:false` ended the utterance at the first real pause. Draw
+      breath in the middle of a sentence and the engine ended, the restart
+      cost a few hundred milliseconds of deafness, and the rest of the
+      sentence landed in the gap -- so you said it again. That gap is the
+      reason for most of the repeating. `continuous:true` keeps one engine
+      across the pause and lets our own settle-timer decide when the
+      sentence is finished, which it was already doing anyway.
+
+      Continuous mode is what caused the original duplicate-command bug, so
+      the two guards that make it safe are explicit: onresult rebuilds the
+      transcript from the whole result list rather than appending to it, and
+      `baseIdx` ignores everything the engine emitted before the last commit.
+
+   3. Recognition now also runs while Pixel is talking, so you can interrupt
+      by speaking instead of by tapping the orb. That is the part that has
+      to be got right: the speaker feeds the microphone, and acting on what
+      comes back is how the orb once ended up interviewing itself. It is
+      decidable, though, because we know exactly what Pixel is saying --
+      see isSelfEcho below.
+   ---------------------------------------------------------------- */
+var LIVE_BARGE_IN = true;      /* speak over Pixel to interrupt it */
+var LIVE_BARGE_MIN_WORDS = 2;  /* one stray word is noise, not an interruption */
 
 var live = {
   on:false,
   state:'idle',          /* idle | listening | user | processing | searching | responding */
-  sessionId:0,           /* bumps on open, close, and every engine restart */
+  /* Two clocks, deliberately. sessionId is the TURN: it bumps when a
+     command is accepted, and every callback belonging to the turn it
+     replaced returns early. recEpoch is the ENGINE: it bumps on every
+     recognition restart. They used to be the same counter, which was
+     harmless only because the microphone was dead during a turn. Now that
+     it stays open, an engine restarting mid-answer would have bumped
+     sessionId and silently abandoned the answer being generated. */
+  sessionId:0,           /* the current turn */
+  recEpoch:0,            /* the current recognition engine */
   rec:null, recRunning:false,
+  speakingText:'',       /* what Pixel is saying right now -- the echo guard */
   muted:false,
   locked:false,          /* command submission lock -- set synchronously */
   lastCommand:'', lastCommandAt:0,
@@ -4200,8 +4245,10 @@ function liveGo(next){
   if(next !== 'listening') liveClearTimer('settle');
   else if(typeof specResetBudget === 'function') specResetBudget();
   live.state = next;
-  var shouldListen = (next === 'listening' || next === 'user') && !live.muted && live.on;
-  if(shouldListen) recEnsure();
+  /* Nothing Pixel said a moment ago is still being said once the user has
+     the floor, and a stale echo guard would swallow their next sentence. */
+  if(next === 'listening') live.speakingText = '';
+  if(recWanted()) recEnsure();
   else recStop();
   /* The moment listening starts, the user is about to speak -- several
      seconds of free time in which to have the containers ready. Warming at
@@ -4214,10 +4261,97 @@ function liveGo(next){
 function setOrb(mode){ liveGo(mode === 'speaking' ? 'responding' : (mode || 'idle')); }
 
 function liveCaption(text, who){
+  /* The caption is also the echo guard's source of truth: whatever is shown
+     as Pixel's line is, within a fraction of a second, what the speaker is
+     playing. Reading it from here rather than from the audio layer means
+     every spoken path -- greeting, filler, streamed answer, error line --
+     is covered without any of them having to remember to say so. */
+  if(who === 'bot') live.speakingText = String(text || '');
+  else if(who === 'user') live.speakingText = '';
   var el = document.getElementById('liveText');
   if(!el) return;
   el.textContent = text || '';
   el.classList.toggle('user', who === 'user');
+}
+
+/* Is this Pixel's own voice coming back through the microphone?
+
+   The speaker feeds the microphone and browsers do not run echo
+   cancellation on the speech-recognition stream, so with the microphone
+   left open during playback the orb WILL hear itself. Treating that as a
+   command is how it once ended up asking and answering its own questions
+   in a loop, so the guard is deliberately eager: it only has to be wrong
+   in the safe direction, since the cost of ignoring a real interruption is
+   that the user taps the orb, and the cost of acting on an echo is that the
+   conversation eats itself.
+
+   It is decidable because we know exactly what Pixel is saying. Anything
+   that is a substring of the current line, or that is mostly built from its
+   words, is echo. */
+function echoGuardText(){
+  var t = String(live.speakingText || '');
+  /* The other voice the microphone hears just after it reopens is the user's
+     own. A command is accepted the moment their sentence stops moving, which
+     is before the room is quiet and before the engine has restarted, so the
+     tail of the question they just asked arrives into the answer to it. A
+     fragment of the last command is therefore echo too, briefly. */
+  if(live.lastCommand && (Date.now() - live.lastCommandAt) < LIVE_DUP_MS){
+    t += ' ' + live.lastCommand;
+  }
+  return t;
+}
+
+function isSelfEcho(heard){
+  var norm = function(t){
+    return String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  };
+  var said = norm(echoGuardText());
+  if(!said) return false;                 /* nothing is playing: it is the user */
+  var h = norm(heard);
+  if(!h) return true;
+  if(said.indexOf(h) >= 0) return true;
+  var words = h.split(' ').filter(Boolean);
+  if(!words.length) return true;
+  var hit = 0;
+  for(var i = 0; i < words.length; i++){
+    if(said.indexOf(words[i]) >= 0) hit++;
+  }
+  return (hit / words.length) >= 0.6;
+}
+
+/* Speech that survived the echo guard while Pixel was talking: a real
+   interruption. Everything the old turn owns is torn down first -- the
+   audio, the sentence queue, the generation, the speculation -- and only
+   then is the new sentence committed, so the turn being replaced cannot
+   unlock or re-render on its way out. */
+function recBarge(text, ep){
+  if(ep !== live.recEpoch || !live.on || live.muted) return;
+  var q = String(text || '').replace(/\s+/g, ' ').trim();
+  if(!q) return;
+  var bare = LIVE_INTERRUPT_ONLY.test(q.toLowerCase().replace(/[.!,?]+$/, ''));
+  if(!bare && q.split(/\s+/).length < LIVE_BARGE_MIN_WORDS) return;
+  if(isSelfEcho(q)) return;
+  haptic('tap');
+  live.fillerToken++;
+  if(live.queue){ live.queue.cancel(); live.queue = null; }
+  liveStopSpeaking();
+  specCancel('barge-in');
+  if(live.abort){ try{ live.abort.abort(); }catch(e){} live.abort = null; }
+  live.speakingText = '';
+  live.heardAt = 0;
+  live.locked = false;                    /* the interrupted turn no longer owns the orb */
+
+  /* "stop", "wait", "no" -- said to cut the reply off, and the reply is
+     already cut off. Answering it would be absurd and ending the session
+     over it would be worse, so simply hand the microphone back. */
+  if(bare){
+    live.lastCommand = q.toLowerCase();
+    live.lastCommandAt = Date.now();
+    liveCaption('', 'user');
+    liveGo('listening');
+    return;
+  }
+  recCommit(q, ep);
 }
 
 /* ================= recognition ================= */
@@ -4225,9 +4359,23 @@ function recSupported(){ return !!(window.SpeechRecognition || window.webkitSpee
 
 /* Detaching every handler before aborting is the difference between a
    stopped engine and a dead engine that is still talking to you. */
+/* Should the microphone be open right now? The answer is "yes, unless the
+   session is closed, muted, or resting" -- the states are listed rather than
+   assumed so that turning barge-in off falls back to exactly the old
+   listening-only behaviour. */
+function recWanted(){
+  if(!live.on || live.muted) return false;
+  if(live.state === 'idle') return false;
+  if(live.state === 'listening' || live.state === 'user') return true;
+  return !!LIVE_BARGE_IN;
+}
+
 function recStop(){
   liveClearTimer('recRestart');
   liveClearTimer('finalGrace');
+  liveClearTimer('interimHold');
+  liveClearTimer('bargeHold');
+  live.recEpoch++;                 /* orphan this engine's callbacks */
   var r = live.rec;
   live.rec = null;
   live.recRunning = false;
@@ -4237,29 +4385,36 @@ function recStop(){
 }
 
 function recEnsure(){
-  if(live.recRunning || !live.on || live.muted) return;
+  if(live.recRunning || !recWanted()) return;
   if(!recSupported()){
     var st = document.getElementById('liveStatus');
     if(st) st.textContent = 'Voice input is not supported in this browser.';
     return;
   }
   recStop();                       /* never two engines at once */
-  var sid = ++live.sessionId;      /* every callback below is stamped with this */
+  /* The ENGINE's clock, not the turn's. Restarting recognition must not
+     invalidate an answer that is still being generated. */
+  var ep = ++live.recEpoch;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var r = new SR();
   live.rec = r;
   live.recRunning = true;
 
   r.lang = state.lang === 'hi' ? 'hi-IN' : state.lang === 'bn' ? 'bn-IN' : 'en-IN';
-  /* continuous:false is deliberate. One utterance, one `end`, one command.
-     Continuous mode is what let the same final transcript be delivered
-     twice across a restart. */
-  r.continuous = false;
+  /* continuous:true, with the two guards that make it safe (see above). The
+     engine no longer ends at every pause, so a sentence with a breath in it
+     is one utterance instead of two with a deaf gap between them. */
+  r.continuous = true;
   r.interimResults = true;
   r.maxAlternatives = 1;
 
   var finalText = '';
-  var current = function(){ return sid === live.sessionId; };
+  /* Everything the engine emitted before the last accepted command. In
+     continuous mode the results array keeps growing for the life of the
+     engine, so without this watermark an old final would be re-read into
+     the next utterance -- the original duplicate-command bug. */
+  var baseIdx = 0;
+  var current = function(){ return ep === live.recEpoch && live.on; };
 
   r.onstart = function(){
     if(!current()) return;
@@ -4274,14 +4429,49 @@ function recEnsure(){
     if(!current()) return;
     var interim = '', got = '';
     /* rebuild from the whole result list rather than appending, so a
-       re-delivered result replaces rather than duplicates */
-    for(var i = 0; i < e.results.length; i++){
+       re-delivered result replaces rather than duplicates; and start at
+       baseIdx so finals from an already-answered utterance are not read
+       back into this one */
+    for(var i = baseIdx; i < e.results.length; i++){
       if(e.results[i].isFinal) got += e.results[i][0].transcript + ' ';
       else interim += e.results[i][0].transcript;
     }
     finalText = got;
     var heard = (got + ' ' + interim).replace(/\s+/g,' ').trim();
     if(!heard) return;
+
+    /* Heard while Pixel has the floor. Either it is Pixel's own voice
+       arriving back through the microphone, which must be thrown away, or it
+       is the user cutting in, which is the entire point of leaving the
+       microphone open. Nothing here may touch the caption or the state
+       machine until it has been shown to be the second one. */
+    if(live.state !== 'listening' && live.state !== 'user'){
+      /* Whatever this was, it is finished with. Leaving a settled result in
+         the buffer is not harmless in continuous mode: the next call reads
+         from baseIdx, so Pixel's own sentence would be glued onto the front
+         of the interruption that follows it -- which is how "stop, tell me
+         about Mars" arrives as "...calls itself stop tell me about Mars".
+         Retire the finals, keep any interim still growing. */
+      var retire = function(){
+        for(var k = e.results.length - 1; k >= baseIdx; k--){
+          if(e.results[k].isFinal){ baseIdx = k + 1; break; }
+        }
+        finalText = '';
+      };
+      if(!LIVE_BARGE_IN){ if(got.trim()) retire(); return; }
+      if(isSelfEcho(heard)){ if(got.trim()) retire(); return; }
+      if(got.trim()){ var said = finalText; retire(); recBarge(said, ep); return; }
+      /* Let the phrase settle before throwing away an answer for it: one
+         misheard syllable must not cancel a reply that is already playing. */
+      var bh = interimHoldMs(heard);
+      if(bh < 0){ liveClearTimer('bargeHold'); return; }
+      var bargeText = heard;
+      liveTimer('bargeHold', function(){
+        if(current() && !isSelfEcho(bargeText)) recBarge(bargeText, ep);
+      }, bh);
+      return;
+    }
+
     if(!live.heardAt) live.heardAt = Date.now();
     live.quietStreak = 0;
     live.errorStreak = 0;          /* recognition is genuinely working again */
@@ -4291,7 +4481,7 @@ function recEnsure(){
     /* If the engine gives a final but never fires end, commit anyway. */
     if(got.trim()){
       liveClearTimer('interimHold');
-      liveTimer('finalGrace', function(){ if(current()) recCommit(finalText, sid); }, LIVE_FINAL_GRACE_MS);
+      liveTimer('finalGrace', function(){ if(current()) recCommit(finalText, ep); }, LIVE_FINAL_GRACE_MS);
       return;
     }
     /* No final yet. Rearm the hold on every new interim, so the timer only
@@ -4311,7 +4501,7 @@ function recEnsure(){
     specStart(settled);
     liveTimer('interimHold', function(){
       if(!current()) return;
-      recCommit(settled, sid);
+      recCommit(settled, ep);
     }, hold);
   };
 
@@ -4319,10 +4509,9 @@ function recEnsure(){
     if(!current()) return;
     var err = e && e.error;
     if(err === 'aborted') return;                    /* we caused it */
-    if(err === 'no-speech'){
-      live.quietStreak++;
-      return;                                        /* handled in onend */
-    }
+    /* A quiet room is not an error. It used to be counted toward giving up;
+       now onend simply starts another engine, so there is nothing to count. */
+    if(err === 'no-speech') return;
     if(err === 'not-allowed' || err === 'service-not-allowed'){
       live.recRunning = false;
       live.muted = true;
@@ -4338,7 +4527,13 @@ function recEnsure(){
     if(!current()) return;
     live.recRunning = false;
     var text = finalText.trim();
-    if(text){ recCommit(text, sid); return; }        /* one utterance, one command */
+    /* An engine that ends holding a final the user is waiting on. Only ever
+       committed from a listening state -- a final left over from a barge-in
+       has already been handled and must not be submitted a second time. */
+    if(text && (live.state === 'listening' || live.state === 'user')){
+      recCommit(text, ep);
+      return;
+    }
 
     if(live.errorStreak >= LIVE_MAX_ERRORS){
       liveGo('idle');
@@ -4346,18 +4541,14 @@ function recEnsure(){
       if(st) st.textContent = 'Voice input keeps failing. Tap the orb to try again.';
       return;
     }
-    if(live.quietStreak >= LIVE_MAX_QUIET){
-      /* Nobody is talking. Resting is correct; hammering the engine is not. */
-      live.quietStreak = 0;
-      liveGo('idle');
-      return;
-    }
-    /* Restart only from a listening state, and back off after errors. */
-    if(live.on && !live.muted && (live.state === 'listening' || live.state === 'user') && !live.locked){
-      var wait = live.errorStreak ? 400 * Math.pow(2, live.errorStreak - 1) : 120;
-      liveTimer('recRestart', function(){
-        if(live.on && !live.muted && !live.locked && (live.state === 'listening' || live.state === 'user')) recEnsure();
-      }, wait);
+    /* Silence is not a reason to stop listening. The engine ending on
+       Chrome's own no-speech timeout is the normal shape of a quiet room,
+       not a fault, so it is simply replaced -- immediately, because the
+       restart gap is deafness and deafness is what makes people repeat
+       themselves. Errors, and only errors, back off. */
+    if(recWanted()){
+      var wait = live.errorStreak ? 400 * Math.pow(2, live.errorStreak - 1) : 0;
+      liveTimer('recRestart', function(){ if(recWanted()) recEnsure(); }, wait);
     }
   };
 
@@ -4367,10 +4558,12 @@ function recEnsure(){
 
 /* The single door a command goes through. Locked synchronously, before
    any await, so two callbacks in the same tick cannot both pass. */
-function recCommit(text, sid){
-  if(sid !== live.sessionId) return;
+function recCommit(text, ep){
+  if(ep !== live.recEpoch || !live.on) return;
   if(live.locked) return;
   liveClearTimer('finalGrace');
+  liveClearTimer('interimHold');
+  liveClearTimer('bargeHold');
   var q = String(text || '').replace(/\s+/g,' ').trim();
   if(!q) return;
 
@@ -4411,6 +4604,11 @@ function syncLiveMute(){
 }
 
 /* ================= farewells ================= */
+/* A bare interruption -- what people actually say to cut a reply off. It is
+   an instruction to the speaker, not a question, and once the audio has
+   stopped it has already been carried out in full. */
+var LIVE_INTERRUPT_ONLY = /^(stop|stop it|stop stop|wait|wait wait|hold on|hang on|no|no no|nope|shh+|shush|quiet|be quiet|shut up|enough|cancel|never mind|nevermind|ruko|ruk jao|bas|bas bas)$/;
+
 function isFarewell(t){
   var raw = String(t || '').trim();
   t = raw.toLowerCase().replace(/[.!,?]+$/,'');
@@ -4418,7 +4616,24 @@ function isFarewell(t){
   /* "what does goodbye mean in french" contains a farewell and is not one. */
   if(/\?$/.test(raw)) return false;
   if(/\b(what|how|why|when|where|which|who|meaning|means|mean|define|definition|translate|translation|spell|spelling|synonym|opposite|say|write|explain|difference)\b/.test(t)) return false;
-  return /(^|\b)(bye+|bye bye|goodbye|good bye|see ya|see you( later| soon)?|talk to you later|ttyl|catch you later|that'?s all|that is all|thats all|i'?m done|im done|that'?ll be all|nothing else|no more|stop( now)?|end (the )?(call|session|chat)|hang up|disconnect|exit|quit|alvida|chalta hu|chalta hoon|thik hai bye|ok bye|okay bye|thank you bye|good night)(\b|$)/.test(t);
+
+  /* Politeness is padding around a farewell, not part of one: strip it and
+     then require what is left to BE the farewell, whole.
+
+     This used to match anywhere in any phrase of six words or fewer, which
+     is fine for "ok bye" and wrong for everything that merely contains one
+     of these words. "stop tell me about mars instead" ended the session.
+     That was always reachable by typing it; leaving the microphone open
+     during a reply makes it likely, because an interruption is exactly where
+     someone says "stop" and then keeps talking. */
+  var prev;
+  do{
+    prev = t;
+    t = t.replace(/^(?:ok|okay|alright|all right|right|so|and|well|hey|um|uh|yeah|yes|thanks|thank you|thankyou|please|acha|theek hai|thik hai)\s+/, '');
+    t = t.replace(/\s+(?:please|now|then|thanks|thank you|for now)$/, '');
+  } while(t !== prev);
+
+  return /^(?:bye+|bye bye|goodbye|good bye|see ya|see you(?: later| soon)?|talk to you later|ttyl|catch you later|that'?s all|that is all|thats all|i'?m done|im done|that'?ll be all|nothing else|no more|stop|stop it|end(?: the)? (?:call|session|chat)|hang up|disconnect|exit|quit|alvida|chalta hu|chalta hoon|thik hai bye|good night)$/.test(t);
 }
 
 /* ================= speaking ================= */
@@ -5383,27 +5598,16 @@ function specStart(text){
 
   s.promise = (async function(){
     try{
-      var decision = routeDecide(text);
-      var needsWeb = decision.decision === 'web' ||
-        (decision.decision === 'ask' && (decision.webScore || 0) > (decision.directScore || 0));
-      s.needsWeb = needsWeb;
+      /* Same router as the real turn, or the speculation answers a question
+         the committed turn would have searched -- and then gets adopted. */
+      var resolved = await resolveRoute(text, s.abort.signal);
+      if(spec !== s && !s.adopted) throw new DOMException('superseded','AbortError');
+      s.needsWeb = resolved.needsWeb;
 
-      if(needsWeb){
+      if(resolved.needsWeb){
         /* Deliberately silent: the filler belongs to the real turn, and a
            speculation that is never adopted must never have made a sound. */
-        var route = { web:true, confidence:decision.confidence, searchQuery:text, topic:'general', freshness:'none' };
-        if(decision.decision === 'ask'){
-          try{
-            var cls = await classifyQuery(text, s.abort.signal);
-            if(cls){
-              route.searchQuery = cls.searchQuery || text;
-              route.topic = cls.topic;
-              route.freshness = cls.freshness;
-            }
-          }catch(e){ if(e && e.name === 'AbortError') throw e; }
-        }
-        if(spec !== s && !s.adopted) throw new DOMException('superseded','AbortError');
-        var web = await runSearchPlan(text, buildSearchPlan(text, route), s.abort.signal);
+        var web = await runSearchPlan(text, buildSearchPlan(text, resolved.route), s.abort.signal);
         s.lc = buildLiveContext(web);
       }
       s.searchDone = true;
@@ -5467,6 +5671,12 @@ async function liveAsk(question){
   var sid = live.sessionId;
 
   function finish(){
+    /* A turn that has been interrupted does not get to unlock the orb, clear
+       the abort controller, or reopen the microphone -- all three now belong
+       to the turn that replaced it. Unconditional before, which was safe only
+       because nothing could interrupt a turn except a tap that stopped
+       everything anyway. Barge-in can, so this has to check. */
+    if(sid !== live.sessionId) return;
     live.locked = false;
     live.abort = null;
     if(live.on && sid === live.sessionId && !live.muted) liveTimer('settle', function(){ liveGo('listening'); }, LIVE_SETTLE_MS);
@@ -5534,7 +5744,11 @@ async function liveAsk(question){
       if(live.state !== 'processing') liveGo('processing');
 
       reply = await claimed.promise;
-      if(signal.aborted || sid !== live.sessionId){ queueC.cancel(); live.locked = false; return; }
+      if(signal.aborted || sid !== live.sessionId){
+        queueC.cancel();
+        if(sid === live.sessionId) live.locked = false;
+        return;
+      }
       if(!state.user) bumpUsage();
       live.transcript.push({ role:'assistant', content:reply });
       liveCaption(reply, 'bot');
@@ -5542,54 +5756,30 @@ async function liveAsk(question){
       return;
     }
 
-    var decision = routeDecide(question);
-    /* Strictly greater, not >=: a genuinely neutral question ("who is
-       Ada Lovelace") should stay on the fast path rather than paying for a
-       search it does not need. Anything that actually leans current still
-       searches. */
-    var needsWeb = decision.decision === 'web' ||
-      (decision.decision === 'ask' && (decision.webScore || 0) > (decision.directScore || 0));
+    /* THE ORB DECIDES THE WAY TEXT MODE DECIDES.
+
+       The search itself was already shared. The decision to run one was not:
+       this used to settle it from the local scores alone, then call the
+       classifier purely to rewrite the query. So on every question the local
+       signals could not settle, the classifier's verdict was fetched and
+       discarded -- text mode searched and answered from evidence, the orb
+       shrugged and answered from memory. That is the gap you could hear.
+
+       resolveRoute is the only place either mode decides now, so they cannot
+       drift apart again, and the orb inherits the two guards it never had:
+       the web toggle, and the rule that an unsure "no" loses to a local lean
+       toward searching. */
+    var resolved = await resolveRoute(question, signal);
+    if(sid !== live.sessionId) return;
+    var needsWeb = resolved.needsWeb;
+    routeLastDecision = needsWeb ? 'web' : 'direct';   /* spoken follow-ups inherit it too */
 
     if(needsWeb){
       liveGo('searching');
       /* A search costs a second or two of silence, and silence reads as a
-         crash. Say something true while it runs -- the microphone is already
-         off in this state, so the filler cannot be heard as a question. */
+         crash. Say something true while it runs. */
       speakFiller();
-
-      /* THE ORB SEARCHES THE WAY TEXT MODE DOES.
-
-         It used to send the raw speech transcript to Tavily at basic depth
-         and read five short snippets. Text mode rewrites the query with the
-         classifier, searches deep with extracted page content when the
-         question is about something current, and reads ten. That gap is
-         what made the spoken answers wrong so much more often than the
-         typed ones.
-
-         The classifier is only consulted when the local router is unsure --
-         the same rule text mode uses -- so a confident "this needs the web"
-         still goes straight to the search with no extra round trip. */
-      /* Mirrors text mode's confident-web route exactly, defaults included.
-         The point of this work is that the two pipelines cannot differ, and
-         "voice picks its topic by regex while text says general" is exactly
-         the kind of small divergence that grows back. */
-      var route = { web:true, confidence:decision.confidence, searchQuery:question, topic:'general', freshness:'none' };
-      if(decision.decision === 'ask'){
-        try{
-          var cls = await classifyQuery(question, signal);
-          if(cls){
-            route.searchQuery = cls.searchQuery || question;
-            route.topic = cls.topic;
-            route.freshness = cls.freshness;
-          }
-        }catch(clsErr){
-          if(clsErr && clsErr.name === 'AbortError') throw clsErr;
-          /* classifier unreachable: search the question as spoken */
-        }
-        if(sid !== live.sessionId) return;
-      }
-
-      var plan = buildSearchPlan(question, route);
+      var plan = buildSearchPlan(question, resolved.route);
       var liveWeb = await runSearchPlan(question, plan, signal);
       lc = buildLiveContext(liveWeb);
       if(sid !== live.sessionId) return;
@@ -5629,12 +5819,19 @@ async function liveAsk(question){
       queue.feed(full);
     }, { lite: voiceLite });
 
-    if(signal.aborted || sid !== live.sessionId){ queue.cancel(); live.locked = false; return; }
+    if(signal.aborted || sid !== live.sessionId){
+      queue.cancel();
+      if(sid === live.sessionId) live.locked = false;
+      return;
+    }
     if(!state.user) bumpUsage();
     live.transcript.push({ role:'assistant', content:reply });
     liveCaption(reply, 'bot');
     queue.end(reply);
   }catch(e){
+    /* An interrupted turn's rejection lands here after the new turn has
+       already started. It may tear down its own work and nothing else. */
+    if(sid !== live.sessionId) return;
     if(live.queue){ live.queue.cancel(); live.queue = null; }
     if(e && e.name === 'AbortError'){ live.locked = false; return; }
     liveSpeak('Sorry, I could not reach the server just then.', finish);
@@ -7139,6 +7336,63 @@ async function classifyQuery(query, signal){
   };
 }
 
+/* ================================================================
+   ONE ROUTER, SHARED BY TEXT AND VOICE
+
+   The search pipeline was already shared. The decision to search was not,
+   and that is the half that was still making the orb wrong.
+
+   Text mode asked the classifier on an ambiguous question and did what it
+   said. The orb settled the question from its own local scores and then
+   called the classifier only to rewrite the query -- so the classifier's
+   verdict was computed, paid for, and thrown away. Every question the
+   local signals could not settle ("who is the ceo of intel", "is the new
+   iPhone out yet") was answered from the model's memory by voice and from
+   the live web by text, which is exactly the difference the two modes kept
+   showing.
+
+   Text mode also had two protections the orb did not: the web toggle, and
+   the rule that an UNSURE "no" from the classifier loses to a local lean
+   toward searching -- the precise case that produces a confidently stale
+   answer.
+
+   This is now the only place either mode decides. Returns the decision and
+   the route (rewritten query, topic, freshness) together, because they were
+   never really two questions.
+   ================================================================ */
+async function resolveRoute(text, signal){
+  if(webForceOn){
+    return { needsWeb:true, route:{ web:true, confidence:1, searchQuery:text, topic:'general', freshness:'none' } };
+  }
+  var local = routeDecide(text);
+  if(local.decision === 'direct'){
+    return { needsWeb:false, route:{ web:false, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' } };
+  }
+  if(local.decision === 'web'){
+    /* Confident enough locally: no round trip, no rewrite, straight to the
+       search. This is the common path and it stays as fast as it was. */
+    return { needsWeb:true, route:{ web:true, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' } };
+  }
+  var route;
+  try{
+    route = await classifyQuery(text, signal);
+    if(route.web === false && route.confidence < 0.55 && (local.webScore || 0) > (local.directScore || 0)){
+      route.web = true;
+      route.confidence = 0.55;
+    }
+  }catch(routerError){
+    if(routerError && routerError.name === 'AbortError') throw routerError;
+    /* Router unreachable: fall back to the local lean, and to searching when
+       even that is a coin flip. A needless search costs a second; a stale
+       answer costs the whole turn. */
+    route = {
+      web: (local.webScore || 0) >= (local.directScore || 0),
+      confidence: 0, searchQuery: text, topic:'general', freshness:'none'
+    };
+  }
+  return { needsWeb: route.web === true, route: route };
+}
+
 async function tavilySearch(query, options){
   options = options || {};
   var r = await fetchTimeout('/.netlify/functions/tavily', {
@@ -7218,7 +7472,7 @@ function voiceSystemPrompt(grounded){
   var base = 'You are Pixel Pro, a friendly and accurate voice assistant. Today is ' + today + '. ' +
     IDENTITY_LINE +
     'Reply in the same language the user speaks (English, Hindi or Bengali). ' +
-    'This is a spoken conversation: answer in 1–3 short sentences of plain speech. No markdown, no lists, no headings, no emoji, no citations or source markers. ' +
+    'This is a spoken conversation: plain speech only. No markdown, no lists, no headings, no emoji, no citations or source markers. ' +
     'Answer the exact question first. Never guess at changing facts like dates, scores, prices or office-holders. ';
 
   /* Only sent when there is retrieved evidence in the request. A spoken
@@ -7228,12 +7482,22 @@ function voiceSystemPrompt(grounded){
      These are the same instructions text mode carries, and their absence is
      part of why the orb would half-read the sources and then fall back on
      what it already believed -- which for anything current is wrong. */
-  var ground = !grounded ? '' :
+  /* The length rule lives here rather than in the base, because the right
+     length is not the same on both paths. "1-3 short sentences" is right for
+     a spoken pleasantry and actively harmful over ten web sources: it is
+     pressure to compress, and the first thing compression drops is the
+     figure, the date and the name -- which is the whole of what a grounded
+     answer is for. Text mode never had that pressure, and that is a large
+     part of why its live answers were the exact ones. */
+  var ground = !grounded ? 'Keep it to 1–3 short sentences. ' :
     'LIVE WEB CONTEXT below is fresh retrieval performed just now, not your training data. It is more current than anything you remember, so it WINS over your own knowledge on every point where they disagree. ' +
-    'Answer from it. Use the strongest and newest sources first, and prefer official or primary ones. ' +
+    'Answer ONLY from that evidence for anything time-sensitive. Lead with the direct answer in your first sentence. ' +
+    'Give the exact figures, names, numbers and dates the sources report. Being spoken is not a reason to be vague: say the actual number, the actual name and the actual date rather than rounding them away or gesturing at them. ' +
+    'Say how recent the information is when that matters. Use the strongest and newest sources first, and prefer official or primary ones. ' +
     'If the sources disagree, say so briefly and go with the newest authoritative one. ' +
     'If the retrieved sources genuinely do not contain the answer, say you could not find it — do NOT fill the gap from memory. ' +
-    'Never read out URLs, source numbers or bracketed markers; they are not speakable. ';
+    'Never read out URLs, source numbers or bracketed markers; they are not speakable. ' +
+    'Keep it to 2–4 short sentences: short enough to listen to, long enough to carry the facts. ';
 
   return base + ground +
     'You are mid-conversation. Read short or vague replies as answers to what you just asked, resolve "it", "that" and "there" against the turns above, and never restart the topic unless the user does.' +
@@ -8349,41 +8613,15 @@ async function sendMessage(text){
       setThinking('Thinking');
       route = { web: false, confidence: 1, searchQuery: text, topic: 'general', freshness: 'none' };
     } else {
-      /* Decide locally first. Only genuinely ambiguous questions pay for a
-         classifier round-trip; anything the signals settle with a clear
-         margin goes straight through, so the common path stays
-         user -> AI -> answer with nothing in between. */
-      var local = webForceOn
-        ? { decision:'web', confidence:1, why:['web toggle on'] }
-        : routeDecide(text);
-      if(local.decision === 'direct'){
-        needsLive = false;
-        route = { web:false, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' };
-        setThinking('Thinking');
-      } else if(local.decision === 'web'){
-        needsLive = true;
-        route = { web:true, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' };
-      } else {
-        setThinking('Thinking');
-        try {
-          route = await classifyQuery(text, currentAbort ? currentAbort.signal : null);
-          /* The classifier is only trusted when it is sure. An unsure "no" on a
-             question the local signals already leaned toward searching is the
-             exact case that produces a confidently stale answer, so it loses. */
-          if(route.web === false && route.confidence < 0.55 && (local.webScore || 0) > (local.directScore || 0)){
-            route.web = true;
-            route.confidence = 0.55;
-          }
-        } catch(routerError) {
-          /* Router unreachable: fall back to the local lean, and to searching
-             when even that is a coin flip. */
-          route = {
-            web: (local.webScore || 0) >= (local.directScore || 0),
-            confidence: 0, searchQuery: text, topic:'general', freshness:'none'
-          };
-        }
-        needsLive = route.web === true;
-      }
+      /* Decide locally first, and only pay for a classifier round-trip on a
+         question the local signals cannot settle. All of that now lives in
+         resolveRoute, which the orb calls too -- text mode's behaviour is
+         unchanged, it is just no longer written down in only one of the two
+         places that need it. */
+      setThinking('Thinking');
+      var resolvedT = await resolveRoute(text, currentAbort ? currentAbort.signal : null);
+      needsLive = resolvedT.needsWeb;
+      route = resolvedT.route;
       routeLastDecision = needsLive ? 'web' : 'direct';   /* short follow-ups inherit this */
     }
 
