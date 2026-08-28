@@ -3961,6 +3961,9 @@ if(window.speechSynthesis){ try{ speechSynthesis.onvoiceschanged = function(){};
    every single exchange. */
 var LIVE_SETTLE_MS = 260;      /* let the speaker's tail die before listening */
 var LIVE_DUP_MS = 2500;        /* the same command inside this window is a repeat */
+/* ...and the same command this soon after the microphone reopens is the tail
+   of the one that has just been answered, however long the answer took. */
+var LIVE_REOPEN_DUP_MS = 1500;
 /* Once the engine has produced a final transcript, `onend` normally follows
    within a couple of hundred milliseconds. Waiting a full second for it was
    dead time on every single turn -- and recCommit dedups, so committing early
@@ -4052,8 +4055,40 @@ var LIVE_MAX_ERRORS = 3;       /* consecutive hard errors before giving up */
       decidable, though, because we know exactly what Pixel is saying --
       see isSelfEcho below.
    ---------------------------------------------------------------- */
-var LIVE_BARGE_IN = true;      /* speak over Pixel to interrupt it */
+/* Acoustic barge-in -- leaving the microphone live while Pixel talks so it
+   can be interrupted by voice -- is OFF.
+
+   It was built with a text echo guard, which is a real guard and not enough
+   on a phone. A laptop cancels most of its own speaker before the
+   recogniser hears it; an Android handset on speaker does not, and what
+   comes back is not a clean copy of what was said but a mangled version of
+   it that the guard cannot match. What survives is then treated as a new
+   command, which is the self-listening loop.
+
+   The right trade is the one that was asked for: pause recognition while the
+   assistant is speaking. Interruption is still there -- tapping the orb
+   stops it instantly -- and it costs one recogniser start per turn rather
+   than a conversation that talks to itself.
+
+   The machinery below is left intact and correct, so this is one flag to
+   flip on a platform with real echo cancellation. */
+var LIVE_BARGE_IN = false;     /* speak over Pixel to interrupt it */
 var LIVE_BARGE_MIN_WORDS = 2;  /* one stray word is noise, not an interruption */
+
+/* Chrome on Android plays a notification tone every time a recognition
+   session STARTS. It is the platform's, not ours -- there is no API to mute
+   it -- so the only way to stop hearing it constantly is to start the
+   recogniser less often.
+
+   The costly one was silence: an engine that ends on its own no-speech
+   timeout was replaced instantly, so an idle orb produced a tone every few
+   seconds, forever. It still always comes back, but after a run of windows
+   in which nobody said anything it comes back a little less eagerly. Any
+   speech at all resets it to instant, so the case that matters -- somebody
+   about to talk, or just finished a turn -- is never slowed. */
+var LIVE_QUIET_RESTARTS = 2;   /* silent windows restarted with no delay */
+var LIVE_QUIET_BACKOFF = [0, 0, 700, 1400, 2200];
+var LIVE_QUIET_MAX_MS = 2200;
 
 var live = {
   on:false,
@@ -4074,6 +4109,7 @@ var live = {
   lastCommand:'', lastCommandAt:0,
   errorStreak:0, quietStreak:0,
   heardAt:0,             /* when the current utterance was first heard */
+  listeningSince:0,      /* when the microphone last reopened */
   lastListenMs:null,     /* how long the last listening phase took */
   fillerToken:0, queue:null,
   transcript:[], startedAt:0,
@@ -4247,7 +4283,14 @@ function liveGo(next){
   live.state = next;
   /* Nothing Pixel said a moment ago is still being said once the user has
      the floor, and a stale echo guard would swallow their next sentence. */
-  if(next === 'listening') live.speakingText = '';
+  if(next === 'listening'){
+    live.speakingText = '';
+    live.listeningSince = Date.now();
+    /* A turn just ended, or the orb just opened: this is the likeliest
+       moment for someone to speak, so recognition comes back at once
+       however long the room was quiet before it. */
+    live.quietStreak = 0;
+  }
   if(recWanted()) recEnsure();
   else recStop();
   /* The moment listening starts, the user is about to speak -- several
@@ -4432,9 +4475,27 @@ function recEnsure(){
        re-delivered result replaces rather than duplicates; and start at
        baseIdx so finals from an already-answered utterance are not read
        back into this one */
+    /* Android's recogniser re-delivers finals it has already given: the same
+       segment reappears at a NEW index, so appending every final in the list
+       turns one "Hi" into "Hi Hi Hi Hi". Rebuilding from the whole list --
+       which is what this loop does -- defends against re-delivery at the
+       SAME index and not at all against re-delivery at a new one.
+
+       Consecutive identical segments are therefore collapsed. A person who
+       really does say a word twice in a row says it with something between,
+       or the recogniser returns it as one segment; two adjacent finals with
+       the same text are the engine repeating itself, never speech. */
+    var prevSeg = null;
     for(var i = baseIdx; i < e.results.length; i++){
-      if(e.results[i].isFinal) got += e.results[i][0].transcript + ' ';
-      else interim += e.results[i][0].transcript;
+      var segTxt = e.results[i][0].transcript;
+      if(e.results[i].isFinal){
+        var key = String(segTxt).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        if(key && key === prevSeg) continue;
+        prevSeg = key;
+        got += segTxt + ' ';
+      }else{
+        interim += segTxt;
+      }
     }
     finalText = got;
     var heard = (got + ' ' + interim).replace(/\s+/g,' ').trim();
@@ -4473,7 +4534,7 @@ function recEnsure(){
     }
 
     if(!live.heardAt) live.heardAt = Date.now();
-    live.quietStreak = 0;
+    live.quietStreak = 0;          /* somebody is here: restart instantly again */
     live.errorStreak = 0;          /* recognition is genuinely working again */
     if(live.state !== 'user'){ live.state = 'user'; liveRender(); }
     live.targetLevel = 0.7 + Math.min(0.5, heard.length / 90);
@@ -4562,11 +4623,25 @@ function recEnsure(){
     }
     /* Silence is not a reason to stop listening. The engine ending on
        Chrome's own no-speech timeout is the normal shape of a quiet room,
-       not a fault, so it is simply replaced -- immediately, because the
-       restart gap is deafness and deafness is what makes people repeat
-       themselves. Errors, and only errors, back off. */
+       not a fault, so it is always replaced.
+
+       How eagerly, though, depends on whether anyone is there. Every start
+       costs an audible tone on Android, and replacing the engine instantly
+       after each no-speech window meant a tone every few seconds at an idle
+       orb -- for as long as it stayed open. The first couple of silent
+       windows still restart instantly, because that covers the moment right
+       after a reply when the user is most likely about to speak; a longer
+       run of them slows to a couple of seconds. Any speech at all resets
+       this to zero, so nobody who is actually talking ever waits. */
     if(recWanted()){
-      var wait = live.errorStreak ? 400 * Math.pow(2, live.errorStreak - 1) : 0;
+      var wait;
+      if(live.errorStreak){
+        wait = 400 * Math.pow(2, live.errorStreak - 1);
+      }else{
+        live.quietStreak++;
+        wait = live.quietStreak <= LIVE_QUIET_RESTARTS ? 0
+             : (LIVE_QUIET_BACKOFF[Math.min(live.quietStreak, LIVE_QUIET_BACKOFF.length - 1)] || LIVE_QUIET_MAX_MS);
+      }
       liveTimer('recRestart', function(){ if(recWanted()) recEnsure(); }, wait);
     }
   };
@@ -4577,20 +4652,53 @@ function recEnsure(){
 
 /* The single door a command goes through. Locked synchronously, before
    any await, so two callbacks in the same tick cannot both pass. */
+/* "Hi hi hi hi" is not something a person says. It is one word the engine
+   returned several times, and by the time it reaches here the segments have
+   already been joined into a single string, so the collapse in onresult
+   cannot see it. Fold a phrase that is nothing but one short phrase repeated
+   back down to a single copy. Conservative on purpose: it only fires when
+   EVERY repeat is identical and the unit is short, so "very very good" and
+   "no no I meant Tuesday" are untouched. */
+function collapseRepeats(q){
+  var words = q.split(/\s+/).filter(Boolean);
+  if(words.length < 2) return q;
+  for(var unit = 1; unit <= 3 && unit * 2 <= words.length; unit++){
+    if(words.length % unit !== 0) continue;
+    var head = words.slice(0, unit).join(' ').toLowerCase();
+    if(head.length > 14) continue;
+    var same = true;
+    for(var i = unit; i < words.length; i += unit){
+      if(words.slice(i, i + unit).join(' ').toLowerCase() !== head){ same = false; break; }
+    }
+    if(same) return words.slice(0, unit).join(' ');
+  }
+  return q;
+}
+
 function recCommit(text, ep){
   if(ep !== live.recEpoch || !live.on) return;
   if(live.locked) return;
   liveClearTimer('finalGrace');
   liveClearTimer('interimHold');
   liveClearTimer('bargeHold');
-  var q = String(text || '').replace(/\s+/g,' ').trim();
+  var q = collapseRepeats(String(text || '').replace(/\s+/g,' ').trim());
   if(!q) return;
 
   var now = Date.now();
-  if(q.toLowerCase() === live.lastCommand && (now - live.lastCommandAt) < LIVE_DUP_MS){
-    /* the same utterance arriving twice from two callbacks */
-    return;
-  }
+  /* Two clocks guard against the same utterance being submitted twice, and
+     they answer different questions.
+
+     lastCommandAt is when the command was accepted, which catches two
+     callbacks racing in the same moment. But a reply can take longer than
+     that window, and the recogniser that reopens afterwards may still be
+     holding the tail of the question that produced it -- by then the first
+     guard has expired. listeningSince catches that: the same words, again,
+     within a moment of the microphone reopening, are the previous utterance
+     arriving late rather than a new one. */
+  var dup = q.toLowerCase() === live.lastCommand &&
+            ((now - live.lastCommandAt) < LIVE_DUP_MS ||
+             (live.listeningSince && (now - live.listeningSince) < LIVE_REOPEN_DUP_MS));
+  if(dup) return;
   live.locked = true;
   specCount = 0;                 /* a new utterance gets a fresh budget */
   /* How long the listening phase actually took, from the first word heard to
