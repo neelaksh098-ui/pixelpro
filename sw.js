@@ -1,4 +1,4 @@
-const CACHE_VERSION = "pixelpro-v37";
+const CACHE_VERSION = "pixelpro-v38";
 const SHELL = ["/", "/index.html", "/privacy.html", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 const NEVER_CACHE = ["/.netlify/functions/", "api.cartesia.ai", "api.groq.com", "api.tavily.com", "identitytoolkit.googleapis", "securetoken.googleapis", "firebaseapp.com/__/auth"];
 function isNeverCache(url){ return NEVER_CACHE.some(function(f){ return url.indexOf(f) !== -1; }); }

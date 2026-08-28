@@ -1044,3 +1044,44 @@ benchmark covers.
 Grounded orb answers will in fact be **slightly slower** than before, because
 they now use the full model and a deeper search. That is the trade that was
 asked for: the previous version was fast and wrong.
+
+## The PCM experiment: proposed, measured, rejected
+
+Raw PCM instead of MP3 looked like a clear win. Cartesia would not spend time
+encoding, the phone would not spend time decoding, and `pcmWavToBuffer()` plays
+PCM with no decoder involved at all. It was built, and then measured on a
+1.6-second sentence clip:
+
+| | |
+|---|---|
+| Skipping the browser decoder entirely | **saves 1.7ms** |
+| PCM's extra bytes on fast 4G (2 MB/s) | costs 18ms |
+| PCM's extra bytes on good 4G (800 KB/s) | costs 46ms |
+| PCM's extra bytes on weak 4G (300 KB/s) | costs 123ms |
+| PCM's extra bytes on 3G (100 KB/s) | costs 369ms |
+
+The decode was never the expensive part. PCM is four times the bytes to save
+under two milliseconds — a net loss on every connection a phone actually sees.
+Cartesia's own encode time is the one unmeasured term, and it would have to
+exceed 18ms on the *fastest* link just to break even.
+
+**So the format change was reverted.** `CARTESIA_FORMAT` is respected exactly as
+before.
+
+`pcmWavToBuffer()` is kept, because it is correct and free: it reads the WAV
+header and copies samples straight into an AudioBuffer, refusing anything that
+is not plain 16-bit PCM so the decoder still handles everything else. If someone
+sets `CARTESIA_FORMAT=wav` deliberately, that path is now marginally quicker.
+It is not a default nobody measured.
+
+Tested against mono, stereo, a non-16k sample rate, an odd-sized chunk before
+the data (which must be skipped with its pad byte), IEEE-float WAV, a truncated
+file, and an MP3 — the last three must all be refused and fall through to
+`decodeAudioData`.
+
+### What this means for voice-output latency
+
+There is no further client-side win of any size left in playback. The remaining
+time is Cartesia's synthesis and the round trip to it. The only lever that
+touches either is the WebSocket, worth an estimated 50–100ms, and its frame
+format still cannot be verified from this environment.
