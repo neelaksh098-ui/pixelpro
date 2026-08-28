@@ -4825,12 +4825,32 @@ function ttsCleanText(text){
 
 /* Audio is scheduled this far ahead of the clock so a chunk arriving a
    little late does not produce a gap mid-word. It is the one deliberate
-   delay here, and it is the difference between streaming and stuttering. */
-var STREAM_LEAD = 0.09;
+   delay here, and it is the difference between streaming and stuttering.
+
+   It is also paid in full on the first spoken word of a reply and nowhere
+   else: later sentences are chained onto the previous clip's end, which is
+   already in the future, so the lead never applies to them. Ninety
+   milliseconds of it was therefore ninety milliseconds added to every
+   answer's first word to insure against a jitter that may never happen.
+
+   So start at less than half of that and EARN the rest. An underrun -- the
+   network falling behind playback -- is measurable at the moment it
+   happens, and every one of them raises the lead a little for the rest of
+   the session. A good connection stays at 40ms forever; a bad one walks
+   itself back up to where the old constant was, and does it after the first
+   glitch rather than in advance of one that never comes. */
+var STREAM_LEAD_MIN = 0.04;
+var STREAM_LEAD_MAX = 0.12;
+var STREAM_LEAD_STEP = 0.02;
+var streamLead = STREAM_LEAD_MIN;
+/* Kept as a read-only view of the current value: the tests and the timing
+   readout both refer to it, and it used to be the constant itself. */
+function streamLeadNow(){ return streamLead; }
 
 function StreamClip(ctx){
   this.ctx = ctx;
   this.onended = null; this.onerror = null;
+  this.onfirst = null;      /* fired once, on the first decoded chunk */
   this.duration = 0;
   this.dead = false; this.started = false; this.complete = false;
   this.cursor = 0;          /* where the next chunk goes on the audio clock */
@@ -4844,6 +4864,11 @@ function StreamClip(ctx){
 StreamClip.prototype.push = function(buf){
   if(this.dead || this.complete || !buf) return;
   this.duration += buf.duration;
+  /* The first chunk is the signal the caller is waiting on. Telling it
+     directly is worth doing: the caller used to find out by polling this
+     object every 10ms, which put up to a full poll interval of pure delay
+     in front of the first word of every reply. */
+  if(this.onfirst){ var f = this.onfirst; this.onfirst = null; try{ f(); }catch(e){} }
   if(!this.started){ this.pending.push(buf); return; }
   this._schedule(buf);
 };
@@ -4851,8 +4876,19 @@ StreamClip.prototype.push = function(buf){
 StreamClip.prototype._schedule = function(buf){
   var c = this.ctx;
   /* An underrun -- the network fell behind playback. Restart the cursor at
-     the clock rather than scheduling in the past, which would drop audio. */
-  if(this.cursor < c.currentTime) this.cursor = c.currentTime + 0.005;
+     the clock rather than scheduling in the past, which would drop audio.
+
+     This is also the only honest evidence that the lead is too small, so it
+     is where the lead grows. Only after playback has actually begun: a
+     chunk scheduled before the first one plays is not late, it is early. */
+  if(this.started && this.cursor < c.currentTime){
+    this.cursor = c.currentTime + 0.005;
+    if(streamLead < STREAM_LEAD_MAX){
+      streamLead = Math.min(STREAM_LEAD_MAX, streamLead + STREAM_LEAD_STEP);
+    }
+  }else if(this.cursor < c.currentTime){
+    this.cursor = c.currentTime + 0.005;
+  }
   var s = c.createBufferSource();
   s.buffer = buf;
   s.connect(c.destination);
@@ -4906,7 +4942,7 @@ StreamClip.prototype.play = function(at){
       throw blocked;
     }
     self.started = true;
-    self.cursor = Math.max(at || 0, c.currentTime + STREAM_LEAD);
+    self.cursor = Math.max(at || 0, c.currentTime + streamLead);
     var queued = self.pending; self.pending = [];
     for(var i = 0; i < queued.length; i++) self._schedule(queued[i]);
     if(self.complete) self.done();
@@ -4925,10 +4961,22 @@ StreamClip.prototype.pause = function(){
 /* ---------------- the socket itself ---------------- */
 
 var CARTESIA_WS = 'wss://api.cartesia.ai/tts/websocket';
-/* Sonic begins producing audio in tens of milliseconds; one round trip adds
-   a couple of hundred. 900ms is generous for the first chunk and still far
-   below the point where waiting costs more than the socket can ever save. */
-var TTS_WS_FIRST_AUDIO_MS = 900;
+/* How long to wait for the first audio chunk before giving up on the socket
+   and going to HTTP.
+
+   This is a deadline, not a delay: in the healthy case the first chunk
+   arrives in tens of milliseconds and nothing here is ever waited out. It
+   only costs anything when the socket is broken in the one way that cannot
+   be detected any other way -- connected, accepted the request, and silent.
+
+   Two values, because the question is different before and after the socket
+   has proved it works. The first clip of a session has to allow for a real
+   cold synthesis, so it keeps the generous deadline. Once a chunk has come
+   back, the socket is known good, and a stall is a stall: fail fast to HTTP
+   rather than spending most of a second finding out. */
+var TTS_WS_FIRST_AUDIO_MS = 900;        /* unproven socket */
+var TTS_WS_STALL_MS = 350;              /* socket that has already delivered */
+var ttsWsProven = false;                /* a chunk has been received this session */
 var ttsWs = null;              /* the live socket, or null */
 var ttsWsState = 'idle';       /* idle | opening | open | off  ('off' is sticky) */
 var ttsWsWaiters = [];         /* resolvers waiting for the socket to open */
@@ -5167,16 +5215,32 @@ async function ttsClipSocket(text){
      tens of milliseconds and one round trip is a couple of hundred more,
      so anything past this is not a slow socket -- it is a socket that is
      never going to answer. The point of the socket is to be faster; a slow
-     one is worse than none. */
+     one is worse than none.
+
+     The clip now says when the first chunk lands instead of being polled
+     for it. A 10ms poll meant up to 10ms of dead time in front of the first
+     word of every single reply -- small, constant, and entirely avoidable
+     for something the socket already knows the moment it happens. */
+  var deadline = ttsWsProven ? TTS_WS_STALL_MS : TTS_WS_FIRST_AUDIO_MS;
   var got = await new Promise(function(resolve){
     var settled = false;
-    function go(v){ if(settled) return; settled = true; clearInterval(poll); clearTimeout(t); resolve(v); }
-    var t = setTimeout(function(){ go(false); }, TTS_WS_FIRST_AUDIO_MS);
-    var poll = setInterval(function(){
-      if(clip.failed) go(false);
-      else if(clip.duration > 0 || clip.pending.length) go(true);
-    }, 10);
+    function go(v){
+      if(settled) return;
+      settled = true;
+      clip.onfirst = null;
+      clearInterval(poll); clearTimeout(t);
+      resolve(v);
+    }
+    /* Already arrived while this was being set up. */
+    if(clip.duration > 0 || clip.pending.length) return go(true);
+    if(clip.failed) return go(false);
+    clip.onfirst = function(){ go(true); };
+    var t = setTimeout(function(){ go(false); }, deadline);
+    /* A slow safety net for the one thing onfirst cannot report: an error
+       frame, which fails the clip without ever pushing audio. */
+    var poll = setInterval(function(){ if(clip.failed) go(false); }, 50);
   });
+  if(got) ttsWsProven = true;
   if(!got){
     delete ttsWsClips[id];
     try{ clip.pause(); }catch(e){}
@@ -6069,6 +6133,12 @@ function openLive(){
      sentence takes the 50ms path instead of the 499ms one. Measured cold,
      this is the single largest win available on the first spoken word. */
   ttsWsEnsure();
+  /* The idle callback that normally does this may not have run yet -- a user
+     who taps the orb within the first second of the page beats it, and that
+     is exactly the person whose first command is being measured. The greeting
+     is about to occupy two seconds; twelve milliseconds of regex compilation
+     inside it is invisible. */
+  if(typeof warmHotPaths === 'function') warmHotPaths();
   live.on = true;
   live.muted = false;
   live.locked = true;                 /* the greeting owns the turn */
@@ -9965,8 +10035,39 @@ applyAgentUI();
 
    Run on idle so it never competes with first paint.
    ================================================================ */
+/* The first call into the router costs 10.8ms and the second 3.2ms; by the
+   third it is 0.1ms. That is V8 compiling and then optimising the regex
+   tables, and it is paid exactly once -- in front of the user's first
+   command, which is the one place it is most visible and the reason the
+   first command measured slower than every command after it.
+
+   Running each hot-path function a few times here moves that cost into idle
+   time, where nobody is waiting for it. Nothing is kept: only the compiling
+   matters. */
+var hotPathsWarmed = false;
+function warmHotPaths(){
+  if(hotPathsWarmed) return;
+  hotPathsWarmed = true;
+  try{
+    var samples = [
+      'who is the prime minister of india right now',
+      'what is the weather in kolkata today',
+      'explain how recursion works in simple terms'
+    ];
+    for(var i = 0; i < samples.length; i++){
+      if(typeof routeDecide === 'function') routeDecide(samples[i]);
+      if(typeof groundKeywords === 'function') groundKeywords(samples[i]);
+      if(typeof isFarewell === 'function') isFarewell(samples[i]);
+      if(typeof splitSpeakable === 'function') splitSpeakable(samples[i] + '. And a second sentence.', 0, true, true);
+      if(typeof ttsCleanText === 'function') ttsCleanText('**bold** and `code` ' + samples[i]);
+      if(typeof isNormalLocalRequest === 'function') isNormalLocalRequest(samples[i]);
+    }
+  }catch(e){}
+}
+
 function warmEverything(){
   try{
+    warmHotPaths();
     /* The token is the big one -- without it the first spoken chunk takes
        the proxy's two extra network legs while every later chunk goes
        direct, which is exactly what made command one feel slow. */
