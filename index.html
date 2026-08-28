@@ -4962,6 +4962,51 @@ function ttsWsClose(){
   w.forEach(function(fn){ fn(false); });
 }
 
+/* Is a socket usable RIGHT NOW, with no waiting at all? This is the only
+   question the sentence path is allowed to ask.
+
+   Measured: with the socket already open, text-ready to audible is 50ms.
+   Cold, the same sentence took 499ms and came out of the buffered HTTP path
+   -- and the socket finished opening DURING the turn and then sat there
+   unused. The 250ms the sentence spent waiting for it bought nothing and
+   was added to the HTTP request that followed. */
+function ttsWsReady(){
+  return ttsWsState === 'open' && !!ttsWs && ttsWs.readyState === 1;
+}
+
+/* Open the socket in the background because we know speech is coming and
+   there is time to spare -- the orb opening, the microphone opening, a
+   reading starting. Never awaited by anything on the critical path: the
+   whole point is that the sentence which needs the socket finds it already
+   open rather than waiting for one. */
+var ttsWsDrops = 0;
+var ttsWsTokenWait = false;
+function ttsWsEnsure(){
+  if(ttsWsState === 'off' || !window.WebSocket) return;
+  if(ttsWsReady() || ttsWsState === 'opening') return;
+  if(!ttsTokenFresh()){
+    /* No token yet: chain onto the mint, do not race it.
+
+       Skipping when one was already in flight looked like the careful thing
+       and was the opposite: openLive starts a token fetch and then calls
+       this, so the socket saw inflight, returned, and nothing ever came back
+       to open it. ttsFetchToken already returns the in-flight promise, so
+       chaining is both correct and free. */
+    if(ttsDirect === 'off' || ttsWsTokenWait) return;
+    ttsWsTokenWait = true;
+    ttsFetchToken()
+      .then(function(){ ttsWsTokenWait = false; ttsWsEnsure(); })
+      .catch(function(){ ttsWsTokenWait = false; });
+    return;
+  }
+  ttsWsOpen(4000).then(function(ok){
+    /* The first socket of a session still has to prove it speaks the
+       protocol, and doing that here means the cost lands in dead time
+       instead of in front of somebody's first sentence. */
+    if(ok) ttsWsProbe();
+  }).catch(function(){});
+}
+
 /* Resolves true once a socket is open, false if it cannot be had. Never
    throws, never waits longer than the deadline: a socket that is slow to
    open must not delay the sentence, because the HTTP path is right there. */
@@ -4983,6 +5028,7 @@ function ttsWsOpen(deadlineMs){
     }
     ttsWs.onopen = function(){
       ttsWsState = 'open';
+      ttsWsDrops = 0;              /* it works; forget the earlier drops */
       var w = ttsWsWaiters; ttsWsWaiters = [];
       w.forEach(function(fn){ fn(true); });
     };
@@ -4999,6 +5045,17 @@ function ttsWsOpen(deadlineMs){
       w.forEach(function(fn){ fn(false); });
       for(var k in ttsWsClips){ try{ ttsWsClips[k].done(); }catch(e){} }
       ttsWsClips = {};
+      /* Cartesia closes an idle socket, which is ordinary and expected. The
+         damage was never the close: it was discovering it at the moment a
+         sentence needed the socket, and paying the handshake there. Reopen
+         now, in dead time, while the orb is still open.
+
+         Bounded, because a socket that opens and immediately drops over and
+         over is a fault, and reconnecting into it forever is a hot loop. */
+      if(ttsWsState === 'idle' && typeof live === 'object' && live && live.on){
+        if(++ttsWsDrops <= 4) setTimeout(function(){ ttsWsEnsure(); }, 250);
+        else ttsWsState = 'off';
+      }
     };
   }
 
@@ -5192,24 +5249,42 @@ async function ttsClip(text, signal){
     /* Start one for the NEXT chunk; this one is not going to wait. */
     ttsFetchToken().catch(function(){});
   }
+  /* And arm the socket for the sentence after this one, whatever happens to
+     this one. This has to sit ABOVE the token check below: without a token
+     the socket cannot open, which is precisely why the attempt has to be
+     made here rather than inside a branch that a missing token skips. That
+     was the cold path -- no token, no socket, no arming, and so no token and
+     no socket on the next sentence either. */
+  ttsWsEnsure();
 
-  /* The socket, when it is available and working. It plays the first
-     fragment of audio while the rest of the same sentence is still being
-     generated, which the HTTP path cannot do. Everything about it is
-     optional: no socket, a refused socket, a silent socket or a slow one
-     all end up here on the line below with nothing lost. */
+  /* The socket, when it is ALREADY open. It plays the first fragment of
+     audio while the rest of the same sentence is still being generated,
+     which the HTTP path cannot do.
+
+     What it no longer does is wait for one. This used to call through to
+     ttsWsOpen(250) and block the sentence on a handshake it usually lost:
+     a cold WSS connection is DNS, TLS and an upgrade, comfortably past
+     250ms on mobile, so the sentence paid the full deadline and THEN made
+     the HTTP request anyway. Measured, that turned a 50ms first word into
+     499ms. Now the handshake happens in dead time (ttsWsEnsure, called
+     wherever we know speech is coming) and this line simply takes the
+     socket if it is there. */
   if(ttsWsState !== 'off' && ttsDirect !== 'off' && ttsTokenFresh()){
-    try{
-      var sc = await ttsClipSocket(text);
-      if(sc){
-        if(turnT && turnT.path === undefined) turnT.path = 'socket';
-        return sc;
+    if(ttsWsReady()){
+      try{
+        var sc = await ttsClipSocket(text);
+        if(sc){
+          if(turnT && turnT.path === undefined) turnT.path = 'socket';
+          return sc;
+        }
+      }catch(wsErr){
+        if(wsErr && wsErr.name === 'AbortError') throw wsErr;
+        /* fall through to HTTP; ttsWsOpen has already decided whether to
+           keep trying for the rest of the session */
       }
-    }catch(wsErr){
-      if(wsErr && wsErr.name === 'AbortError') throw wsErr;
-      /* fall through to HTTP; ttsWsOpen has already decided whether to
-         keep trying for the rest of the session */
     }
+    /* Not open yet: nothing to do here. It was armed above, and this
+       sentence is going over HTTP without waiting for it. */
   }
 
   if(ttsDirect !== 'off' && ttsTokenFresh()){
@@ -5916,6 +5991,9 @@ function warmFunctions(){
      which would mean no token existed until a sentence needed one, defeating
      the whole point of having it ready in advance. */
   if(ttsDirect !== 'off' && !ttsTokenFresh()) ttsFetchToken().catch(function(){});
+  /* The microphone is opening, so a sentence is seconds away and the socket
+     has that long to be ready. A no-op when it already is. */
+  ttsWsEnsure();
   /* Keyed off the last call of ANY kind. Keying it off the last ping was a
      bug: the ping fired when the screen opened blocked the one at listening,
      which is the only one that matters. A real synthesis leaves the container
@@ -5985,6 +6063,12 @@ function openLive(){
      still never blocks -- whatever is not ready in time simply uses the
      proxy -- it just gives the very first clip a chance at the fast path. */
   if(ttsDirect !== 'off' && !ttsTokenFresh()) ttsFetchToken().catch(function(){});
+  /* And the socket, chained onto the token. The greeting takes about two
+     seconds to speak, which is far more than a handshake needs -- so by the
+     time the user's first real sentence arrives the socket is open and that
+     sentence takes the 50ms path instead of the 499ms one. Measured cold,
+     this is the single largest win available on the first spoken word. */
+  ttsWsEnsure();
   live.on = true;
   live.muted = false;
   live.locked = true;                 /* the greeting owns the turn */
@@ -7987,6 +8071,10 @@ function stopChatSpeech(){
 function startChatSpeech(){
   if(!state.speak) return null;
   stopChatSpeech();
+  /* Read Aloud goes through the same sentence pipeline, so it wants the
+     same open socket -- and the model has not written a word yet, which is
+     all the time a handshake needs. */
+  if(typeof ttsWsEnsure === 'function') ttsWsEnsure();
   var mine = chatSpeechId;
   var q = makeSpeechQueue(0, {
     orb: false,
@@ -9886,10 +9974,10 @@ function warmEverything(){
       /* The socket probe needs the token, so it is chained onto it rather
          than raced against it. */
       ttsFetchToken().then(function(){
-        if(typeof ttsWsProbe === 'function') ttsWsProbe();
+        if(typeof ttsWsEnsure === 'function') ttsWsEnsure();
       }).catch(function(){});
-    } else if(typeof ttsWsProbe === 'function'){
-      ttsWsProbe();
+    } else if(typeof ttsWsEnsure === 'function'){
+      ttsWsEnsure();
     }
     if(typeof warmFunctions === 'function') warmFunctions();
     /* Create the AudioContext now (it starts suspended, which is
