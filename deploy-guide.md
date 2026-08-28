@@ -1155,3 +1155,70 @@ difference is reliably felt. It is unlikely to be noticeable.
 If the frame format is wrong, the readout will say "direct", nothing will be
 slower, and the fix is to correct the message shape in `ttsClipSocket()`
 against Cartesia's live documentation.
+
+## Thinking during the wait — the largest win in the project
+
+When you stop talking, the orb waits `VOICE_HOLD_MS` (500ms) before accepting
+the sentence: proof you have finished rather than paused. The transcript stopped
+changing at the *start* of that wait — that is the only reason the timer is
+running. So for half a second the app sat on a complete question doing nothing
+with it.
+
+It now starts at the beginning of that wait instead of the end: routing, the web
+search if one is needed, and the Groq stream. Measured, old build against new,
+seven runs each, from the user's last word to the first reply audio:
+
+    before: 1320ms      after: 836ms      SAVED 484ms — 37% faster
+
+For scale: the Web Audio work was 31% and drew "much better". The WebSocket was
+4–8% and is unlikely to be felt at all. This is the biggest single change in the
+project.
+
+### The safety rule
+
+> A speculation may only be adopted if the sentence finally committed is
+> **exactly** the sentence it was started for.
+
+Not a prefix. Not close enough. Not "starts with". A speculation for "what is
+the weather" must never answer "what is the weather in Delhi tomorrow". Anything
+short of an exact string match is discarded and the ordinary path runs, costing
+precisely what it cost before this existed. That case is tested directly.
+
+Until it is adopted a speculation touches **nothing**: not the screen, not
+`live.transcript`, not the speech queue, not the usage counter, and it never
+speaks a filler. It buffers text and waits to be claimed or thrown away.
+`specClaim()` is the only door in, and it compares the full string.
+
+### Cancelled in every way a turn can end
+
+`specCancel()` runs on: a longer sentence arriving, a phrase turning out to be
+mid-thought (`interimHoldMs` → −1), tapping the orb to interrupt, muting,
+closing the session, and a farewell. A goodbye and a user over quota are never
+speculated at all, because neither goes to Groq.
+
+The stream's own delta callback checks `spec !== s` on every chunk, so a
+superseded speculation goes silent mid-stream. Identity, not a flag — `spec` is
+cleared before anything else happens in `specCancel`, so there is no window
+where a cancelled speculation can still write.
+
+### Adoption, and why nothing is spoken twice
+
+On adoption the sink is attached **first**, then the buffer is replayed. A delta
+arriving in between simply calls `queue.feed()` with the same cumulative text,
+and `feed()` only emits what it has not already consumed. `live.abort` is
+repointed at the speculation's controller so tapping the orb still stops the
+work that is actually running.
+
+### What it costs, honestly
+
+Every time the sentence grows, the previous guess is thrown away — so a long
+dictated sentence could fire a request per pause. A test caught four for one
+sentence. `LIVE_SPEC_MAX = 3` bounds it per utterance, resetting when a command
+is accepted or the orb returns to listening.
+
+Capping rather than debouncing was deliberate: a debounce would have taken the
+delay off *every* question to protect against the rare long one. The cap keeps
+the full 484ms on ordinary questions and only gives up on sentences long enough
+that the guessing was mostly waste anyway.
+
+`LIVE_SPECULATE = false` disables the whole thing, and that switch is tested.
