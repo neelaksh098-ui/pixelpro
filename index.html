@@ -3897,7 +3897,12 @@ if(window.speechSynthesis){ try{ speechSynthesis.onvoiceschanged = function(){};
    act.
    ================================================================ */
 
-var LIVE_SETTLE_MS = 380;      /* let the speaker's tail die before listening */
+/* The pause between the reply finishing and the microphone reopening. It
+   exists so the room's echo of the last word is not heard as the next
+   command -- an acoustic delay, not a software one, so it does not need to
+   be long. 260ms still clears the tail and takes a tenth of a second off
+   every single exchange. */
+var LIVE_SETTLE_MS = 260;      /* let the speaker's tail die before listening */
 var LIVE_DUP_MS = 2500;        /* the same command inside this window is a repeat */
 /* Once the engine has produced a final transcript, `onend` normally follows
    within a couple of hundred milliseconds. Waiting a full second for it was
@@ -4129,6 +4134,13 @@ function liveRender(){
    assistant physically unable to hear itself. */
 function liveGo(next){
   if(!live.on && next !== 'idle') return;
+  /* A pending 'settle' timer means "reopen the microphone once the last
+     reply's echo has died". The moment any other state is entered
+     deliberately, that instruction is stale -- and letting it fire anyway
+     switches the microphone on in the middle of a new reply, which is the
+     self-hearing bug by another route. It was reachable: a settle armed by
+     one turn could land inside the next turn's speech. */
+  if(next !== 'listening') liveClearTimer('settle');
   live.state = next;
   var shouldListen = (next === 'listening' || next === 'user') && !live.muted && live.on;
   if(shouldListen) recEnsure();
@@ -4883,15 +4895,6 @@ async function liveAsk(question){
       .slice(-10)
       .map(function(m){ return { role:m.role, content:String(m.content).slice(0, 700) }; });
 
-    var msgs = [
-      { role:'system', content: voiceSystemPrompt() }
-    ].concat(history).concat([{ role:'user', content: question }]);
-    /* pin the light Groq model for voice specifically, whatever text tier is
-       selected -- a 1-3 sentence spoken answer does not need the 120b
-       model's extra depth, and the smaller model starts generating sooner,
-       which is the one delay a voice turn cannot hide behind streaming text */
-    var voiceLite = true;
-
     var reply, lc = '';
     var decision = routeDecide(question);
     /* Strictly greater, not >=: a genuinely neutral question ("who is
@@ -4907,19 +4910,60 @@ async function liveAsk(question){
          crash. Say something true while it runs -- the microphone is already
          off in this state, so the filler cannot be heard as a question. */
       speakFiller();
-      var liveWeb = await tavilySearch(question, {
-        topic: /\b(news|headlines?|breaking|sports?|match|score|result|election)\b/i.test(question) ? 'news' : 'general',
-        timeRange: /\b(today|tonight|now|currently|current|latest|breaking|live)\b/i.test(question) ? 'day' : undefined,
-        maxResults: 6, searchDepth: 'basic', timeout: 14000, signal: signal
-      });
-      lc = (liveWeb.answer ? 'TAVILY ANSWER:\n' + String(liveWeb.answer).slice(0,1800) + '\n\n' : '') +
-        (liveWeb.results || []).slice(0,5).map(function(it,i){
-          return '['+(i+1)+'] '+(it.title||'')+'\nURL: '+(it.url||'')+'\nPublished: '+(it.published_date||'unknown')+'\nSnippet: '+String(it.content||'').slice(0,1200);
-        }).join('\n\n');
+
+      /* THE ORB SEARCHES THE WAY TEXT MODE DOES.
+
+         It used to send the raw speech transcript to Tavily at basic depth
+         and read five short snippets. Text mode rewrites the query with the
+         classifier, searches deep with extracted page content when the
+         question is about something current, and reads ten. That gap is
+         what made the spoken answers wrong so much more often than the
+         typed ones.
+
+         The classifier is only consulted when the local router is unsure --
+         the same rule text mode uses -- so a confident "this needs the web"
+         still goes straight to the search with no extra round trip. */
+      /* Mirrors text mode's confident-web route exactly, defaults included.
+         The point of this work is that the two pipelines cannot differ, and
+         "voice picks its topic by regex while text says general" is exactly
+         the kind of small divergence that grows back. */
+      var route = { web:true, confidence:decision.confidence, searchQuery:question, topic:'general', freshness:'none' };
+      if(decision.decision === 'ask'){
+        try{
+          var cls = await classifyQuery(question, signal);
+          if(cls){
+            route.searchQuery = cls.searchQuery || question;
+            route.topic = cls.topic;
+            route.freshness = cls.freshness;
+          }
+        }catch(clsErr){
+          if(clsErr && clsErr.name === 'AbortError') throw clsErr;
+          /* classifier unreachable: search the question as spoken */
+        }
+        if(sid !== live.sessionId) return;
+      }
+
+      var plan = buildSearchPlan(question, route);
+      var liveWeb = await runSearchPlan(question, plan, signal);
+      lc = buildLiveContext(liveWeb);
       if(sid !== live.sessionId) return;
       turnMark('searchDone');
       liveGo('processing');
     }
+
+    var msgs = [
+      /* The grounding rules only ship when there is something to ground
+         against, so an ordinary spoken question still gets the short prompt
+         and the fast first token. */
+      { role:'system', content: voiceSystemPrompt(!!lc) }
+    ].concat(history).concat([{ role:'user', content: question }]);
+
+    /* The small model is right for chat -- a spoken pleasantry does not need
+       120b of reasoning, and 20b starts generating sooner. It is wrong for
+       reading ten web sources and reporting what they say, which is the
+       exact task the orb was getting wrong. So: fast model when answering
+       from its own knowledge, full model when answering from evidence. */
+    var voiceLite = !lc;
 
     /* Generation and synthesis overlap from here. The first finished
        sentence is sent to be spoken while the rest of the answer is still
@@ -5063,9 +5107,32 @@ function warmForTyping(){
 }
 
 /* ================= open / close ================= */
+/* The first SpeechRecognition session of a page pays for things later ones
+   do not: the permission prompt resolving, the OS capture device opening,
+   the audio input graph spinning up. Asking for the microphone here and
+   releasing it immediately does all of that during the greeting, when
+   nobody is waiting, instead of in front of the user's first sentence.
+
+   Deliberately fire-and-forget: a refusal, an insecure origin or a browser
+   without getUserMedia must all be silent, because recognition asks for the
+   microphone itself anyway and will surface any real problem then. */
+var micWarmed = false;
+function warmMicrophone(){
+  if(micWarmed) return;
+  micWarmed = true;
+  try{
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
+      /* Hold it for no longer than it takes to have opened it. */
+      try{ stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
+    }).catch(function(){});
+  }catch(e){}
+}
+
 function openLive(){
   if(live.on) return;                 /* re-activating must not start a second session */
   primeAudio();                       /* opened from a tap -- unlock output now */
+  warmMicrophone();                   /* ...and open the capture path now too */
   /* First thing, before the greeting: the token takes one round trip to
      mint, and the greeting is the soonest thing that will want it. This
      still never blocks -- whatever is not ready in time simply uses the
@@ -6430,6 +6497,11 @@ async function tavilySearch(query, options){
       timeRange: options.timeRange || undefined,
       maxResults: options.maxResults || 8,
       searchDepth: options.searchDepth || 'advanced',
+      /* Was never forwarded. The function defaults it on for advanced
+         searches, so extracted page content did arrive -- by accident, and
+         with the caller's intent invisible. Sending it makes the two agree
+         and lets a caller genuinely turn it off. */
+      rawContent: options.rawContent,
       days: options.days || undefined,
       country: options.country || undefined,
       includeDomains: options.includeDomains || undefined,
@@ -6488,14 +6560,29 @@ function systemPrompt(){
    actually needs -- who Pixel Pro is, what language to reply in, how long to
    talk, how to treat live results, and how to stay in the conversation --
    plus the user's own saved memory. */
-function voiceSystemPrompt(){
+function voiceSystemPrompt(grounded){
   var today = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  return 'You are Pixel Pro, a friendly and accurate voice assistant. Today is ' + today + '. ' +
+  var base = 'You are Pixel Pro, a friendly and accurate voice assistant. Today is ' + today + '. ' +
     IDENTITY_LINE +
     'Reply in the same language the user speaks (English, Hindi or Bengali). ' +
     'This is a spoken conversation: answer in 1–3 short sentences of plain speech. No markdown, no lists, no headings, no emoji, no citations or source markers. ' +
-    'Answer the exact question first. Never guess at changing facts like dates, scores, prices or office-holders. ' +
-    'When LIVE WEB CONTEXT is supplied, it is fresh retrieval — answer from it and prefer the newest, most authoritative source. ' +
+    'Answer the exact question first. Never guess at changing facts like dates, scores, prices or office-holders. ';
+
+  /* Only sent when there is retrieved evidence in the request. A spoken
+     question answered from the model's own knowledge does not need these
+     rules, and every character of them delays the first token.
+
+     These are the same instructions text mode carries, and their absence is
+     part of why the orb would half-read the sources and then fall back on
+     what it already believed -- which for anything current is wrong. */
+  var ground = !grounded ? '' :
+    'LIVE WEB CONTEXT below is fresh retrieval performed just now, not your training data. It is more current than anything you remember, so it WINS over your own knowledge on every point where they disagree. ' +
+    'Answer from it. Use the strongest and newest sources first, and prefer official or primary ones. ' +
+    'If the sources disagree, say so briefly and go with the newest authoritative one. ' +
+    'If the retrieved sources genuinely do not contain the answer, say you could not find it — do NOT fill the gap from memory. ' +
+    'Never read out URLs, source numbers or bracketed markers; they are not speakable. ';
+
+  return base + ground +
     'You are mid-conversation. Read short or vague replies as answers to what you just asked, resolve "it", "that" and "there" against the turns above, and never restart the topic unless the user does.' +
     memoryContext();
 }
@@ -7012,6 +7099,99 @@ function isCurrentQuery(q){
   q = String(q || '').toLowerCase();
   return /\b(today|tonight|tomorrow|now|right now|currently|current|latest|newest|recent|recently|this week|this month|this year|live|breaking|upcoming|score|scores|result|results|price|cost|stock|stocks|exchange rate|version|release|released|launch|launched|available|availability|election|minister|cm|chief minister|president|prime minister|ceo|owner|leader|winner|won|forecast)\b/i.test(q) || isWeatherQuery(q);
 }
+/* ================================================================
+   ONE SEARCH PIPELINE, SHARED BY TEXT AND VOICE
+
+   The orb used to build its own search: the raw speech transcript as the
+   query, basic depth, no extracted page content, five results at 1200
+   characters, no country hint, no retry -- and then it answered from that
+   with the small model. Text mode did none of those things, which is
+   exactly why one was accurate and the other was not.
+
+   Both now call these two functions. There is no second, weaker pipeline
+   left to drift out of step, because there is only one.
+   ================================================================ */
+
+/* Everything that decides WHAT to search for and HOW hard to look. */
+function buildSearchPlan(text, route){
+  route = route || {};
+  var weather = isWeatherQuery(text);
+  var current = isCurrentQuery(text);
+
+  var searchTopic = route.topic ||
+    (/\b(news|headlines?|breaking|election|elections|sports?|match|score|result|fifa|cricket|football|war|politics)\b/i.test(text) ? 'news' :
+     (/\b(price|stock|stocks|shares|market|finance|exchange rate|gold|silver|bitcoin|crypto)\b/i.test(text) ? 'finance' : 'general'));
+
+  var freshness = route.freshness && route.freshness !== 'none' ? route.freshness : (weather ? 'day' : undefined);
+
+  /* route.searchQuery is the model's rewrite of the question into
+     something a search engine handles well. The orb never used it, so it
+     searched raw speech -- including whatever the recogniser mangled. */
+  var searchQuery = route.searchQuery || (weather ? (text + ' current weather forecast today') : text);
+
+  /* "weather here" / "near me" -> ground it in the shared location's city */
+  if(typeof locationOn !== 'undefined' && locationOn && typeof currentLocation !== 'undefined' &&
+     currentLocation && currentLocation.city &&
+     /\b(here|near me|my area|my city|nearby|around me|my location)\b/i.test(text)){
+    searchQuery += ' in ' + currentLocation.city + (currentLocation.region ? ', ' + currentLocation.region : '');
+  }
+
+  return {
+    searchQuery: searchQuery,
+    current: current,
+    options: {
+      topic: searchTopic,
+      timeRange: freshness,
+      days: freshness === 'day' ? 1 : undefined,
+      maxResults: current ? 8 : 6,
+      searchDepth: current ? 'advanced' : 'basic',
+      rawContent: current,
+      country: /\b(india|indian|west bengal|kolkata|delhi|mumbai|malda|bengaluru|chennai|hyderabad|kerala|tamil nadu|maharashtra|up|uttar pradesh|bihar|odisha|assam)\b/i.test(text) ? 'india' : undefined,
+      timeout: current ? 30000 : 16000
+    }
+  };
+}
+
+/* Runs the plan, including the one retry that rescues a query the rewrite
+   made worse. Returns the raw Tavily payload. */
+async function runSearchPlan(text, plan, signal){
+  var opts = {};
+  for(var k in plan.options) opts[k] = plan.options[k];
+  opts.signal = signal;
+  var web = await tavilySearch(plan.searchQuery, opts);
+  if((!web.results || !web.results.length) && plan.searchQuery !== text){
+    web = await tavilySearch(text, opts);
+  }
+  return web;
+}
+
+/* Everything that decides what the MODEL gets to read. The orb's old
+   version passed half the snippet length, no extracted page text, no
+   relevance scores and five results instead of ten -- so even when the
+   search was right, the evidence was thin enough to answer from memory
+   instead. */
+function buildLiveContext(web){
+  var ctx = '';
+  if(web && web.answer) ctx += 'TAVILY ANSWER:\n' + String(web.answer).slice(0, 2500) + '\n\n';
+  var ranked = (web && web.results ? web.results : []).slice()
+    .sort(function(a,b){ return (Number(b.score)||0) - (Number(a.score)||0); });
+  ctx += ranked.slice(0,10).map(function(it,i){
+    return '[' + (i+1) + '] ' + (it.title || '') +
+      '\nURL: ' + (it.url || '') +
+      '\nPublished: ' + (it.published_date || 'unknown') +
+      '\nRelevance score: ' + (typeof it.score === 'number' ? it.score.toFixed(3) : 'unknown') +
+      '\nSnippet: ' + (it.content || '').slice(0,2600) +
+      '\nExtracted: ' + (it.raw_content || '').slice(0,5000);
+  }).join('\n\n');
+  return ctx;
+}
+function rankedSources(web){
+  return (web && web.results ? web.results : []).slice()
+    .sort(function(a,b){ return (Number(b.score)||0) - (Number(a.score)||0); })
+    .slice(0,8)
+    .map(function(it){ return { title: it.title || it.url, link: it.url, date: it.published_date || '' }; });
+}
+
 function isNormalLocalRequest(q){
   q = String(q || '').trim();
   if(!q) return true;
@@ -7556,44 +7736,12 @@ async function sendMessage(text){
 
     if(!imgForThisTurn && needsLive){
       setThinking('Searching live web…', '\ud83d\udd0e');
-      var lowerQ = text.toLowerCase();
-      var weather = isWeatherQuery(text);
-      var current = isCurrentQuery(text);
-      var searchTopic = route.topic || (/\b(news|headlines?|breaking|election|elections|sports?|match|score|result|fifa|cricket|football|war|politics)\b/i.test(text) ? 'news' : (/\b(price|stock|stocks|shares|market|finance|exchange rate|gold|silver|bitcoin|crypto)\b/i.test(text) ? 'finance' : 'general'));
-      var freshness = route.freshness && route.freshness !== 'none' ? route.freshness : (weather ? 'day' : undefined);
-      var searchQuery = route.searchQuery || (weather ? (text + ' current weather forecast today') : text);
-      /* "weather here" / "near me" -> ground the search in the shared location's city */
-      if(locationOn && currentLocation && currentLocation.city && /\b(here|near me|my area|my city|nearby|around me|my location)\b/i.test(text)){
-        searchQuery += ' in ' + currentLocation.city + (currentLocation.region ? ', ' + currentLocation.region : '');
-      }
-      var searchOptions = {
-        topic: searchTopic,
-        timeRange: freshness,
-        days: freshness === 'day' ? 1 : undefined,
-        maxResults: current ? 8 : 6,
-        searchDepth: current ? 'advanced' : 'basic',
-        rawContent: current,
-        country: /\b(india|indian|west bengal|kolkata|delhi|mumbai|malda|bengaluru|chennai|hyderabad|kerala|tamil nadu|maharashtra|up|uttar pradesh|bihar|odisha|assam)\b/i.test(text) ? 'india' : undefined,
-        timeout: current ? 30000 : 16000,
-        signal: currentAbort ? currentAbort.signal : null
-      };
-      var web = await tavilySearch(searchQuery, searchOptions);
-      /* One targeted retry only when Tavily returns no usable sources. This keeps
-         ordinary searches to one Tavily request while rescuing ambiguous queries. */
-      if ((!web.results || !web.results.length) && searchQuery !== text) {
-        web = await tavilySearch(text, searchOptions);
-      }
-      sources = (web.results || []).slice().sort(function(a,b){ return (Number(b.score)||0) - (Number(a.score)||0); }).slice(0,8).map(function(it){
-        return { title: it.title || it.url, link: it.url, date: it.published_date || '' };
-      });
-      var liveContext = '';
-      if (web.answer) {
-        liveContext += 'TAVILY ANSWER:\n' + String(web.answer).slice(0, 2500) + '\n\n';
-      }
-      var rankedResults = (web.results || []).slice().sort(function(a,b){ return (Number(b.score)||0) - (Number(a.score)||0); });
-      liveContext += rankedResults.slice(0,10).map(function(it,i){
-        return '[' + (i+1) + '] ' + (it.title || '') + '\nURL: ' + (it.url || '') + '\nPublished: ' + (it.published_date || 'unknown') + '\nRelevance score: ' + (typeof it.score === 'number' ? it.score.toFixed(3) : 'unknown') + '\nSnippet: ' + (it.content || '').slice(0,2600) + '\nExtracted: ' + (it.raw_content || '').slice(0,5000);
-      }).join('\n\n');
+      /* Identical behaviour to before, now expressed as the shared plan the
+         orb runs too. Nothing about text mode changes. */
+      var plan = buildSearchPlan(text, route);
+      var web = await runSearchPlan(text, plan, currentAbort ? currentAbort.signal : null);
+      sources = rankedSources(web);
+      var liveContext = buildLiveContext(web);
       var liveMessages = [{ role:'system', content: systemPrompt() +
         ' You have been given live web results retrieved seconds ago. Answer ONLY from that evidence for anything time-sensitive. Lead with the direct answer in the first sentence. Give exact figures, names and dates as reported, and say when the information is from. If sources disagree, say so and give the most recent. If the evidence does not actually answer the question, say that plainly instead of guessing.' }]
         .concat(state.history.slice(-8))

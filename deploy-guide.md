@@ -954,3 +954,93 @@ that was asked for. Accuracy is protected by the tail check, not by waiting
 longer: a phrase ending on a word that cannot end a sentence
 (`VOICE_INCOMPLETE_TAIL`) is still never committed early, however long the
 silence runs.
+
+## The orb's live-web answers were wrong because it had its own, weaker search
+
+This was reported as "the orb is wrong about 70% of the time on live questions,
+while text mode is fine". It was not a model problem. The orb had been running a
+completely separate, much weaker search pipeline:
+
+| | Text mode | Orb (before) |
+|---|---|---|
+| Query sent to Tavily | the classifier's rewrite | the **raw speech transcript** |
+| Depth | `advanced` + extracted page content | `basic`, snippets only |
+| Results reaching the model | top 10, 2600-char snippets + 5000-char extract | top 5, **1200-char** snippets |
+| Ranking by relevance score | yes | no |
+| Topic | news / finance / general | news / general |
+| India hint, "near me" grounding | yes | no |
+| Retry when the search returns nothing | yes | no |
+| **Model answering from the evidence** | full 120b | **pinned to 20b** |
+| Grounding instructions in the prompt | full | one sentence |
+
+Every one of those pushes the same way. The orb searched a mangled transcript,
+looked less hard, read less than half as much of what it found, and then asked
+the small model to summarise it — which is exactly the setup where a model
+quietly falls back on what it already believed. For anything current, what it
+already believed is wrong.
+
+**There is now one pipeline.** `buildSearchPlan()`, `runSearchPlan()` and
+`buildLiveContext()` are called by both modes. There is no second
+implementation left to drift, because there is no second implementation. Text
+mode's behaviour is unchanged — it was already doing all of this, it just does
+it through the shared functions now.
+
+Two rules restore the rest of the parity:
+
+- **The classifier is consulted on the same terms.** Only when the local router
+  is unsure, exactly as text mode does — so a confident "this needs the web"
+  still goes straight to the search with no extra round trip, and an unsure one
+  gets its query rewritten before searching instead of searching raw speech.
+- **The model is chosen by the task, not by the surface.** 20b when the orb is
+  answering from its own knowledge, where it is fast and good enough; the full
+  model when it is reading ten web sources and reporting what they say, which is
+  the task it was getting wrong. `voiceLite = !lc`.
+
+`voiceSystemPrompt(grounded)` now takes the same grounding rules text mode
+carries — the retrieved context *wins* over the model's own knowledge, prefer
+newest and most authoritative, say so if the sources disagree, and say you
+could not find it rather than filling the gap from memory — but only ships them
+when there is context to ground against, so an ordinary spoken question keeps
+the short prompt and the fast first token.
+
+### A real bug found on the way
+
+`rawContent` was **never forwarded** by `tavilySearch()`. The Netlify function
+defaults it on for advanced searches, so extracted page content did arrive — by
+accident, with the caller's intent invisible and `rawContent: false` silently
+ignored. It is sent explicitly now. This affected both modes.
+
+## Two more fixes from this pass
+
+**A stale settle timer could switch the microphone on mid-reply.** `finish()`
+arms a `settle` timer meaning "reopen the microphone once the last reply's echo
+has died". Nothing cancelled it when another state was entered, so a settle
+armed by one turn could fire inside the *next* turn's speech — the self-hearing
+bug by another route, and reachable. `liveGo()` now clears it whenever the next
+state is not `listening`. Found because tightening `LIVE_SETTLE_MS` shifted the
+timing enough to make an existing test catch it.
+
+**The microphone is opened during the greeting.** The first
+`SpeechRecognition` session of a page pays for the permission resolving, the OS
+capture device opening and the audio graph spinning up. `warmMicrophone()` asks
+for the microphone at `openLive()` and releases it immediately, so that happens
+while the greeting plays rather than in front of the user's first sentence.
+Fire-and-forget by design: a refusal, an insecure origin or a browser without
+`getUserMedia` must all be silent, because recognition asks for the microphone
+itself anyway.
+
+`LIVE_SETTLE_MS` 380 → 260, which is 120ms off every exchange. That figure is
+arithmetic on a constant, not a measurement.
+
+### What this pass did NOT speed up, honestly
+
+Measured old build against new, orb end-to-end from last word to first reply
+audio: **1317ms → 1317ms on the first command, 1298ms → 1300ms on later ones.**
+No change, and that is correct — the recognition window was already tightened in
+the previous release, and this pass's speed changes are between turns
+(`LIVE_SETTLE_MS`) and on the device (`warmMicrophone`), neither of which that
+benchmark covers.
+
+Grounded orb answers will in fact be **slightly slower** than before, because
+they now use the full model and a deeper search. That is the trade that was
+asked for: the previous version was fast and wrong.
