@@ -56,19 +56,38 @@ export default async (req) => {
   const maxTokens = isReport ? 8000 : (payload.deep ? 2600 : 1500);
   const temperature = isReport ? 0.25 : (payload.deep ? 0.3 : 0.35);
 
-  async function openStream(useModel) {
+  // Groq's service tier, documented values: auto | on_demand | flex |
+  // performance | null. Omitting it means on_demand, which is the standard
+  // tier and takes queue latency at peak times.
+  //
+  // "auto" is the only one that is right to hardcode. "performance" is
+  // enterprise-only and "flex" is explicitly best-effort -- it raises rate
+  // limits but can answer with an over-capacity error, which trades
+  // reliability for throughput and is the wrong trade for a spoken reply that
+  // has to arrive. "auto" asks for the best tier this account actually has,
+  // whatever that is, and can never be worse than the default it replaces.
+  const SERVICE_TIER = "auto";
+
+  async function openStream(useModel, withTier) {
+    const body = { model: useModel, messages, temperature, max_tokens: maxTokens, stream: true };
+    if (withTier) body.service_tier = SERVICE_TIER;
     return fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + KEY },
-      body: JSON.stringify({ model: useModel, messages, temperature, max_tokens: maxTokens, stream: true }),
+      body: JSON.stringify(body),
     });
   }
 
   let upstream;
   try {
-    upstream = await openStream(model);
+    upstream = await openStream(model, true);
+    // An account or API version that does not know the parameter must not
+    // lose its answer over it: drop the tier and ask again, once.
+    if (upstream.status === 400) {
+      upstream = await openStream(model, false);
+    }
     if (!upstream.ok && (upstream.status === 429 || upstream.status >= 500) && model !== FALLBACK_MODEL) {
-      upstream = await openStream(FALLBACK_MODEL);
+      upstream = await openStream(FALLBACK_MODEL, true);
     }
   } catch {
     return new Response(JSON.stringify({ error: "Upstream Groq error." }), { status: 502, headers: { ...CORS, "Content-Type": "application/json" } });

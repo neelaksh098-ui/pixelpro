@@ -4006,8 +4006,41 @@ var LIVE_FINAL_GRACE_MS = 120; /* commit anyway if onend never arrives */
    Accuracy is protected by the tail check rather than by waiting longer:
    a phrase ending on a word that cannot end a sentence is never
    committed early no matter how long the silence runs. */
-var VOICE_HOLD_MS = 500;       /* silence after a phrase that sounds finished */
-var VOICE_HOLD_SHORT_MS = 800; /* a two-or-three word phrase gets longer to grow */
+/* HOW LONG TO WAIT AFTER THE LAST WORD
+
+   Measured, this is the largest number in the whole chain by a wide margin.
+   With speculation working -- and it is: the answer is generated during this
+   wait, so the first token and the first speakable fragment both arrive at
+   0ms after the command commits -- the ONLY thing between somebody finishing
+   a sentence and hearing a reply is this wait plus one Cartesia round trip.
+   800ms of holding on, then 56ms of everything else.
+
+   A constant is the wrong shape for it. The question being answered is "has
+   this person stopped talking", and the evidence for that is how fast they
+   were talking a moment ago. Words arriving every 110ms and then 300ms of
+   nothing is a clear stop; the same 300ms from someone speaking slowly, at
+   400ms a word, is just a breath.
+
+   So the hold is a multiple of their own measured pace, floored and capped.
+   Fast speech settles in about a third of a second; slow, deliberate speech
+   still gets close to a second. What protects against cutting anybody off is
+   unchanged and is not this timer: a phrase ending on a word that cannot end
+   a sentence is never committed early, however long the silence runs. */
+/* 450ms, not less. Tested against a speaker pausing mid-sentence at a word
+   that CAN end one -- "what is the weather ... tomorrow in Kolkata" -- which
+   is the failure this floor exists to prevent and which 350ms did not: the
+   question was committed as "what is the weather". Clause-boundary pauses in
+   ordinary speech run to about 400ms, so the floor has to sit above them.
+
+   This is still a large improvement on the constant it replaces, and in both
+   directions: a fast speaker waited 800ms for a short phrase and now waits
+   450, while a slow, deliberate one used to get 500ms -- too little, and a
+   real source of sentences being cut in half -- and now gets up to 900. */
+var VOICE_HOLD_MIN_MS = 450;   /* never call it a stop sooner than this */
+var VOICE_HOLD_MAX_MS = 900;   /* ...nor hang on longer than this */
+var VOICE_HOLD_FACTOR = 2.5;   /* multiples of their own word-to-word pace */
+var VOICE_HOLD_SHORT_BONUS = 120;  /* a one or two word phrase may still be growing */
+var VOICE_HOLD_DEFAULT_GAP = 160;  /* assumed pace before there is evidence */
 
 /* Words that almost never end a spoken sentence. If the interim stops here,
    the speaker is mid-thought or the recogniser is mid-phrase. */
@@ -4021,7 +4054,15 @@ function interimHoldMs(text){
   if(VOICE_INCOMPLETE_TAIL.test(t)) return -1;
   var words = t.split(/\s+/).filter(Boolean);
   if(words.length === 0) return -1;
-  return words.length <= 3 ? VOICE_HOLD_SHORT_MS : VOICE_HOLD_MS;
+
+  /* Their pace, from this utterance, or a middling assumption before there is
+     enough of it to measure. */
+  var gap = (live.wordGaps && live.wordGaps.length >= 2)
+    ? live.wordGapAvg
+    : VOICE_HOLD_DEFAULT_GAP;
+  var hold = gap * VOICE_HOLD_FACTOR;
+  if(words.length <= 2) hold += VOICE_HOLD_SHORT_BONUS;
+  return Math.max(VOICE_HOLD_MIN_MS, Math.min(VOICE_HOLD_MAX_MS, Math.round(hold)));
 }
 var LIVE_MAX_ERRORS = 3;       /* consecutive hard errors before giving up */
 
@@ -4168,6 +4209,10 @@ var live = {
   listeningSince:0,      /* when the microphone last reopened */
   committedEpoch:-1,     /* the recognition session that has already spoken */
   lastListenMs:null,     /* how long the last listening phase took */
+  lastWordAt:0,          /* when the transcript last changed */
+  wordGaps:[],           /* recent word-to-word intervals, this utterance */
+  wordGapAvg:0,          /* their current speaking pace, in ms per word */
+  lastEndpointMs:null,   /* silence held after the last word before committing */
   fillerToken:0, queue:null,
   transcript:[], startedAt:0,
   abort:null,
@@ -4595,6 +4640,23 @@ function recEnsure(){
     }
 
     if(!live.heardAt) live.heardAt = Date.now();
+    /* The pace of THIS utterance, which is what the endpointer needs. Only
+       intervals that plausibly separate words are counted: a 4-second gap is
+       a pause between sentences, not a slow speaker, and letting it into the
+       average would make the endpointer wait a very long time for the next
+       one. The last few are enough -- people change pace mid-sentence. */
+    var nowW = Date.now();
+    if(live.lastWordAt){
+      var gapW = nowW - live.lastWordAt;
+      if(gapW >= 20 && gapW <= 1200){
+        live.wordGaps.push(gapW);
+        if(live.wordGaps.length > 6) live.wordGaps.shift();
+        var sumW = 0;
+        for(var gi = 0; gi < live.wordGaps.length; gi++) sumW += live.wordGaps[gi];
+        live.wordGapAvg = sumW / live.wordGaps.length;
+      }
+    }
+    live.lastWordAt = nowW;
     live.quietStreak = 0;          /* somebody is here: restart instantly again */
     live.errorStreak = 0;          /* recognition is genuinely working again */
     if(live.state !== 'user'){ live.state = 'user'; liveRender(); }
@@ -4805,7 +4867,12 @@ function recCommit(text, ep){
      the moment the utterance was accepted. This is the number the complaint
      was about, so it belongs in the readout beside all the others. */
   live.lastListenMs = live.heardAt ? (now - live.heardAt) : null;
-  live.heardAt = 0;
+  /* T0 -> T2 with the two halves separated: how long the person was speaking,
+     and how long the endpointer waited after they stopped. Only the second is
+     ours to shorten. */
+  live.lastEndpointMs = live.lastWordAt ? (now - live.lastWordAt) : null;
+  live.heardAt = 0; live.lastWordAt = 0;
+  live.wordGaps = []; live.wordGapAvg = 0;   /* the next utterance has its own pace */
   live.lastCommand = q.toLowerCase();
   live.lastCommandAt = now;
   live.sessionId++;               /* orphan every callback from the engine that just ended */
@@ -5782,8 +5849,15 @@ function makeSpeechQueue(sid, opts){
        without this the chunk was silently dropped -- the listener heard a
        sentence simply missing from the middle of the answer, which is worse
        than waiting for it. */
+    var sentAt = Date.now();
     item.ready = ttsClip(text)
-      .then(function(a){ item.audio = a; turnMark('firstAudioReady'); })
+      .then(function(a){
+        item.audio = a;
+        turnMark('firstAudioReady');
+        /* TTS send -> first audio, for this clip alone, so a slow synthesis
+           is distinguishable from a slow generator. */
+        if(turnT && turnT.ttsMs === undefined) turnT.ttsMs = Date.now() - sentAt;
+      })
       .catch(function(){
         return ttsClip(text).then(function(a){ item.audio = a; turnMark('firstAudioReady'); })
                             .catch(function(){ item.failed = true; });
@@ -5906,6 +5980,7 @@ function turnStart(){
   /* Measured before this turn began -- recognition finishes before asking
      starts -- so it is carried in rather than marked. */
   if(typeof live === 'object' && live && live.lastListenMs != null) turnT.listenMs = live.lastListenMs;
+  if(typeof live === 'object' && live && live.lastEndpointMs != null) turnT.endpointMs = live.lastEndpointMs;
 }
 function turnMark(name){
   if(!turnT) return;
@@ -5971,7 +6046,7 @@ function formatTimings(){
 /* ================================================================
    THINKING WHILE IT WAITS
 
-   When you stop talking, the orb waits VOICE_HOLD_MS before accepting
+   When you stop talking, the orb waits interimHoldMs() before accepting
    the sentence -- proof that you have really finished rather than paused.
    The transcript stopped changing at the START of that wait; that is the
    only reason the timer is running at all. So for half a second the app
@@ -9153,6 +9228,10 @@ async function sendMessage(text){
   if(!text || state.busy) return;
   if(quotaExceeded()){ haptic('warn'); openGate(); return; }
   state.busy = true; state.lastUser = text;
+  /* T0 for a typed turn is the Enter key. Read Aloud runs the same sentence
+     pipeline as the orb and deserves the same readout: without this, the one
+     number that defines it -- Enter to first spoken word -- existed nowhere. */
+  turnStart();
   haptic('send');
   currentAbort = new AbortController();
   showStopBtn();
@@ -9283,11 +9362,13 @@ async function sendMessage(text){
     }
 
     if(!imgForThisTurn && needsLive){
+      turnMark('routeDone');
       setThinking('Searching live web…', '\ud83d\udd0e');
       /* Identical behaviour to before, now expressed as the shared plan the
          orb runs too. Nothing about text mode changes. */
       var plan = buildSearchPlan(text, route);
       var web = await runSearchPlan(text, plan, currentAbort ? currentAbort.signal : null);
+      turnMark('searchDone');
       sources = rankedSources(web);
       var liveContext = buildLiveContext(web, text);
       var liveMessages = [{ role:'system', content: systemPrompt() +
@@ -9326,6 +9407,7 @@ async function sendMessage(text){
         bubbleEl = addMessage('bot', '', { sources: sources, searched: needsLive });
         haptic('start');           /* the answer has begun */
       }
+      turnMark('firstToken');
       if(chatQ) chatQ.feed(full);
       var now = Date.now();
       if(now - lastPaint > 55){          /* repaint at ~18fps, not per token */
@@ -9395,7 +9477,7 @@ async function sendMessage(text){
     /* The stream fed every sentence as it arrived; end() flushes whatever
        tail has no terminator. A photo turn never streamed, so it has nothing
        queued and end() synthesises the whole reply in one go, as before. */
-    if(chatQ) chatQ.end(reply); else speak(reply);
+    if(chatQ) chatQ.end(reply); else { speak(reply); turnEnd(); }
     extractMemory(text, reply); /* fire-and-forget, never blocks the UI */
     if(mailToggleOn){ sendReplyAsEmail(text, reply); }
     state.history.push({ role:'user', content: text });
