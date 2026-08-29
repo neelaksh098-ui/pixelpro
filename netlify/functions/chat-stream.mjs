@@ -61,12 +61,20 @@ export default async (req) => {
     });
   }
 
-  // Escalate only when the work genuinely needs it: evidence to synthesise,
-  // or a research report. `heavy` is the client saying so explicitly; the
-  // presence of live context says so on its own, so a caller that forgets
-  // the flag still gets the right model rather than a worse answer.
-  // `lite` is still accepted from older callers and now means the default.
-  const heavy = payload.heavy === true || payload.report === true || !!String(payload.liveContext || "").trim();
+  // Escalate only when the work genuinely needs it. A research report always
+  // does. Otherwise the CLIENT decides: the Live Orb's voice path deliberately
+  // sends liveContext without asking for 120b, because reading Tavily's
+  // evidence and staying fast both matter there and 20b is good enough to do
+  // both. Text mode, which is not on the speed-critical path, still asks for
+  // 120b whenever it has evidence to read.
+  //
+  // The old rule ORed live-context presence into `heavy` unconditionally, so
+  // an explicit `heavy:false` from the client was silently overridden the
+  // moment liveContext was non-empty -- which is exactly the bug this exists
+  // to fix. Presence of context is now only a fallback for a caller old
+  // enough to not send `heavy` at all.
+  const heavy = payload.report === true ||
+    (typeof payload.heavy === "boolean" ? payload.heavy : !!String(payload.liveContext || "").trim());
   const model = heavy ? ESCALATE_MODEL : MODEL;
   const maxTokens = isReport ? 8000 : (payload.deep ? 2600 : 1500);
   const temperature = isReport ? 0.25 : (payload.deep ? 0.3 : 0.35);

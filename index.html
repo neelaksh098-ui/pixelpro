@@ -6246,7 +6246,7 @@ function specStart(text){
         if(spec !== s && !s.adopted) return;
         s.buffer = full;
         if(s.sink) s.sink(piece, full);
-      }, { lite: !s.lc });   /* see voiceLite in liveAsk: evidence escalates, not this */
+      }, { lite: !s.lc, voice: true });   /* speed-critical: 20b even with evidence, see streamAI */
 
       s.reply = reply;
       return reply;
@@ -6424,11 +6424,11 @@ async function liveAsk(question){
       { role:'system', content: voiceSystemPrompt(!!lc) }
     ].concat(history).concat([{ role:'user', content: question }]);
 
-    /* 20b answers everything now, and the presence of evidence is what
-       escalates -- which streamAI derives from the live context itself, so
-       this flag no longer chooses the model. It is left in place because the
-       deployed function may be an older one that still reads it, and it says
-       the same thing either way. */
+    /* 20b answers everything on this path, WITH or without evidence. This
+       flag no longer chooses the model -- `voice:true` below does that, by
+       telling streamAI not to escalate on live context the way text mode
+       does. It is left in place because the deployed function may be an
+       older one that still reads it. */
     var voiceLite = !lc;
 
     /* Generation and synthesis overlap from here. The first finished
@@ -6447,7 +6447,7 @@ async function liveAsk(question){
       turnMark('firstToken');
       liveCaption(full, 'bot');
       queue.feed(full);
-    }, { lite: voiceLite });
+    }, { lite: voiceLite, voice: true });   /* speed-critical: 20b even with evidence, see streamAI */
 
     if(signal.aborted || sid !== live.sessionId){
       queue.cancel();
@@ -8177,14 +8177,19 @@ function voiceSystemPrompt(grounded){
    buffered endpoint if streaming is unavailable, so answers never break. */
 async function streamAI(messages, signal, liveContext, onDelta, opts){
   opts = opts || {};
+  /* Whether this call escalates to 120b. A report always does. Otherwise:
+     `opts.voice` is the Live Orb and Read Aloud saying "this is the
+     speed-critical path -- stay on 20b even though I am handing you Tavily
+     evidence", which is the whole point of this function existing in two
+     modes. Everything else keeps the old rule, evidence implies heavy,
+     because text mode is not time-critical the way a spoken reply is. */
+  var heavy = !!opts.report || (!opts.voice && !!String(liveContext || '').trim());
   var body = JSON.stringify({
     messages: messages,
     liveContext: liveContext || '',
-    /* 20b is the default everywhere now, so nothing has to ask for it. What
-       the server needs to be told is when the work is genuinely heavier than
-       that: evidence to read. `lite` is still sent so an older deployed
-       function keeps behaving, and is ignored by the current one. */
-    heavy: !!String(liveContext || '').trim() || !!opts.report,
+    heavy: heavy,
+    /* `lite` is still sent so an older deployed function keeps behaving; the
+       current one reads `heavy` instead and ignores this. */
     lite: opts.lite || ((typeof currentTier !== 'undefined' && currentTier === 'lite') && !opts.report),
     deep: !!thinkOn || !!opts.report,
     /* a deep-research report gets a much larger evidence window and far more
@@ -8198,10 +8203,10 @@ async function streamAI(messages, signal, liveContext, onDelta, opts){
     });
   }catch(e){
     if(e && e.name === 'AbortError') throw e;
-    return await callAI(messages, false, signal, liveContext);
+    return await callAI(messages, false, signal, liveContext, heavy);
   }
   if(!r.ok || !r.body){
-    return await callAI(messages, false, signal, liveContext);
+    return await callAI(messages, false, signal, liveContext, heavy);
   }
   var reader = r.body.getReader();
   var dec = new TextDecoder();
@@ -8218,15 +8223,22 @@ async function streamAI(messages, signal, liveContext, onDelta, opts){
     if(streamErr && streamErr.name === 'AbortError' && full.trim()) return full.trim();
     if(!full.trim()) throw streamErr;
   }
-  if(!full.trim()) return await callAI(messages, false, signal, liveContext);
+  if(!full.trim()) return await callAI(messages, false, signal, liveContext, heavy);
   return full.trim();
 }
-async function callAI(messages, isVision, signal, liveContext){
+/* heavyOverride: pass the same escalation decision the caller already made
+   (streamAI's fallback does this) so falling back to the buffered endpoint
+   cannot silently re-derive a different one from liveContext presence.
+   Callers that have no opinion -- vision, memory extraction, the plain
+   text-mode fallback -- omit it and get the old liveContext-implies-heavy
+   default. */
+async function callAI(messages, isVision, signal, liveContext, heavyOverride){
+  var heavy = (typeof heavyOverride === 'boolean') ? heavyOverride : !!String(liveContext || '').trim();
   var r = await fetchTimeout('/.netlify/functions/groq', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({ messages:messages, vision:!!isVision, liveContext: liveContext || '',
-      heavy: !!String(liveContext || '').trim(),
+      heavy: heavy,
       lite: (typeof currentTier !== 'undefined' && currentTier === 'lite') }),
     signal:signal
   }, 28000, signal);

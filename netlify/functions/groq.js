@@ -179,11 +179,13 @@ Do NOT answer the question. Classify only.`;
   }
 
   try {
-    // 20b is the default here too. `heavy` -- evidence to synthesise -- is
-    // the only thing that escalates, and live context implies it even if the
-    // caller did not say so. `lite` used to select the small model and now
+    // 20b is the default here too. Trust an explicit `heavy` from the client
+    // -- the Live Orb voice path deliberately sends liveContext with
+    // heavy:false so it stays on 20b even when grounded -- and only fall
+    // back to live-context presence for a caller old enough not to send
+    // `heavy` at all. `lite` used to select the small model and now
     // describes what already happens, so it is simply ignored.
-    const heavy = payload.heavy === true || !!String(payload.liveContext || "").trim();
+    const heavy = typeof payload.heavy === "boolean" ? payload.heavy : !!String(payload.liveContext || "").trim();
     const model = payload.vision ? VISION_MODEL : (heavy ? ESCALATE_MODEL : MODEL);
     const temperature = payload.vision ? 0.2 : 0.35;
     const maxTokens = payload.vision ? 1400 : 900; // back to the original budget — 4000 was draining the daily token quota far too fast
