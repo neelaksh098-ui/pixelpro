@@ -2086,7 +2086,7 @@ html,body{overscroll-behavior:none}
 <main id="main">
   <div class="wrap" id="chat" role="log" aria-live="polite">
     <div class="hero" id="hero">
-      <h2>What can I <i>help</i> with?</h2>
+      <h2>What can I help with?</h2>
       <div class="chips" id="chips" style="display:none"></div>
     </div>
   </div>
@@ -2609,6 +2609,31 @@ function addMemoryFact(fact){
   saveMemory(list);
   if(typeof renderMemoryChips === 'function') renderMemoryChips();
 }
+/* ================================================================
+   ONE CONVERSATION, TWO WAYS OF HAVING IT
+
+   state.history is the authoritative rolling context: it is what text mode
+   sends, it is saved with the chat, and it survives a reload. The orb reads
+   it when it opens and writes into it as it goes, so a question asked aloud
+   can refer to something typed a minute earlier and the other way round.
+
+   Capped exactly as text mode caps it, so joining the two cannot quietly
+   grow the prompt -- and therefore the time to first token -- on either side.
+   ================================================================ */
+var SHARED_HISTORY_MAX = 16;
+function sharedHistory(){
+  return (typeof state === 'object' && state && Array.isArray(state.history)) ? state.history : [];
+}
+function rememberTurn(userText, assistantText){
+  if(typeof state !== 'object' || !state) return;
+  if(!Array.isArray(state.history)) state.history = [];
+  if(userText) state.history.push({ role:'user', content: String(userText) });
+  if(assistantText) state.history.push({ role:'assistant', content: String(assistantText).slice(0, 1500) });
+  if(state.history.length > SHARED_HISTORY_MAX){
+    state.history = state.history.slice(-SHARED_HISTORY_MAX);
+  }
+}
+
 function memoryContext(){
   var list = loadMemory();
   if(!list.length) return '';
@@ -3540,7 +3565,7 @@ var GREETS = ['how are you today?','great to see you!','what shall we explore?',
 function personalizeHero(){
   var h = document.querySelector('#hero h2');
   if(!h) return;
-  h.innerHTML = 'What can I <i>help</i> with?';
+  h.textContent = 'What can I help with?';
 }
 
 /* ---------- stop / abort ---------- */
@@ -4042,6 +4067,31 @@ var VOICE_HOLD_FACTOR = 2.5;   /* multiples of their own word-to-word pace */
 var VOICE_HOLD_SHORT_BONUS = 120;  /* a one or two word phrase may still be growing */
 var VOICE_HOLD_DEFAULT_GAP = 160;  /* assumed pace before there is evidence */
 
+/* Utterances that are complete the moment they are heard.
+
+   "Hi" waited 570ms -- the floor plus the extra a one-word phrase gets in
+   case it is the start of something longer. For a greeting that is the whole
+   sentence, and the wait is the entire interaction.
+
+   These are conversational atoms: they are not prefixes of anything the
+   assistant would answer differently, and being wrong about one costs a
+   greeting answered as a greeting. Everything outside this list keeps the
+   full pace-adaptive hold, so it buys speed exactly where there is no
+   ambiguity to pay for. */
+var LIVE_COMPLETE_SHORT = new RegExp('^(?:hi|hii+|hey|hello|yo|hi pixel|hey pixel|hello pixel|' +
+  'thanks|thank you|thanks a lot|ta|cheers|ok|okay|k|yes|yeah|yep|yup|no|nope|nah|' +
+  'stop|wait|bye|goodbye|good bye|see you|good morning|good afternoon|good evening|good night|' +
+  'how are you|what time is it|who are you|what can you do|namaste|salaam|hola)[.!?]*$', 'i');
+var VOICE_HOLD_COMPLETE_MS = 280;  /* they only have to outlast a stutter */
+
+/* A recogniser that hands back the same interim twice has stopped changing
+   its mind. That is direct evidence the phrase has settled, worth more than
+   any timer, and it costs nothing to use: each unchanged repeat takes a
+   third off what is left of the wait, down to a floor that still absorbs a
+   stutter. Speech that is still arriving never repeats, so this can only
+   fire when the person has actually stopped. */
+var VOICE_STABLE_FLOOR_MS = 260;
+
 /* Words that almost never end a spoken sentence. If the interim stops here,
    the speaker is mid-thought or the recogniser is mid-phrase. */
 var VOICE_INCOMPLETE_TAIL = new RegExp('\\b(a|an|and|are|as|at|because|but|by|can|could|did|do|does|for|from|had|has|have|how|i|if|in|is|it|its|my|of|on|or|our|should|so|than|that|the|their|then|there|they|this|to|was|we|were|what|when|where|which|who|whose|why|will|with|would|you|your|um|uh|umm|hmm|er|ah|like)$', 'i');
@@ -4051,6 +4101,19 @@ var VOICE_INCOMPLETE_TAIL = new RegExp('\\b(a|an|and|are|as|at|because|but|by|ca
 function interimHoldMs(text){
   var t = String(text || '').trim();
   if(!t) return -1;
+
+  /* A complete utterance in its own right needs no settling time, and this
+     has to be asked BEFORE the tail test rather than after it.
+
+     "what time is it", "who are you", "how are you", "see you" all end on a
+     word that cannot end a sentence, so the tail test refused to commit any
+     of them early -- ever. They waited for the browser's own final, which is
+     a second or more away and on some engines never arrives at all. Four of
+     the most ordinary things anybody says to a voice assistant were the four
+     slowest, and the rule that made them slow was a heuristic about
+     unfinished sentences being applied to sentences that were finished. */
+  if(LIVE_COMPLETE_SHORT.test(t)) return VOICE_HOLD_COMPLETE_MS;
+
   if(VOICE_INCOMPLETE_TAIL.test(t)) return -1;
   var words = t.split(/\s+/).filter(Boolean);
   if(words.length === 0) return -1;
@@ -4062,7 +4125,15 @@ function interimHoldMs(text){
     : VOICE_HOLD_DEFAULT_GAP;
   var hold = gap * VOICE_HOLD_FACTOR;
   if(words.length <= 2) hold += VOICE_HOLD_SHORT_BONUS;
-  return Math.max(VOICE_HOLD_MIN_MS, Math.min(VOICE_HOLD_MAX_MS, Math.round(hold)));
+  hold = Math.max(VOICE_HOLD_MIN_MS, Math.min(VOICE_HOLD_MAX_MS, Math.round(hold)));
+
+  /* Each time the recogniser has repeated this exact text unchanged, it is
+     surer than the timer is. Take a third off per repeat, never below the
+     floor. */
+  for(var rep = 0; rep < (live.interimRepeats || 0) && hold > VOICE_STABLE_FLOOR_MS; rep++){
+    hold = Math.round(hold * 0.66);
+  }
+  return Math.max(VOICE_STABLE_FLOOR_MS, hold);
 }
 var LIVE_MAX_ERRORS = 3;       /* consecutive hard errors before giving up */
 
@@ -4211,10 +4282,13 @@ var live = {
   lastListenMs:null,     /* how long the last listening phase took */
   lastWordAt:0,          /* when the transcript last changed */
   wordGaps:[],           /* recent word-to-word intervals, this utterance */
+  lastInterim:'',        /* the previous interim, to notice it repeating */
+  holdText:'',           /* the text the pending hold timer belongs to */
+  interimRepeats:0,      /* times the recogniser has re-sent it unchanged */
   wordGapAvg:0,          /* their current speaking pace, in ms per word */
   lastEndpointMs:null,   /* silence held after the last word before committing */
   fillerToken:0, queue:null,
-  transcript:[], startedAt:0,
+  transcript:[], seedCount:0, startedAt:0,
   abort:null,
   level:0, targetLevel:0,
   timers:{}
@@ -4646,6 +4720,10 @@ function recEnsure(){
        average would make the endpointer wait a very long time for the next
        one. The last few are enough -- people change pace mid-sentence. */
     var nowW = Date.now();
+    /* Unchanged text means the recogniser has settled; changed text means
+       they are still talking, and the count starts over. */
+    if(heard === live.lastInterim) live.interimRepeats++;
+    else { live.lastInterim = heard; live.interimRepeats = 0; }
     if(live.lastWordAt){
       var gapW = nowW - live.lastWordAt;
       if(gapW >= 20 && gapW <= 1200){
@@ -4687,8 +4765,16 @@ function recEnsure(){
       liveTimer('finalGrace', function(){ if(current()) recCommit(finalText, ep); }, LIVE_FINAL_GRACE_MS);
       return;
     }
-    /* No final yet. Rearm the hold on every new interim, so the timer only
-       fires once the transcript has genuinely stopped moving. */
+    /* No final yet. The hold is armed when the transcript CHANGES -- and,
+       crucially, is left alone when it does not.
+
+       Rearming on every interim looked equivalent and was not: recognisers
+       re-send the settled text repeatedly while they think, and every one of
+       those repeats pushed the commit a further full hold into the future.
+       The wait therefore did not measure silence at all, it measured how long
+       the engine kept chattering about a phrase the person had already
+       finished. Measured on a settled "Hi": 585ms, against the 280ms the
+       timer was set to. */
     var hold = interimHoldMs(heard);
     if(hold < 0){
       /* Still mid-sentence. Anything speculated for the shorter phrase is
@@ -4698,6 +4784,9 @@ function recEnsure(){
       return;
     }
     var settled = heard;
+    var unchanged = (heard === live.holdText) && !!live.timers['interimHold'];
+    if(unchanged) return;            /* the clock is already running; let it run */
+    live.holdText = heard;
     /* The wait below is the only reason this sentence is not already being
        answered. Start on it now; if more words arrive, specStart is called
        again with the fuller text and throws this one away. */
@@ -4873,6 +4962,7 @@ function recCommit(text, ep){
   live.lastEndpointMs = live.lastWordAt ? (now - live.lastWordAt) : null;
   live.heardAt = 0; live.lastWordAt = 0;
   live.wordGaps = []; live.wordGapAvg = 0;   /* the next utterance has its own pace */
+  live.lastInterim = ''; live.interimRepeats = 0; live.holdText = '';
   live.lastCommand = q.toLowerCase();
   live.lastCommandAt = now;
   live.sessionId++;               /* orphan every callback from the engine that just ended */
@@ -6156,7 +6246,7 @@ function specStart(text){
         if(spec !== s && !s.adopted) return;
         s.buffer = full;
         if(s.sink) s.sink(piece, full);
-      }, { lite: !s.lc });
+      }, { lite: !s.lc });   /* see voiceLite in liveAsk: evidence escalates, not this */
 
       s.reply = reply;
       return reply;
@@ -6282,6 +6372,11 @@ async function liveAsk(question){
       }
       if(!state.user) bumpUsage();
       live.transcript.push({ role:'assistant', content:reply });
+      /* Into the shared context, so text mode knows this was said, and into
+         long-term memory, so a spoken conversation is worth as much to future
+         recommendations as a typed one. Both fire and forget. */
+      rememberTurn(question, reply);
+      extractMemory(question, reply);
       liveCaption(reply, 'bot');
       queueC.end(reply);
       return;
@@ -6329,11 +6424,11 @@ async function liveAsk(question){
       { role:'system', content: voiceSystemPrompt(!!lc) }
     ].concat(history).concat([{ role:'user', content: question }]);
 
-    /* The small model is right for chat -- a spoken pleasantry does not need
-       120b of reasoning, and 20b starts generating sooner. It is wrong for
-       reading ten web sources and reporting what they say, which is the
-       exact task the orb was getting wrong. So: fast model when answering
-       from its own knowledge, full model when answering from evidence. */
+    /* 20b answers everything now, and the presence of evidence is what
+       escalates -- which streamAI derives from the live context itself, so
+       this flag no longer chooses the model. It is left in place because the
+       deployed function may be an older one that still reads it, and it says
+       the same thing either way. */
     var voiceLite = !lc;
 
     /* Generation and synthesis overlap from here. The first finished
@@ -6361,6 +6456,8 @@ async function liveAsk(question){
     }
     if(!state.user) bumpUsage();
     live.transcript.push({ role:'assistant', content:reply });
+    rememberTurn(question, reply);
+    extractMemory(question, reply);
     liveCaption(reply, 'bot');
     queue.end(reply);
   }catch(e){
@@ -6374,16 +6471,21 @@ async function liveAsk(question){
 }
 
 /* ================= saving into Channels ================= */
+/* Only what was actually said aloud in this session -- the seeded turns
+   belong to the typed conversation and are already saved there. */
+function liveOwnTurns(){
+  return live.transcript.slice(live.seedCount || 0);
+}
 function liveSessionTitle(){
-  var first = null;
-  for(var i=0;i<live.transcript.length;i++){
-    if(live.transcript[i].role === 'user'){ first = live.transcript[i].content; break; }
+  var own = liveOwnTurns(), first = null;
+  for(var i=0;i<own.length;i++){
+    if(own[i].role === 'user'){ first = own[i].content; break; }
   }
   if(!first) return 'Voice session';
   return cleanTitle(first).slice(0, 46) || 'Voice session';
 }
 function saveLiveSession(){
-  var turns = live.transcript.filter(function(m){ return m.role === 'user'; }).length;
+  var turns = liveOwnTurns().filter(function(m){ return m.role === 'user'; }).length;
   if(turns < 1) return null;
   var chats = loadChats();
   var entry = {
@@ -6393,7 +6495,7 @@ function saveLiveSession(){
     titled: true,
     ts: Date.now(),
     durationMs: Date.now() - live.startedAt,
-    messages: live.transcript.slice(-60)
+    messages: liveOwnTurns().slice(-60)
   };
   chats.unshift(entry);
   saveChats(chats);
@@ -6534,7 +6636,23 @@ function openLive(){
   live.on = true;
   live.muted = false;
   live.locked = true;                 /* the greeting owns the turn */
-  live.transcript = []; live.startedAt = Date.now();
+  /* THE ORB JOINS THE CONVERSATION; IT DOES NOT START A NEW ONE.
+
+     This used to be an empty array, which is why the orb behaved like a
+     stranger: you could ask about someone in text mode, open the orb, say
+     "how old is he", and be answered as though the question had arrived out
+     of nowhere -- while text mode, one tap away, knew exactly who "he" was.
+
+     state.history is the authoritative rolling context and already survives
+     reloads with the chat, so the orb seeds from it and writes back into it.
+     seedCount marks where the spoken part of this session begins, so saving
+     it later stores the conversation that happened here rather than a second
+     copy of the typed one. */
+  live.transcript = sharedHistory().map(function(m){
+    return { role: m.role, content: String(m.content || '') };
+  });
+  live.seedCount = live.transcript.length;
+  live.startedAt = Date.now();
   live.lastCommand = ''; live.lastCommandAt = 0;
   live.errorStreak = 0; live.quietStreak = 0;
   live.fillerToken = 0;
@@ -6581,7 +6699,7 @@ function closeLive(){
   document.getElementById('liveOverlay').classList.remove('show');
   var saved = saveLiveSession();
   if(saved){ haptic('done'); showLiveSaved(); }
-  live.transcript = [];
+  live.transcript = []; live.seedCount = 0;
 }
 
 
@@ -8062,6 +8180,11 @@ async function streamAI(messages, signal, liveContext, onDelta, opts){
   var body = JSON.stringify({
     messages: messages,
     liveContext: liveContext || '',
+    /* 20b is the default everywhere now, so nothing has to ask for it. What
+       the server needs to be told is when the work is genuinely heavier than
+       that: evidence to read. `lite` is still sent so an older deployed
+       function keeps behaving, and is ignored by the current one. */
+    heavy: !!String(liveContext || '').trim() || !!opts.report,
     lite: opts.lite || ((typeof currentTier !== 'undefined' && currentTier === 'lite') && !opts.report),
     deep: !!thinkOn || !!opts.report,
     /* a deep-research report gets a much larger evidence window and far more
@@ -8102,7 +8225,9 @@ async function callAI(messages, isVision, signal, liveContext){
   var r = await fetchTimeout('/.netlify/functions/groq', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ messages:messages, vision:!!isVision, liveContext: liveContext || '', lite: (typeof currentTier !== 'undefined' && currentTier === 'lite') }),
+    body:JSON.stringify({ messages:messages, vision:!!isVision, liveContext: liveContext || '',
+      heavy: !!String(liveContext || '').trim(),
+      lite: (typeof currentTier !== 'undefined' && currentTier === 'lite') }),
     signal:signal
   }, 28000, signal);
   var d = await r.json();
@@ -9291,9 +9416,7 @@ async function sendMessage(text){
       autoTitleChat(activeChatId, text, deepOut.text);
       extractMemory(text, deepOut.text);
       if(mailToggleOn){ sendReplyAsEmail(text, deepOut.text); }
-      state.history.push({ role:'user', content: text });
-      state.history.push({ role:'assistant', content: deepOut.text.slice(0, 1500) });
-      if(state.history.length > 16) state.history = state.history.slice(-16);
+      rememberTurn(text, deepOut.text);
     }catch(deepErr){
       var stopped = currentAbort === null || (deepErr && deepErr.name === 'AbortError');
       if(deepBubble){
@@ -9480,9 +9603,7 @@ async function sendMessage(text){
     if(chatQ) chatQ.end(reply); else { speak(reply); turnEnd(); }
     extractMemory(text, reply); /* fire-and-forget, never blocks the UI */
     if(mailToggleOn){ sendReplyAsEmail(text, reply); }
-    state.history.push({ role:'user', content: text });
-    state.history.push({ role:'assistant', content: reply.slice(0, 1500) });
-    if(state.history.length > 16) state.history = state.history.slice(-16);
+    rememberTurn(text, reply);
   }catch(e){
     removeThinking();
     if(chatQ) chatQ.cancel();

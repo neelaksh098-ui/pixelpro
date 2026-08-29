@@ -3,8 +3,17 @@
 // they are generated instead of arriving in one lump at the end.
 // The classic buffered endpoint (/groq) stays as an automatic fallback.
 
-const MODEL = "openai/gpt-oss-120b";
-const FALLBACK_MODEL = "openai/gpt-oss-20b";
+// 20b is the PRIMARY model, because for this application speed is the
+// feature. It answers ordinary conversation and every spoken turn, and it
+// starts generating markedly sooner than 120b -- which matters most on the
+// voice path, where the first token is the first word the user hears.
+//
+// 120b is kept for the one job it is measurably better at and which is not
+// speed-critical: reading a pile of retrieved web pages and reporting what
+// they actually say. A grounded answer is the escalation, and deep research
+// is the extreme of it. Everything else is 20b.
+const MODEL = "openai/gpt-oss-20b";
+const ESCALATE_MODEL = "openai/gpt-oss-120b";
 
 export default async (req) => {
   const CORS = {
@@ -52,7 +61,13 @@ export default async (req) => {
     });
   }
 
-  const model = payload.lite ? FALLBACK_MODEL : MODEL;
+  // Escalate only when the work genuinely needs it: evidence to synthesise,
+  // or a research report. `heavy` is the client saying so explicitly; the
+  // presence of live context says so on its own, so a caller that forgets
+  // the flag still gets the right model rather than a worse answer.
+  // `lite` is still accepted from older callers and now means the default.
+  const heavy = payload.heavy === true || payload.report === true || !!String(payload.liveContext || "").trim();
+  const model = heavy ? ESCALATE_MODEL : MODEL;
   const maxTokens = isReport ? 8000 : (payload.deep ? 2600 : 1500);
   const temperature = isReport ? 0.25 : (payload.deep ? 0.3 : 0.35);
 
@@ -86,8 +101,12 @@ export default async (req) => {
     if (upstream.status === 400) {
       upstream = await openStream(model, false);
     }
-    if (!upstream.ok && (upstream.status === 429 || upstream.status >= 500) && model !== FALLBACK_MODEL) {
-      upstream = await openStream(FALLBACK_MODEL, true);
+    // Rate-limited or broken: try the other size rather than failing. From
+    // 20b that is an escalation and from 120b a step down, and either is
+    // better than no answer.
+    if (!upstream.ok && (upstream.status === 429 || upstream.status >= 500)) {
+      const other = model === MODEL ? ESCALATE_MODEL : MODEL;
+      upstream = await openStream(other, true);
     }
   } catch {
     return new Response(JSON.stringify({ error: "Upstream Groq error." }), { status: 502, headers: { ...CORS, "Content-Type": "application/json" } });

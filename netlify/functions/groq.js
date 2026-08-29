@@ -1,10 +1,13 @@
 // Pixel Pro — Groq backend
 // Fast everyday answers and image understanding. API key stays server-side.
-const MODEL = "openai/gpt-oss-120b";
+// Primary everywhere, for the same reason as the streaming endpoint: this is
+// the model the fast path runs on. See chat-stream.mjs.
+const MODEL = "openai/gpt-oss-20b";
 // A smaller sibling model on its own separate daily quota — used only as an
 // automatic fallback the moment the primary model reports it is rate
 // limited, so a busy day never surfaces as a dead end to the user.
-const FALLBACK_MODEL = "openai/gpt-oss-20b";
+const ESCALATE_MODEL = "openai/gpt-oss-120b";
+const FALLBACK_MODEL = ESCALATE_MODEL;   /* kept for the call sites below */
 // Llama 4 Maverick — Groq's flagship natively-multimodal model, used for
 // image understanding. Swap here if Groq's model catalog changes.
 const VISION_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
@@ -176,9 +179,12 @@ Do NOT answer the question. Classify only.`;
   }
 
   try {
-    // Pixel Lite explicitly asks for the smaller/faster model -- genuinely
-    // quicker, not just a relabeled version of the same model.
-    const model = payload.vision ? VISION_MODEL : (payload.lite ? FALLBACK_MODEL : MODEL);
+    // 20b is the default here too. `heavy` -- evidence to synthesise -- is
+    // the only thing that escalates, and live context implies it even if the
+    // caller did not say so. `lite` used to select the small model and now
+    // describes what already happens, so it is simply ignored.
+    const heavy = payload.heavy === true || !!String(payload.liveContext || "").trim();
+    const model = payload.vision ? VISION_MODEL : (heavy ? ESCALATE_MODEL : MODEL);
     const temperature = payload.vision ? 0.2 : 0.35;
     const maxTokens = payload.vision ? 1400 : 900; // back to the original budget — 4000 was draining the daily token quota far too fast
     // A photo is a megabyte or two of upload before inference even starts, so
@@ -194,11 +200,11 @@ Do NOT answer the question. Classify only.`;
       // decommissioned model and the photo simply failed. It gets the same
       // treatment as text now.
       res = await callGroqChat(KEY, VISION_FALLBACK_MODEL, messages, temperature, maxTokens, timeoutMs);
-    } else if (!res.ok && !payload.vision && model !== FALLBACK_MODEL && isRateLimited(res.status, res.data)) {
-      res = await callGroqChat(KEY, FALLBACK_MODEL, messages, temperature, maxTokens, timeoutMs);
-    } else if (!res.ok && !payload.vision && model === FALLBACK_MODEL && isRateLimited(res.status, res.data)) {
-      // Pixel Lite's own model is rate limited too -- fall back up to the main model rather than retrying the same one.
-      res = await callGroqChat(KEY, MODEL, messages, temperature, maxTokens, timeoutMs);
+    } else if (!res.ok && !payload.vision && isRateLimited(res.status, res.data)) {
+      // Out of quota on one size: the other has its own, and an answer from
+      // the wrong size beats no answer.
+      const other = model === MODEL ? ESCALATE_MODEL : MODEL;
+      res = await callGroqChat(KEY, other, messages, temperature, maxTokens, timeoutMs);
     }
 
     if (!res.ok) {
