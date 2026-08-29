@@ -27,7 +27,8 @@ After generating the release certificate, publish the SHA-256 fingerprint in `ht
 - Groq handles fast everyday chat and image questions.
 - Tavily Search handles current/live web questions.
 - The previous Google AI and legacy client-side search paths are no longer used by the web app.
-- Set `GROQ_KEY` and `TAVILY_API_KEY` in Netlify environment variables.
+- Set `GROQ_KEY`, `EXA_API_KEY` and `TAVILY_API_KEY` in Netlify environment variables.
+  (Exa is the primary live-web provider; Tavily is the fallback and the deep-research provider.)
 
 ## Voice architecture
 

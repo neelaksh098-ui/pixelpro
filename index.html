@@ -6897,7 +6897,25 @@ var ROUTE_HARD_DIRECT = [
   /^\s*(hi+|hey+|hello+|yo|sup|namaste|hola|salaam|good (morning|evening|afternoon|night)|thanks?|thank you|thx|ty|ok|okay|k|kk|cool|nice|great|lol|lmao|hmm+|bye+|goodbye|see you|gn|gm)\b[\s,!.?😊🙂👍]*(there|man|bro|buddy|dude|friend|pixel|so much|a lot|very much|again)?[\s!.?😊🙂👍]*$/i,
   /^(?!.*\b(in|at|for)\s+[a-z]{3,})[^]*\b(what('s| is) the time|current time|what time is it|time (right now|is it)|what('s| is) today'?s date|today'?s date|what('s| is) the date|what day is (it|today)|which day is (it|today)|what year is it)\b/i,
   /\b(where am i|my (current )?location|what('s| is) my location|which city am i in|what city am i in)\b/i,
-  /\b(who (made|created|developed|built|owns|trained) you|what model are you|are you (chatgpt|gpt|gemini|claude)|what('s| is) your name|about yourself|who are you)\b/i
+  /\b(who (made|created|developed|built|owns|trained) you|what model are you|are you (chatgpt|gpt|gemini|claude)|what('s| is) your name|about yourself|who are you)\b/i,
+  /* Talking TO the assistant rather than asking it to look something up.
+     These reached the classifier before -- scoring zero either way -- which
+     cost a round trip on the very cheapest thing anybody says, and left the
+     door open to a search being run for "how are you". Nothing here can be
+     answered better by reading the web. */
+  /^\s*(how (are|r) (you|u)|how'?s it going|how have you been|what'?s up|wassup|whats up|how do you do|you (ok|okay|good|there)|are you (ok|okay|there|alive|real))\b[\s,!.?😊🙂👍]*$/i,
+  /^\s*(what|who|how|why)\s+do\s+you\s+(think|feel|reckon|suggest|recommend)\b/i,
+  /^\s*(can|could|will|would)\s+you\s+(help|assist)\b/i,
+  /* "What is X?" asking for a definition, where X carries no sign that the
+     present state of the world is the point.
+
+     The negative lookahead is the whole safety of this rule: any recency
+     word, price/score/release word, office, or "current/new/best" keeps the
+     sentence out of here and lets the scoring layer weigh it normally. So
+     "what is Python" is answered directly and "what is the latest iPhone",
+     "what is the score", "what is the price of gold" are not. Capped at a
+     short subject so only genuine definition questions qualify. */
+  /^\s*(what|which)\s+(is|are)\s+(a|an|the)?\s*(?!.*\b(latest|newest|new|current|currently|today|tonight|now|recent|price|cost|rate|score|result|winner|won|weather|forecast|temperature|news|release|released|launch|launched|version|available|stock|value|ceo|president|prime minister|pm|cm|chief minister|captain|coach|champion|best|top|trending|update|updated)\b)[a-z][a-z\s-]{0,32}\??\s*$/i
 ];
 var ROUTE_HARD_WEB = [
   /\b(search (the )?(web|internet|online)|search for\b|look (it|this|that|\w+) up( online)?|google (it|this|that|the|for|a|an|\w+)\b|check online|browse the web|find (it )?online|latest info on)\b/i,
@@ -8062,6 +8080,80 @@ async function resolveRoute(text, signal){
   return { needsWeb: route.web === true, route: route };
 }
 
+/* ================================================================
+   LIVE SEARCH: EXA INSTANT FIRST, TAVILY BEHIND IT
+
+   Exa's "instant" search type is documented as the lowest-latency search it
+   offers, built for real-time applications, which is precisely what a spoken
+   answer is. It is the primary provider for every ordinary live question.
+
+   Tavily is not deleted and is not dead code. It stays as the failure
+   fallback -- an Exa outage, a timeout, a missing key must not end the
+   conversation -- and it remains the provider for deep research, which issues
+   many queries and genuinely wants the heavier retrieval it was chosen for.
+   What it is no longer is the default path for "who won the match".
+
+   The fallback is strictly after the fact: nothing waits on Tavily unless Exa
+   has already failed, so a working Exa search is never slowed by the
+   existence of a second provider.
+   ================================================================ */
+var LIVE_SEARCH_PROVIDER = 'exa';   /* the fast path; 'tavily' forces the old one */
+
+async function exaSearch(query, options){
+  options = options || {};
+  var r = await fetchTimeout('/.netlify/functions/exa', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      query: String(query || '').slice(0, 400),
+      topic: options.topic || 'general',
+      timeRange: options.timeRange || undefined,
+      maxResults: options.maxResults || 6,
+      /* Ordinary questions get instant + a small evidence budget. Only the
+         research path asks for more, and it asks for it explicitly. */
+      deep: !!options.deep,
+      country: options.country || undefined,
+      includeDomains: options.includeDomains || undefined,
+      excludeDomains: options.excludeDomains || undefined,
+      timeout: options.timeout || undefined
+    })
+  }, options.timeout || 15000, options.signal);
+  var d = await r.json();
+  if(!r.ok) throw new Error(d && d.error ? d.error : 'Exa search failed');
+  return d;
+}
+
+/* The one door every ordinary live search goes through. */
+async function liveSearch(query, options){
+  options = options || {};
+  if(LIVE_SEARCH_PROVIDER === 'exa'){
+    try{
+      var out = await exaSearch(query, options);
+      if(out && out.results && out.results.length){
+        turnMark('searchProvider_exa');
+        return out;
+      }
+      /* A clean empty result is not a failure -- but it is also nothing to
+         answer from, so the other provider is worth one try before giving up. */
+    }catch(err){
+      /* The user pressing stop is not an Exa outage. */
+      if(err && err.name === 'AbortError') throw err;
+    }
+    try{
+      var alt = await tavilySearch(query, options);
+      turnMark('searchProvider_tavilyFallback');
+      return alt;
+    }catch(err2){
+      if(err2 && err2.name === 'AbortError') throw err2;
+      /* Both providers are down. Return an empty payload rather than throwing:
+         the grounding layer treats no evidence as "say you could not find it",
+         which is a better answer than an error dialog. */
+      return { answer:'', results:[] };
+    }
+  }
+  return await tavilySearch(query, options);
+}
+
 async function tavilySearch(query, options){
   options = options || {};
   var r = await fetchTimeout('/.netlify/functions/tavily', {
@@ -8814,18 +8906,20 @@ async function runSearchPlan(text, plan, signal){
   var alt = String(text || '').trim();
   var wantAlt = plan.current && alt && alt !== plan.searchQuery;
 
-  var calls = [tavilySearch(plan.searchQuery, opts)];
+  turnMark('searchStart');
+  var calls = [liveSearch(plan.searchQuery, opts)];
   if(wantAlt){
     /* Its failure must not take the primary down with it. */
-    calls.push(tavilySearch(alt, opts).catch(function(){ return null; }));
+    calls.push(liveSearch(alt, opts).catch(function(){ return null; }));
   }
   var payloads = await Promise.all(calls);
+  turnMark('searchData');
   var web = mergeSearches(payloads);
 
   /* Both formulations found nothing. The raw sentence is the last thing
      left to try, and only now is it worth waiting for. */
   if(!web.results.length && !wantAlt && alt && alt !== plan.searchQuery){
-    web = mergeSearches([await tavilySearch(alt, opts)]);
+    web = mergeSearches([await liveSearch(alt, opts)]);
   }
   return web;
 }

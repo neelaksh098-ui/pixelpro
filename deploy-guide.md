@@ -7,7 +7,8 @@ Pixel Pro uses **Groq for fast everyday AI** and **Tavily Search for live/curren
 Add these two variables to the existing Netlify site:
 
 - `GROQ_KEY` — your Groq API key
-- `TAVILY_API_KEY` — your Tavily API key
+- `EXA_API_KEY` — your Exa API key (primary live-web search, "instant" mode)
+- `TAVILY_API_KEY` — your Tavily API key (fallback if Exa fails, and deep research)
 ### Email sending (the composer's mail-toggle icon)
 
 Pick ONE provider. Brevo is used when both are configured.
@@ -412,7 +413,7 @@ under `SECRETS_SCAN_OMIT_KEYS`: model names, voice ids, audio format, sample
 rate, speed, API version, and the two sender addresses. They appear in the code
 as defaults so the app still runs if a variable is unset.
 
-`CARTESIA_API_KEY`, `GROQ_KEY`, `TAVILY_API_KEY`, `STABILITY_API_KEY` and
+`CARTESIA_API_KEY`, `GROQ_KEY`, `EXA_API_KEY`, `TAVILY_API_KEY`, `STABILITY_API_KEY` and
 `BREVO_API_KEY` are deliberately **not** in that list — if one of those ever
 turns up in a file, the build should keep failing.
 

@@ -181,7 +181,11 @@ Do NOT answer the question. Classify only.`;
   if (liveContext && !payload.vision) {
     messages.unshift({
       role: "system",
-      content: "LIVE WEB CONTEXT — retrieved moments ago from Tavily. Answer the user's exact question using the retrieved information. Prefer the Tavily answer and the most relevant source excerpts. Do NOT refuse merely because one source is incomplete or because the sources do not use the exact wording of the question. Synthesize the best supported answer from the available evidence. Mention uncertainty only when the evidence truly conflicts or is insufficient. Keep the answer concise and do not invent facts.\n\n" + liveContext.slice(0, 10000),
+      // Names no provider. It used to say "from Tavily" twice, which was one
+      // more thing to remember to change when the provider did, and told the
+      // model nothing it could act on -- what matters is that the evidence is
+      // fresh retrieval, not who fetched it.
+      content: "LIVE WEB CONTEXT — retrieved moments ago. Answer the user's exact question using the retrieved information. Prefer the most relevant and most recent source excerpts. Do NOT refuse merely because one source is incomplete or because the sources do not use the exact wording of the question. Synthesize the best supported answer from the available evidence. Mention uncertainty only when the evidence truly conflicts or is insufficient. Keep the answer concise and do not invent facts.\n\n" + liveContext.slice(0, 10000),
     });
   }
 
