@@ -22,18 +22,36 @@ function isRateLimited(status, data) {
   const type = ((data && data.error && data.error.type) || "").toLowerCase();
   return type.indexOf("rate_limit") !== -1 || msg.indexOf("rate limit") !== -1;
 }
+// Same tier chat-stream.mjs uses, for the same reason: "auto" asks Groq for
+// the best tier this account actually has and can never be worse than the
+// on_demand default omitting it means. "performance" is enterprise-only and
+// "flex" is explicitly best-effort, so neither is right to hardcode here.
+// See chat-stream.mjs for the fuller rationale -- verified against Groq's
+// documented service_tier values before either file used it.
+const SERVICE_TIER = "auto";
+
 async function callGroqChat(KEY, model, messages, temperature, maxTokens, timeoutMs) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + KEY },
-      body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
-      signal: ctrl.signal,
-    });
-    const d = await r.json();
-    return { ok: r.ok, status: r.status, data: d };
+    async function attempt(withTier) {
+      const body = { model, messages, temperature, max_tokens: maxTokens };
+      if (withTier) body.service_tier = SERVICE_TIER;
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + KEY },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      const d = await r.json();
+      return { ok: r.ok, status: r.status, data: d };
+    }
+    let res = await attempt(true);
+    // Same rule as the streaming endpoint: an account or API version that
+    // does not know the parameter must not lose its answer over it -- drop
+    // the tier and ask again, once, inside the same timeout budget.
+    if (res.status === 400) res = await attempt(false);
+    return res;
   } finally {
     clearTimeout(timer);
   }
