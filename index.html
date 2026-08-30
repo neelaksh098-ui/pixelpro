@@ -6459,7 +6459,7 @@ async function liveAsk(question){
     /* The follow-up may already be answerable from the last search. Checked
        before the search is announced, so a reused turn makes no sound and
        goes straight to the model -- which is the whole point of it. */
-    var reused = needsWeb ? reusableEvidence(question) : '';
+    var reused = needsWeb ? reusableEvidence(question, !!(resolved.route && resolved.route.inherited)) : '';
     if(reused){
       lc = reused;
       needsWeb = false;
@@ -6977,6 +6977,12 @@ var ROUTE_HARD_DIRECT = [
      web cannot solve your equation or fix your code, and these were scoring
      zero either way and paying a classifier round trip to establish it. */
   /^\s*(solve|calculate|compute|work out|fix|debug|refactor|simplify|factor|expand|convert|proofread|shorten|lengthen|outline|brainstorm)\b/i,
+  /* "How do I ..." is a how-to, and "tell me about X" is a description. Both
+     were reaching the classifier on a 0-0 score -- a round trip, and a chance
+     of a search, for "how do I center a div". The lookahead is what keeps
+     "how do I get the latest version" and "tell me about today's news" out. */
+  /^\s*how\s+(do|can|would|should)\s+(i|you|we)\b(?!.*\b(latest|newest|current|today|tonight|now|recent|price|cost|score|buy|order|book|available|release|version|update)\b)/i,
+  /^\s*tell me about\b(?!.*\b(latest|newest|current|today|tonight|now|recent|new|price|score|winner|result|release|version|update|trending)\b)/i,
   /* "What is X?" asking for a definition, where X carries no sign that the
      present state of the world is the point.
 
@@ -6999,7 +7005,14 @@ var ROUTE_HARD_WEB = [
 
      "the best WAY to" is excluded: that is asking for advice, which the model
      has, not for a market position, which it does not. */
-  /^\s*(what|which|who)\s+(is|are)\s+the\s+(?!best\s+(way|method|approach|practice|time|thing|place)\b)(latest|newest|current|present|best|top|new)\b/i
+  /^\s*(what|which|who)\s+(is|are)\s+the\s+(?!best\s+(way|method|approach|practice|time|thing|place)\b)(latest|newest|current|present|best|top|new)\b/i,
+  /* "The score", "the price", "the result" -- a definite article on a reading
+     that only exists in the present. There is no static answer to "what is
+     the score"; it either means right now or it means nothing. These were
+     landing short of the local margin and deferring to a classifier that can
+     get them wrong with high confidence, which is the one way a clearly
+     current question was still reaching a direct answer. */
+  /^\s*(what|what's|whats)\s+(is\s+)?the\s+(score|result|results|standings|exchange rate|price|rate|weather|forecast|temperature)\b/i
 ];
 
 /* ---------- layer 1: evidence ---------- */
@@ -7269,13 +7282,28 @@ function rememberEvidence(query, context){
   lastLiveEvidence = { context: context, query: String(query || ''), at: Date.now() };
 }
 
-function reusableEvidence(text){
+/* A follow-up that names a DIFFERENT slice of the topic -- another day,
+   another place -- is asking for something the last search did not fetch.
+   "What about tomorrow" after today's weather genuinely needs a new search;
+   "why?" and "tell me more" do not. */
+var FOLLOWUP_NEW_SLICE = /\b(tomorrow|today|tonight|yesterday|now|latest|current|next (week|month|year|match|game)|last (week|month|year|night)|this (week|month|year)|in [a-z]{3,}|for [a-z]{3,}|instead)\b/i;
+
+function reusableEvidence(text, inherited){
   var t = String(text || '').trim();
   if(!t || !lastLiveEvidence.context) return '';
   if(Date.now() - lastLiveEvidence.at > EVIDENCE_REUSE_MS) return '';
   var words = t.split(/\s+/).filter(Boolean).length;
   if(words > 9) return '';                       /* long enough to be its own question */
-  if(!/\b(it|its|he|him|his|she|her|they|them|their|that|those|this|there)\b/i.test(t)) return '';
+
+  /* Two ways in. An anaphor -- "where was it played" -- is the original and
+     strongest signal. The second is a web decision this question did not
+     earn: it inherited one because the previous turn searched, which makes it
+     a follow-up about that search's subject and answerable from that search's
+     evidence. Either way, a follow-up naming a new slice is excluded and goes
+     and fetches it properly. */
+  var anaphor = /\b(it|its|he|him|his|she|her|they|them|their|that|those|this|there)\b/i.test(t);
+  if(!anaphor && !inherited) return '';
+  if(FOLLOWUP_NEW_SLICE.test(t)) return '';
   return lastLiveEvidence.context;
 }
 
@@ -7306,9 +7334,18 @@ function routeDecide(text){
   directScore += d.directBonus || 0;
   d.notes.forEach(function(n){ why.push('damper ' + n); });
 
-  /* A short follow-up carries no signals of its own -- inherit. */
+  /* A short follow-up carries no signals of its own -- inherit.
+
+     Flagged as inherited, because a decision borrowed from the previous turn
+     is not the same thing as one this question earned. "Why?", "tell me
+     more", "go on", "are you sure?" after a live answer were all inheriting
+     'web' and running a SECOND full search -- measured, eleven of fourteen
+     ordinary conversational follow-ups did. None of them needs the web; they
+     need what was already fetched, or just the conversation. The callers use
+     this flag to reuse the evidence they are still holding instead. */
   if(Math.abs(webScore - directScore) < ROUTE_MARGIN && routeIsFollowUp(t) && routeLastDecision){
-    return { decision: routeLastDecision, confidence: 0.7, why: why.concat(['follow-up, inherited ' + routeLastDecision]) };
+    return { decision: routeLastDecision, confidence: 0.7, inherited: true,
+             why: why.concat(['follow-up, inherited ' + routeLastDecision]) };
   }
 
   var margin = webScore - directScore;
@@ -8194,8 +8231,12 @@ async function resolveRoute(text, signal){
   }
   if(local.decision === 'web'){
     /* Confident enough locally: no round trip, no rewrite, straight to the
-       search. This is the common path and it stays as fast as it was. */
-    return { needsWeb:true, route:{ web:true, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' } };
+       search. This is the common path and it stays as fast as it was.
+
+       `inherited` travels with it so a caller can tell a question that earned
+       its own web decision from one that merely borrowed the previous turn's. */
+    return { needsWeb:true, route:{ web:true, confidence:local.confidence, searchQuery:text,
+                                    topic:'general', freshness:'none', inherited: !!local.inherited } };
   }
   var route;
   try{
@@ -9736,7 +9777,7 @@ async function sendMessage(text){
 
     /* Same rule as the orb: a short referential follow-up is answered from
        the evidence already fetched rather than fetching it again. */
-    var reusedText = (!imgForThisTurn && needsLive) ? reusableEvidence(text) : '';
+    var reusedText = (!imgForThisTurn && needsLive) ? reusableEvidence(text, !!(route && route.inherited)) : '';
     if(reusedText){ needsLive = false; turnMark('evidenceReused'); }
 
     if(reusedText){
