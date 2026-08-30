@@ -5071,22 +5071,74 @@ function liveSpeak(text, done){
   });
 }
 
-/* A short, honest line while a web search runs. It is not a stall for its
-   own sake -- the search really is happening -- it just stops two seconds of
-   dead air reading as a crash. Fire-and-forget: its own completion must never
-   move the state machine, because the real answer owns that. */
-var LIVE_FILLERS = [
-  'Let me look that up.',
-  'One moment, checking that now.',
-  'Give me a second, I am looking it up.'
-];
-function speakFiller(){
+/* ================================================================
+   THE SEARCH CHIME
+
+   A web search used to be announced by speaking: "Let me look that up."
+   That was a sentence the user had to sit through before the answer could
+   begin, it needed a TTS round trip of its own to produce, and it said
+   nothing the orb's own state was not already showing.
+
+   A short tone says the same thing in a fifth of the time and costs no
+   network at all -- it is two oscillators and an envelope, generated in the
+   AudioContext that is already open and warm. Two soft notes rising, about
+   200ms, at low gain: enough to register as "checking", not enough to
+   become the thing you remember about the app.
+
+   Three rules it must not break, all enforced here rather than by callers:
+   it plays only when a real search starts, exactly once per turn, and it
+   never blocks. Nothing awaits it; the search request has already left.
+   ================================================================ */
+var SEARCH_CHIME_NOTES = [1318.5, 1760.0];   /* E6 -> A6, a clean rising pair */
+var searchChimeTurn = -1;                    /* the turn that has already chimed */
+
+function playSearchChime(){
+  try{
+    var c = audioCtx();
+    if(!c || c.state === 'suspended') return;     /* never force audio open for this */
+    var t0 = c.currentTime + 0.005;
+    var master = c.createGain();
+    master.gain.value = 0.16;                     /* deliberately quiet */
+    master.connect(c.destination);
+    SEARCH_CHIME_NOTES.forEach(function(freq, i){
+      var at = t0 + i * 0.085;
+      var osc = c.createOscillator();
+      var g = c.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, at);
+      /* A struck-bell envelope: immediate attack, exponential decay. A linear
+         fade sounds like a beep; this sounds like a chime. */
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(1, at + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+      osc.connect(g); g.connect(master);
+      osc.start(at);
+      osc.stop(at + 0.18);
+    });
+  }catch(e){ /* a missing or blocked AudioContext must never break a search */ }
+}
+
+/* Called at the moment a real live search begins. Fire-and-forget by
+   construction: it returns immediately and the caller continues into the
+   search on the same tick. */
+function signalSearching(){
   var token = ++live.fillerToken;
-  var line = LIVE_FILLERS[Math.floor(Math.random() * LIVE_FILLERS.length)];
-  liveCaption(line, 'bot');
-  speakAloud(line, function(){ /* deliberately does nothing */ });
+  /* One chime per turn, whatever the shape of the turn. A speculation that
+     is later adopted, a retry, or a fallback to the second provider all
+     belong to the same search as far as the listener is concerned. */
+  if(searchChimeTurn !== live.sessionId){
+    searchChimeTurn = live.sessionId;
+    playSearchChime();
+  }
+  /* No words on the caption either: the orb's searching state already says
+     this, and text here would be read out by Read Aloud and matched by the
+     echo guard as though it were speech. */
+  liveCaption('', 'bot');
   return token;
 }
+
+/* Kept so older call sites and tests keep working; it no longer speaks. */
+function speakFiller(){ return signalSearching(); }
 
 
 /* ================================================================
@@ -6337,7 +6389,7 @@ async function liveAsk(question){
         /* The search this speculation started is still running, so the
            turn still owes the user a word about it. */
         liveGo('searching');
-        speakFiller();
+        signalSearching();
       }
       live.fillerToken++;
       var spokenAllC = false;
@@ -6356,7 +6408,10 @@ async function liveAsk(question){
         liveCaption(full, 'bot');
         queueC.feed(full);
       };
-      if(claimed.lc) turnMark('searchDone');
+      /* An adopted speculation did the search for this turn, so its evidence
+         is this turn's evidence and a follow-up may reuse it. A speculation
+         that was never adopted deliberately remembers nothing. */
+      if(claimed.lc){ turnMark('searchDone'); rememberEvidence(question, claimed.lc); }
       if(claimed.buffer){
         turnMark('firstToken');
         liveCaption(claimed.buffer, 'bot');
@@ -6401,14 +6456,26 @@ async function liveAsk(question){
     var needsWeb = resolved.needsWeb;
     routeLastDecision = needsWeb ? 'web' : 'direct';   /* spoken follow-ups inherit it too */
 
+    /* The follow-up may already be answerable from the last search. Checked
+       before the search is announced, so a reused turn makes no sound and
+       goes straight to the model -- which is the whole point of it. */
+    var reused = needsWeb ? reusableEvidence(question) : '';
+    if(reused){
+      lc = reused;
+      needsWeb = false;
+      turnMark('evidenceReused');
+      if(turnT) turnT.ctxChars = lc.length;
+    }
+
     if(needsWeb){
       liveGo('searching');
-      /* A search costs a second or two of silence, and silence reads as a
-         crash. Say something true while it runs. */
-      speakFiller();
+      /* One short chime, not a spoken sentence: the search really is
+         happening and the orb's own state already says so. */
+      signalSearching();
       var plan = buildSearchPlan(question, resolved.route);
       var liveWeb = await runSearchPlan(question, plan, signal);
       lc = buildLiveContext(liveWeb, question);
+      rememberEvidence(question, lc);
       if(sid !== live.sessionId) return;
       /* Evidence size is a latency input, not a curiosity: time to first
          token scales with it. It belongs beside the timings it explains. */
@@ -6906,6 +6973,10 @@ var ROUTE_HARD_DIRECT = [
   /^\s*(how (are|r) (you|u)|how'?s it going|how have you been|what'?s up|wassup|whats up|how do you do|you (ok|okay|good|there)|are you (ok|okay|there|alive|real))\b[\s,!.?😊🙂👍]*$/i,
   /^\s*(what|who|how|why)\s+do\s+you\s+(think|feel|reckon|suggest|recommend)\b/i,
   /^\s*(can|could|will|would)\s+you\s+(help|assist)\b/i,
+  /* Work handed to the assistant to do, not a question about the world. The
+     web cannot solve your equation or fix your code, and these were scoring
+     zero either way and paying a classifier round trip to establish it. */
+  /^\s*(solve|calculate|compute|work out|fix|debug|refactor|simplify|factor|expand|convert|proofread|shorten|lengthen|outline|brainstorm)\b/i,
   /* "What is X?" asking for a definition, where X carries no sign that the
      present state of the world is the point.
 
@@ -6919,7 +6990,16 @@ var ROUTE_HARD_DIRECT = [
 ];
 var ROUTE_HARD_WEB = [
   /\b(search (the )?(web|internet|online)|search for\b|look (it|this|that|\w+) up( online)?|google (it|this|that|the|for|a|an|\w+)\b|check online|browse the web|find (it )?online|latest info on)\b/i,
-  /https?:\/\/\S+/i                                                  /* a URL to go and read */
+  /https?:\/\/\S+/i,                                                 /* a URL to go and read */
+  /* "What is THE LATEST / CURRENT / BEST X" -- a definite article followed by
+     a superlative or a recency word is asking for the state of the world, and
+     there is no reading of it that is not. These were scoring 5 against 3,
+     short of the margin, so every one of them paid a classifier round trip to
+     be told what the shape of the sentence already said.
+
+     "the best WAY to" is excluded: that is asking for advice, which the model
+     has, not for a market position, which it does not. */
+  /^\s*(what|which|who)\s+(is|are)\s+the\s+(?!best\s+(way|method|approach|practice|time|thing|place)\b)(latest|newest|current|present|best|top|new)\b/i
 ];
 
 /* ---------- layer 1: evidence ---------- */
@@ -7126,6 +7206,29 @@ function routeDampers(t, webScore){
   if(/\b(what (does|do) .{1,30} (mean|stand for)|meaning of|definition of|full form of|define )\b/i.test(t)){
     adj -= 5; directBonus += 3; notes.push('definition, not status');
   }
+  /* THE DEFINITE ARTICLE IS THE TELL.
+
+     "What is weather" asks what weather IS. "What is THE weather" asks what
+     it is doing right now. Same noun, opposite questions, and the article
+     separates them reliably -- which is exactly why a keyword list cannot
+     decide this on its own. Measured: "What is weather?" was running a live
+     search purely because the word appeared.
+
+     Nouns that ARE a current measurement are excluded, because for those the
+     bare form is current too: "what is gold price" wants today's price, not
+     an essay on pricing. */
+  if(/^\s*(what|which)\s+(is|are)\s+(?!the\b|a\b|an\b|my\b|our\b|your\b)[a-z][a-z\s-]{0,28}\s*\??\s*$/i.test(t) &&
+     !/\b(price|rate|cost|score|value|temperature|population|version|winner|result|news|stock|share|standings|ranking)\b/i.test(t) &&
+     !/\b(today|tonight|now|current|currently|latest|new|recent|yesterday|tomorrow|this (week|month|year))\b/i.test(t)){
+    adj -= 7; directBonus += 4; notes.push('bare concept question');
+  }
+  /* "Who was X" is a question about the past unless something in the sentence
+     drags it into the present. "Who was Ada Lovelace" and "who was the first
+     president" are history; "who was the winner last night" is not. */
+  if(/\bwho\s+(was|were)\b/i.test(t) &&
+     !/\b(today|tonight|yesterday|now|current|currently|latest|recent|this (week|month|year)|last (night|week|month))\b/i.test(t)){
+    adj -= 4; directBonus += 3; notes.push('past tense, no recency');
+  }
   /* Historical framing */
   if(/\b(history of|origin of|who invented|who discovered|when was .{1,40} (invented|founded|discovered|built|established))\b/i.test(t)){
     adj -= 3; notes.push('historical fact');
@@ -7140,6 +7243,40 @@ function routeIsFollowUp(t){
   if(w > 7) return false;
   return /^(and|what about|how about|ok(ay)? (and|but)|also|then|what if|why|why not|really|are you sure|more|tell me more|go on|continue|the price|the cost|in \w+\??|for \w+\??)\b/i.test(t.trim()) ||
          /^(it|that|those|they|he|she|them|this)\b/i.test(t.trim());
+}
+
+/* ================================================================
+   EVIDENCE ALREADY IN HAND
+
+   "Who won the match?" runs a search. "Where was it played?" was running a
+   second one -- a short follow-up inherits the previous turn's web decision,
+   which is right, and then paid for retrieval it already had, which is not.
+   The answer to the follow-up is almost always sitting in the evidence
+   fetched a moment ago.
+
+   Reuse is deliberately narrow. It requires an anaphor -- "it", "he",
+   "there", "that" -- because a pronoun with no new subject is the one
+   unambiguous signal that the question is about what was just retrieved.
+   "Who scored?" is a follow-up to a human and is not accepted here; it
+   searches, which is slower and cannot be wrong. Guessing from stale
+   evidence to save a second is the trade this must never make.
+   ================================================================ */
+var lastLiveEvidence = { context:'', query:'', at:0 };
+var EVIDENCE_REUSE_MS = 300000;        /* five minutes; older is a new topic */
+
+function rememberEvidence(query, context){
+  if(!context) return;
+  lastLiveEvidence = { context: context, query: String(query || ''), at: Date.now() };
+}
+
+function reusableEvidence(text){
+  var t = String(text || '').trim();
+  if(!t || !lastLiveEvidence.context) return '';
+  if(Date.now() - lastLiveEvidence.at > EVIDENCE_REUSE_MS) return '';
+  var words = t.split(/\s+/).filter(Boolean).length;
+  if(words > 9) return '';                       /* long enough to be its own question */
+  if(!/\b(it|its|he|him|his|she|her|they|them|their|that|those|this|there)\b/i.test(t)) return '';
+  return lastLiveEvidence.context;
 }
 
 /* ---------- the decision ---------- */
@@ -8069,11 +8206,18 @@ async function resolveRoute(text, signal){
     }
   }catch(routerError){
     if(routerError && routerError.name === 'AbortError') throw routerError;
-    /* Router unreachable: fall back to the local lean, and to searching when
-       even that is a coin flip. A needless search costs a second; a stale
-       answer costs the whole turn. */
+    /* Router unreachable. Fall back to the local lean -- but STRICTLY, so a
+       question with no evidence either way does not search.
+
+       This used to be `>=`, which made a 0-0 tie a search. That is the
+       classifier being unavailable turning into a web request for "solve
+       this math problem", "how do I center a div", "tell me about the Eiffel
+       Tower" -- every one of which scores zero both ways and none of which
+       has anything to gain from the live web. Uncertainty is not evidence of
+       freshness, and it must not be spent as though it were. A question that
+       genuinely leans current still leans current here and still searches. */
     route = {
-      web: (local.webScore || 0) >= (local.directScore || 0),
+      web: (local.webScore || 0) > (local.directScore || 0),
       confidence: 0, searchQuery: text, topic:'general', freshness:'none'
     };
   }
@@ -9590,7 +9734,19 @@ async function sendMessage(text){
       routeLastDecision = needsLive ? 'web' : 'direct';   /* short follow-ups inherit this */
     }
 
-    if(!imgForThisTurn && needsLive){
+    /* Same rule as the orb: a short referential follow-up is answered from
+       the evidence already fetched rather than fetching it again. */
+    var reusedText = (!imgForThisTurn && needsLive) ? reusableEvidence(text) : '';
+    if(reusedText){ needsLive = false; turnMark('evidenceReused'); }
+
+    if(reusedText){
+      setThinking('Thinking…');
+      var reuseMessages = [{ role:'system', content: systemPrompt() +
+        ' You have been given live web results retrieved moments ago for the previous question in this conversation. Answer ONLY from that evidence for anything time-sensitive. If it does not actually cover what was asked, say so plainly instead of guessing.' }]
+        .concat(state.history.slice(-8))
+        .concat([{ role:'user', content:text }]);
+      streamMessages = reuseMessages; streamLive = reusedText;
+    } else if(!imgForThisTurn && needsLive){
       turnMark('routeDone');
       setThinking('Searching live web…', '\ud83d\udd0e');
       /* Identical behaviour to before, now expressed as the shared plan the
@@ -9600,6 +9756,7 @@ async function sendMessage(text){
       turnMark('searchDone');
       sources = rankedSources(web);
       var liveContext = buildLiveContext(web, text);
+      rememberEvidence(text, liveContext);
       var liveMessages = [{ role:'system', content: systemPrompt() +
         ' You have been given live web results retrieved seconds ago. Answer ONLY from that evidence for anything time-sensitive. Lead with the direct answer in the first sentence. Give exact figures, names and dates as reported, and say when the information is from. If sources disagree, say so and give the most recent. If the evidence does not actually answer the question, say that plainly instead of guessing.' }]
         .concat(state.history.slice(-8))
