@@ -6117,8 +6117,20 @@ function makeSpeechQueue(sid, opts){
 var turnTimings = [];
 var turnT = null;
 
+var turnSeq = 0;
 function turnStart(){
-  turnT = { t0: Date.now(), marks: {} };
+  /* IDENTITY, so a trace from a real phone can be read.
+
+     One utterance produces one turn, which produces at most one route, one
+     search and one answer. Naming them means a log line can say WHICH
+     request it belongs to -- which is the only way to tell a stale result
+     apart from the current one after the fact, and the only way the user can
+     hand back a reproduction that says more than "it didn't work". */
+  turnT = { t0: Date.now(), marks: {},
+            requestId: 'r' + (++turnSeq) + '-' + Date.now().toString(36),
+            utteranceId: (typeof live === 'object' && live) ? live.sessionId : null,
+            sessionId: (typeof live === 'object' && live) ? live.startedAt : null,
+            routeId: null, searchId: null, failure: null };
   /* Measured before this turn began -- recognition finishes before asking
      starts -- so it is carried in rather than marked. */
   if(typeof live === 'object' && live && live.lastListenMs != null) turnT.listenMs = live.lastListenMs;
@@ -6128,13 +6140,38 @@ function turnMark(name){
   if(!turnT) return;
   if(turnT.marks[name] === undefined) turnT.marks[name] = Date.now() - turnT.t0;
 }
+/* WHICH STAGE FAILED. Recorded on the turn rather than logged and lost, so
+   the diagnostics screen can report the actual stage instead of the single
+   word "search". Never overwritten: the FIRST failure is the cause, and
+   everything after it is a consequence. */
+function turnFail(status, detail){
+  if(!turnT || turnT.failure) return;
+  turnT.failure = { status: status || 'UNKNOWN', at: Date.now() - turnT.t0,
+                    detail: detail ? String(detail).slice(0, 160) : '' };
+  turnMark('failed');
+  if(turnT.published) persistTimings();
+}
+/* Called at first audio -- which is what `total` measures -- but NOT the end
+   of the turn's life. It used to null `turnT` here, and everything learned
+   after the first word was therefore learned about nothing: the search
+   outcome, the failure stage and the route of any turn whose audio started
+   before its stream finished were all written to a discarded object. That is
+   every grounded turn, because streaming and speaking overlap by design.
+
+   The record is published now and keeps being written to afterwards -- same
+   object, already in the list. The next turnStart() swaps in a fresh one, so
+   a late write from a finished turn lands on that turn's row and never on
+   the current one. */
 function turnEnd(){
-  if(!turnT) return;
+  if(!turnT || turnT.published) return;
   turnT.total = Date.now() - turnT.t0;
+  turnT.published = true;
   turnTimings.unshift(turnT);
   if(turnTimings.length > 8) turnTimings.pop();
+  persistTimings();
+}
+function persistTimings(){
   try{ store('pp-turn-timings', JSON.stringify(turnTimings.slice(0,8))); }catch(e){}
-  turnT = null;
 }
 function loadTurnTimings(){
   try{ return JSON.parse(store('pp-turn-timings') || '[]'); }catch(e){ return []; }
@@ -6166,22 +6203,42 @@ function copyPlain(text, okMsg){
     navigator.clipboard.writeText(text).then(function(){ showToast(okMsg); }).catch(fallback);
   } else fallback();
 }
+/* WHAT THE USER CAN SEND BACK.
+
+   A report that says "the orb didn't answer" cannot be acted on. This is the
+   same row it always was, plus the four things that turn a complaint into a
+   diagnosis: which route was chosen, which provider actually served the
+   evidence, which stage failed if one did, and the request id that ties the
+   row to a single utterance. No keys, no headers, no question text, no
+   answer text -- nothing here is private, which is what makes it safe to
+   copy out of a phone and paste into a message. */
 function formatTimings(){
   var rows = timingRows();
   if(!rows.length) return 'No voice turns recorded yet.';
   return rows.map(function(t, i){
     var m = t.marks || {};
-    return (i === 0 ? 'latest  ' : ('-' + i + '      ').slice(0, 8)) +
-           (t.path ? '[' + t.path + '] ' : '') + [
+    var sm = t.specMarks || null;
+    var head = (i === 0 ? 'latest  ' : ('-' + i + '      ').slice(0, 8)) +
+               (t.requestId ? t.requestId + ' ' : '') +
+               (t.path ? '[' + t.path + '] ' : '');
+    var what = [
+      'route ' + (t.route || '—') +
+        (t.provider && t.provider !== 'none' ? '/' + t.provider : '') +
+        (t.searchStatus && t.searchStatus !== 'OK' ? '(' + t.searchStatus + ')' : ''),
       'listen ' + (t.listenMs != null ? t.listenMs + 'ms' : '—'),
-      'search ' + (m.searchDone !== undefined ? m.searchDone + 'ms' : '—'),
+      'search ' + (m.searchDone !== undefined ? m.searchDone + 'ms'
+                   : (sm && sm.searchDone !== undefined ? sm.searchDone + 'ms*' : '—')),
       'first token ' + (m.firstToken !== undefined ? m.firstToken + 'ms' : '—'),
       'sent to voice ' + (m.firstChunkSent !== undefined ? m.firstChunkSent + 'ms' : '—'),
       'audio ready ' + (m.firstAudioReady !== undefined ? m.firstAudioReady + 'ms' : '—'),
       'speaking ' + (m.firstAudioPlay !== undefined ? m.firstAudioPlay + 'ms' : '—'),
+      'evidence ' + (t.ctxChars ? t.ctxChars + ' chars/' + (t.sources || 0) + ' sources' : '—'),
       'total ' + (t.total || 0) + 'ms'
-    ].join(' · ');
-  }).join('\n');
+    ];
+    if(t.failure) what.push('FAILED AT ' + t.failure.status + ' @' + t.failure.at + 'ms');
+    return head + what.join(' · ');
+  }).join('\n') +
+  '\n\n* measured from when the answer started being prepared, which is before you finished speaking.';
 }
 
 
@@ -6250,22 +6307,36 @@ function specStart(text){
   if(spec && spec.text === text && !spec.cancelled && !spec.failed) return;
   if(specCount >= LIVE_SPEC_MAX) return;
 
+  /* Measured, and deliberately NOT changed: a speculation on a phrase the
+     local rules cannot settle does consult the remote classifier, and if the
+     person keeps talking that call is superseded and aborted. Refusing to
+     speculate those was tried and cost 435ms of time-to-first-audio on every
+     ambiguous question -- the classifier round trip moved out of the pause
+     the user was already taking and into the wait after it. An aborted
+     background request nobody waits for is much the cheaper of the two. */
+
   specCancel('new text');
   specCount++;
 
   var s = {
     text: text,
     startedAt: Date.now(),
+    marks: {},
     abort: new AbortController(),
     buffer: '',                /* everything generated so far */
     sink: null,                /* set on adoption; deltas go here afterwards */
     lc: '',                    /* web context, if a search was needed */
     needsWeb: false,
     searchDone: false,
+    evidenceMissing: false,
+    searchStatus: '',
     failed: false,
     cancelled: false,
     adopted: false,
     reply: null
+  };
+  s.mark = function(name){
+    if(s.marks[name] === undefined) s.marks[name] = Date.now() - s.startedAt;
   };
   spec = s;
 
@@ -6275,22 +6346,33 @@ function specStart(text){
          the committed turn would have searched -- and then gets adopted. */
       var resolved = await resolveRoute(text, s.abort.signal);
       if(spec !== s && !s.adopted) throw new DOMException('superseded','AbortError');
+      s.mark('routeDone');
       s.needsWeb = resolved.needsWeb;
+      s.routeId = resolved.routeId || null;
+      s.routeName = resolved.name || '';
 
       if(resolved.needsWeb){
         /* Deliberately silent: the filler belongs to the real turn, and a
            speculation that is never adopted must never have made a sound. */
         var web = await runSearchPlan(text, buildSearchPlan(text, resolved.route), s.abort.signal);
-        s.lc = buildLiveContext(web, text);
+        var ctx = buildLiveContext(web, text);
+        /* Same contract as the committed turn: unusable evidence is not
+           evidence, and an empty `lc` here would otherwise mean "this
+           question never needed the web" to everything downstream. */
+        if(web.usable && ctx) s.lc = ctx;
+        else { s.lc = ''; s.evidenceMissing = true; s.searchStatus = web.status; }
+        s.mark('searchDone');
+        s.searchMarks = { start: web.startedAt || null, data: web.dataAt || null };
       }
       s.searchDone = true;
       if(spec !== s && !s.adopted) throw new DOMException('superseded','AbortError');
 
       var history = live.transcript.slice(-10)
         .map(function(m){ return { role:m.role, content:String(m.content).slice(0, 700) }; });
-      var msgs = [{ role:'system', content: voiceSystemPrompt(!!s.lc) }]
+      var msgs = [{ role:'system', content: voiceSystemPrompt(s.lc ? true : (s.evidenceMissing ? 'unavailable' : false)) }]
         .concat(history).concat([{ role:'user', content: text }]);
 
+      s.mark('modelStart');
       var reply = await streamAI(msgs, s.abort.signal, s.lc, function(piece, full){
         /* A speculation that has been replaced must go quiet immediately,
            even mid-stream. Identity, not a flag, because `spec` is cleared
@@ -6408,10 +6490,6 @@ async function liveAsk(question){
         liveCaption(full, 'bot');
         queueC.feed(full);
       };
-      /* An adopted speculation did the search for this turn, so its evidence
-         is this turn's evidence and a follow-up may reuse it. A speculation
-         that was never adopted deliberately remembers nothing. */
-      if(claimed.lc){ turnMark('searchDone'); rememberEvidence(question, claimed.lc); }
       if(claimed.buffer){
         turnMark('firstToken');
         liveCaption(claimed.buffer, 'bot');
@@ -6424,6 +6502,26 @@ async function liveAsk(question){
         queueC.cancel();
         if(sid === live.sessionId) live.locked = false;
         return;
+      }
+
+      /* NOW the speculation has finished, so its evidence and its failure are
+         both known. An adopted speculation did this turn's search, so its
+         evidence is this turn's evidence and a follow-up may reuse it; a
+         speculation that was never adopted deliberately remembers nothing. */
+      if(turnT){
+        turnT.routeId = claimed.routeId || null;
+        turnT.route = claimed.routeName || '';
+        /* The work happened on the speculation's clock, which started BEFORE
+           the person finished speaking. Reported as such, with the lead time,
+           rather than folded into the turn's clock where the offsets would be
+           negative and meaningless. */
+        turnT.specMarks = claimed.marks;
+        turnT.specLeadMs = turnT.t0 - claimed.startedAt;
+      }
+      if(claimed.needsWeb){
+        turnMark('searchDone');
+        if(claimed.lc) rememberEvidence(question, claimed.lc);
+        else turnFail(claimed.searchStatus || SEARCH_STATUS.NO_USABLE_EVIDENCE);
       }
       if(!state.user) bumpUsage();
       live.transcript.push({ role:'assistant', content:reply });
@@ -6452,6 +6550,7 @@ async function liveAsk(question){
        toward searching. */
     var resolved = await resolveRoute(question, signal);
     turnMark('routeDone');
+    if(turnT){ turnT.routeId = resolved.routeId || null; turnT.route = resolved.name || ''; }
     if(sid !== live.sessionId) return;
     var needsWeb = resolved.needsWeb;
     routeLastDecision = needsWeb ? 'web' : 'direct';   /* spoken follow-ups inherit it too */
@@ -6459,10 +6558,12 @@ async function liveAsk(question){
     /* The follow-up may already be answerable from the last search. Checked
        before the search is announced, so a reused turn makes no sound and
        goes straight to the model -- which is the whole point of it. */
+    var evidenceMissing = false;
     var reused = needsWeb ? reusableEvidence(question, !!(resolved.route && resolved.route.inherited)) : '';
     if(reused){
       lc = reused;
       needsWeb = false;
+      if(turnT) turnT.route = ROUTE_NAMES.REUSE_EVIDENCE;
       turnMark('evidenceReused');
       if(turnT) turnT.ctxChars = lc.length;
     }
@@ -6474,9 +6575,36 @@ async function liveAsk(question){
       signalSearching();
       var plan = buildSearchPlan(question, resolved.route);
       var liveWeb = await runSearchPlan(question, plan, signal);
+
+      /* A SEARCH THAT OUTLIVED ITS TURN IS DEAD.
+
+         The staleness check used to come one line too late, so a search
+         belonging to a question the user had already spoken over still wrote
+         its evidence into the store on its way out -- and the NEXT question,
+         a follow-up, could then be answered from the abandoned turn's
+         results. Barge-in is common and the two turns are usually about
+         different things, so this is exactly the "stale current answer" the
+         whole reuse rule exists to prevent, arriving through the back door.
+         Nothing a replaced turn produces may touch shared state. */
+      if(sid !== live.sessionId){ turnFail(SEARCH_STATUS.STALE_REQUEST); return; }
+
       lc = buildLiveContext(liveWeb, question);
-      rememberEvidence(question, lc);
-      if(sid !== live.sessionId) return;
+      if(liveWeb.usable && lc){
+        rememberEvidence(question, lc);
+      }else{
+        /* NO FALSE SUCCESS.
+
+           Both providers have now been asked and neither produced anything
+           to read. The previous code fell through here with lc = '' -- which
+           silently became an ORDINARY ungrounded turn: the short prompt, no
+           grounding rules, and a model cheerfully answering "what is the
+           latest iPhone" from training data that is months old, with no sign
+           to the listener that a search had been attempted at all. A
+           confident wrong answer is worse than an honest missing one. */
+        evidenceMissing = true;
+        lc = '';
+        turnFail(liveWeb.status || SEARCH_STATUS.NO_USABLE_EVIDENCE);
+      }
       /* Evidence size is a latency input, not a curiosity: time to first
          token scales with it. It belongs beside the timings it explains. */
       if(turnT){ turnT.ctxChars = lc.length; turnT.sources = (liveWeb.results || []).length; }
@@ -6488,7 +6616,7 @@ async function liveAsk(question){
       /* The grounding rules only ship when there is something to ground
          against, so an ordinary spoken question still gets the short prompt
          and the fast first token. */
-      { role:'system', content: voiceSystemPrompt(!!lc) }
+      { role:'system', content: voiceSystemPrompt(lc ? true : (evidenceMissing ? 'unavailable' : false)) }
     ].concat(history).concat([{ role:'user', content: question }]);
 
     /* 20b answers everything on this path, WITH or without evidence. This
@@ -7282,11 +7410,63 @@ function rememberEvidence(query, context){
   lastLiveEvidence = { context: context, query: String(query || ''), at: Date.now() };
 }
 
-/* A follow-up that names a DIFFERENT slice of the topic -- another day,
-   another place -- is asking for something the last search did not fetch.
-   "What about tomorrow" after today's weather genuinely needs a new search;
-   "why?" and "tell me more" do not. */
-var FOLLOWUP_NEW_SLICE = /\b(tomorrow|today|tonight|yesterday|now|latest|current|next (week|month|year|match|game)|last (week|month|year|night)|this (week|month|year)|in [a-z]{3,}|for [a-z]{3,}|instead)\b/i;
+/* ================================================================
+   IS THE ANSWER ALREADY IN HAND?
+
+   Reuse used to be decided from the SHAPE of the follow-up: does it contain
+   a pronoun, did it inherit a web decision. That is a proxy for the real
+   question, and measured against the cases it is supposed to handle it was
+   wrong in both directions -- "who scored", "how many goals", "by how much"
+   and "what temperature did you mention" all ran a second search for facts
+   sitting in the evidence, and "what about Delhi" answered from Kolkata's
+   weather, which is the dangerous direction.
+
+   The question is not what the follow-up looks like. It is whether the
+   evidence already held can answer it. Three tests, in order of how much
+   damage getting them wrong does:
+
+   1. Does it ask for something that CHANGES? A score, a price, anything
+      "now" or "latest" or about another day. Evidence has a timestamp, and
+      past that timestamp these are not answers, they are stale readings.
+      This test comes first and overrides everything.
+
+   2. Does it name a SUBJECT the evidence does not cover? "What about Delhi"
+      after Kolkata's weather is a different place, and the give-away is the
+      frame -- "what about X", "and X", "how about X" -- introducing an X the
+      evidence has never heard of. A common noun like "goals" is asking about
+      the same subject and does not count.
+
+   3. Otherwise it is elaboration on what was just retrieved, and the
+      evidence is the right thing to answer it from.
+   ================================================================ */
+
+/* Facts that are only true at an instant. Asking for one of these means the
+   evidence's timestamp matters, and any evidence older than the question is
+   the wrong answer however recently it was fetched. */
+var EVIDENCE_DYNAMIC = /\b(now|currently|current|latest|newest|today|tonight|tomorrow|yesterday|this (week|month|year|morning|evening)|next (week|month|year|match|game|time)|last (night|week|month)|update|updates|updated|live|so far|at the moment|right now|score|scores|price|prices|rate|rates|standings|ranking|available|availability)\b/i;
+
+var EVIDENCE_STOP = ('a an and the of in on at for to is are was were do does did what which who whom whose '+
+  'when where why how about it its that this those these they them their he she his her him you your my our '+
+  'me we us so then than there here be been being have has had will would can could should may might much many '+
+  'more most any some one two both each other another such no nor not only own same too very just now '+
+  /* Conversational filler that carries no subject: "also", "go on", "really".
+     Left in, each of these reads as a brand-new topic the evidence has never
+     heard of, and an ordinary continuation is answered by running a second
+     search for the word "also". */
+  'also again else please ok okay sure yeah yes nope thanks thank continue go going tell say said says know '+
+  'mean means think really still actually well hmm oh right got let us'
+  ).split(' ');
+
+function evidenceContentTerms(t){
+  var stop = {};
+  EVIDENCE_STOP.forEach(function(w){ stop[w] = 1; });
+  var seen = {}, out = [];
+  String(t || '').toLowerCase().split(/[^a-z0-9]+/).forEach(function(w){
+    if(w.length < 3 || stop[w] || seen[w]) return;
+    seen[w] = 1; out.push(w);
+  });
+  return out;
+}
 
 function reusableEvidence(text, inherited){
   var t = String(text || '').trim();
@@ -7295,15 +7475,47 @@ function reusableEvidence(text, inherited){
   var words = t.split(/\s+/).filter(Boolean).length;
   if(words > 9) return '';                       /* long enough to be its own question */
 
-  /* Two ways in. An anaphor -- "where was it played" -- is the original and
-     strongest signal. The second is a web decision this question did not
-     earn: it inherited one because the previous turn searched, which makes it
-     a follow-up about that search's subject and answerable from that search's
-     evidence. Either way, a follow-up naming a new slice is excluded and goes
-     and fetches it properly. */
+  /* It has to be a follow-up at all: an anaphor, a decision it inherited
+     rather than earned, or a question short enough to only make sense as one. */
   var anaphor = /\b(it|its|he|him|his|she|her|they|them|their|that|those|this|there)\b/i.test(t);
-  if(!anaphor && !inherited) return '';
-  if(FOLLOWUP_NEW_SLICE.test(t)) return '';
+  var shortAsk = words <= 5 && /^(who|what|when|where|why|how|which|by|any|and|tell|go on|really|are you)\b/i.test(t);
+  if(!anaphor && !inherited && !shortAsk) return '';
+
+  /* 1. Asks for something that changes -- never answer that from a snapshot. */
+  if(EVIDENCE_DYNAMIC.test(t)) return '';
+
+  /* 2. Does the evidence in hand actually cover what is being ASKED ABOUT?
+
+     This check used to run only behind a "what about X" frame, on the theory
+     that a new subject announces itself. It does not. "Who won the fifa
+     match", asked five words long straight after a search about the Prime
+     Minister of India, is a new subject with no frame at all -- and it was
+     answered from the Prime Minister's evidence, because it was short and
+     began with "who". That is precisely the stale-evidence failure this
+     function exists to prevent, arriving through the front door.
+
+     So it applies to every candidate now. A follow-up may be answered from
+     evidence only when every content word it introduces already appears in
+     that evidence. A pure anaphor ("why is that", "tell me more") introduces
+     no content words and passes trivially, which is right. A question about
+     something the evidence has never mentioned searches, which is slower and
+     cannot be wrong -- and that is the trade this makes deliberately, in the
+     direction the cost is recoverable. */
+  /* One exemption, and it is not a keyword bridge: a question about what was
+     JUST SAID ("what temperature did you mention", "what was that name you
+     said") is asking about the conversation, not about the world. There is
+     nothing fresher to fetch -- the answer is in the turn that already
+     happened -- so the coverage test, which is about the world, does not
+     apply. The dynamic-fact test above still does, so "what price did you say
+     it is now" still searches. */
+  var aboutWhatWasSaid = /\b(you (said|mentioned|told|gave|quoted)|did you (say|mention)|that you (said|mentioned))\b/i.test(t);
+  if(!aboutWhatWasSaid){
+    var have = String(lastLiveEvidence.context + ' ' + lastLiveEvidence.query).toLowerCase();
+    var novel = evidenceContentTerms(t).filter(function(w){ return have.indexOf(w) < 0; });
+    if(novel.length) return '';
+  }
+
+  /* 3. Elaboration on what is already here. */
   return lastLiveEvidence.context;
 }
 
@@ -8168,14 +8380,68 @@ document.getElementById('speakBtn').addEventListener('click', function(){
 /* ================================================================
    LIVE WEB  —  Tavily Search via secure Netlify function
    ================================================================ */
+/* ================================================================
+   A TIMEOUT IS NOT A CANCELLATION
+
+   This function used to abort its own controller when the deadline passed,
+   which made `fetch` reject with an AbortError -- the SAME error the browser
+   raises when the caller cancels. Every layer above then had to guess which
+   one had happened, and every layer guessed "the user cancelled", because
+   that is the only reading under which re-throwing is safe.
+
+   The cost of that ambiguity was the whole bug:
+
+     - An Exa request that ran past its deadline looked like a cancellation,
+       so liveSearch re-threw instead of falling back, and Tavily -- which was
+       sitting there, healthy, one call away -- was never asked.
+     - A classifier request that ran past ITS deadline looked like a
+       cancellation, so resolveRoute re-threw instead of using the local
+       lean, liveAsk caught an AbortError, and the turn ended without a word.
+       The user spoke, the orb thought, and then nothing happened at all.
+
+   Neither failure needed a slow network to be common -- only a slower one
+   than the deadline, which is the ordinary condition of a phone on mobile
+   data and almost never the condition of a desktop on Wi-Fi. That is the
+   whole of the "it only breaks on Android" report.
+
+   So the two are separated here, once, at the only place that knows which
+   of them actually happened:
+
+     external abort  -> AbortError    -> CANCELLED. Nothing may recover.
+     our own deadline-> TimeoutError  -> a provider failure. Recover from it.
+   ================================================================ */
 function fetchTimeout(url, opts, ms, externalSignal){
   var ctrl = new AbortController();
-  var t = setTimeout(function(){ ctrl.abort(); }, ms || 12000);
+  var timedOut = false;
+  var limit = ms || 12000;
+  var t = setTimeout(function(){ timedOut = true; ctrl.abort(); }, limit);
   opts = opts || {};
-  if(externalSignal){ externalSignal.addEventListener('abort', function(){ ctrl.abort(); }, { once:true }); }
+  var onAbort = function(){ ctrl.abort(); };
+  if(externalSignal){
+    /* A signal that is ALREADY aborted never fires the event, so a request
+       issued after cancellation used to run to completion. */
+    if(externalSignal.aborted) ctrl.abort();
+    else externalSignal.addEventListener('abort', onAbort, { once:true });
+  }
   opts.signal = ctrl.signal;
-  return fetch(url, opts).finally(function(){ clearTimeout(t); });
+  return fetch(url, opts).catch(function(e){
+    if(timedOut && e && e.name === 'AbortError' &&
+       !(externalSignal && externalSignal.aborted)){
+      var te = new Error('Request timed out after ' + limit + 'ms');
+      te.name = 'TimeoutError';
+      throw te;
+    }
+    throw e;
+  }).finally(function(){
+    clearTimeout(t);
+    if(externalSignal && externalSignal.removeEventListener) externalSignal.removeEventListener('abort', onAbort);
+  });
 }
+
+/* The one question every recovery path has to ask, asked the same way
+   everywhere: did the person cancel this, or did it fail? Only the first
+   forbids recovery. */
+function isCancellation(e){ return !!(e && e.name === 'AbortError'); }
 
 async function classifyQuery(query, signal){
   var r = await fetchTimeout('/.netlify/functions/groq', {
@@ -8221,13 +8487,29 @@ async function classifyQuery(query, signal){
    the route (rewritten query, topic, freshness) together, because they were
    never really two questions.
    ================================================================ */
+/* The four outcomes a question can have, named. `needsWeb` is still what the
+   callers branch on -- it is the same decision it always was -- but a boolean
+   cannot say WHY, and a trace that only records true/false cannot tell a
+   direct answer apart from one that reused evidence, or a search that was
+   asked for from one that was inherited. */
+var ROUTE_NAMES = { DIRECT:'DIRECT', LIVE_SEARCH:'LIVE_SEARCH',
+                    REUSE_EVIDENCE:'REUSE_EVIDENCE', DEEP_RESEARCH:'DEEP_RESEARCH' };
+var routeSeq = 0;
+function routeOut(needsWeb, route, why){
+  route.name = needsWeb ? ROUTE_NAMES.LIVE_SEARCH : ROUTE_NAMES.DIRECT;
+  route.routeId = 'q' + (++routeSeq);
+  route.why = why || '';
+  return { needsWeb: needsWeb, route: route, name: route.name, routeId: route.routeId };
+}
+
 async function resolveRoute(text, signal){
   if(webForceOn){
-    return { needsWeb:true, route:{ web:true, confidence:1, searchQuery:text, topic:'general', freshness:'none' } };
+    return routeOut(true, { web:true, confidence:1, searchQuery:text, topic:'general', freshness:'none' }, 'web toggle');
   }
   var local = routeDecide(text);
   if(local.decision === 'direct'){
-    return { needsWeb:false, route:{ web:false, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' } };
+    return routeOut(false, { web:false, confidence:local.confidence, searchQuery:text, topic:'general', freshness:'none' },
+                    'local: ' + (local.why || []).join('; '));
   }
   if(local.decision === 'web'){
     /* Confident enough locally: no round trip, no rewrite, straight to the
@@ -8235,8 +8517,9 @@ async function resolveRoute(text, signal){
 
        `inherited` travels with it so a caller can tell a question that earned
        its own web decision from one that merely borrowed the previous turn's. */
-    return { needsWeb:true, route:{ web:true, confidence:local.confidence, searchQuery:text,
-                                    topic:'general', freshness:'none', inherited: !!local.inherited } };
+    return routeOut(true, { web:true, confidence:local.confidence, searchQuery:text,
+                            topic:'general', freshness:'none', inherited: !!local.inherited },
+                    'local: ' + (local.why || []).join('; '));
   }
   var route;
   try{
@@ -8246,7 +8529,13 @@ async function resolveRoute(text, signal){
       route.confidence = 0.55;
     }
   }catch(routerError){
-    if(routerError && routerError.name === 'AbortError') throw routerError;
+    /* Only a genuine cancellation stops the turn here. A router TIMEOUT used
+       to arrive as an AbortError and be re-thrown, which liveAsk caught as
+       "the user cancelled" and answered with silence: the person spoke, the
+       orb thought, and no answer ever came. It is a router failure, and a
+       router failure has a defined fallback -- the local lean, right below. */
+    if(isCancellation(routerError)) throw routerError;
+    if(turnT) turnT.routerFailed = (routerError && routerError.name) || 'error';
     /* Router unreachable. Fall back to the local lean -- but STRICTLY, so a
        question with no evidence either way does not search.
 
@@ -8262,7 +8551,7 @@ async function resolveRoute(text, signal){
       confidence: 0, searchQuery: text, topic:'general', freshness:'none'
     };
   }
-  return { needsWeb: route.web === true, route: route };
+  return routeOut(route.web === true, route, 'classifier');
 }
 
 /* ================================================================
@@ -8284,86 +8573,276 @@ async function resolveRoute(text, signal){
    ================================================================ */
 var LIVE_SEARCH_PROVIDER = 'exa';   /* the fast path; 'tavily' forces the old one */
 
-async function exaSearch(query, options){
-  options = options || {};
-  var r = await fetchTimeout('/.netlify/functions/exa', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      query: String(query || '').slice(0, 400),
-      topic: options.topic || 'general',
-      timeRange: options.timeRange || undefined,
-      maxResults: options.maxResults || 6,
-      /* Ordinary questions get instant + a small evidence budget. Only the
-         research path asks for more, and it asks for it explicitly. */
-      deep: !!options.deep,
-      country: options.country || undefined,
-      includeDomains: options.includeDomains || undefined,
-      excludeDomains: options.excludeDomains || undefined,
-      timeout: options.timeout || undefined
-    })
-  }, options.timeout || 15000, options.signal);
-  var d = await r.json();
-  if(!r.ok) throw new Error(d && d.error ? d.error : 'Exa search failed');
-  return d;
+/* ================================================================
+   WHAT WENT WRONG, NAMED
+
+   "Search failed" was one string covering nine different events, and the
+   recovery for each of them is different: a timeout should fall back, a
+   cancellation must not, an empty result set is not an outage, and a 200
+   carrying nothing usable is not a success. Collapsing them meant the code
+   could not tell which had happened, so it picked one behaviour and was
+   wrong about the rest.
+   ================================================================ */
+var SEARCH_STATUS = {
+  OK:                   'OK',
+  ROUTE_FAILURE:        'ROUTE_FAILURE',
+  EXA_REQUEST_FAILURE:  'EXA_REQUEST_FAILURE',   /* network / DNS / CORS   */
+  EXA_TIMEOUT:          'EXA_TIMEOUT',
+  EXA_HTTP_FAILURE:     'EXA_HTTP_FAILURE',      /* non-2xx from the proxy */
+  EXA_JSON_FAILURE:     'EXA_JSON_FAILURE',      /* 200 but unreadable     */
+  EXA_SCHEMA_FAILURE:   'EXA_SCHEMA_FAILURE',    /* readable, wrong shape  */
+  EXA_EMPTY:            'EXA_EMPTY',             /* well-formed, 0 results */
+  EXA_INVALID_EVIDENCE: 'EXA_INVALID_EVIDENCE',  /* results, no usable text*/
+  TAVILY_FALLBACK:      'TAVILY_FALLBACK',       /* Exa could not, Tavily did */
+  TAVILY_FAILURE:       'TAVILY_FAILURE',
+  NO_USABLE_EVIDENCE:   'NO_USABLE_EVIDENCE',    /* both providers, nothing */
+  GROQ_FAILURE:         'GROQ_FAILURE',
+  TTS_FAILURE:          'TTS_FAILURE',
+  CANCELLED:            'CANCELLED',
+  STALE_REQUEST:        'STALE_REQUEST'
+};
+
+function searchError(status, cause){
+  var e = new Error(status + (cause && cause.message ? ': ' + cause.message : ''));
+  e.searchStatus = status;
+  return e;
 }
 
-/* The one door every ordinary live search goes through. */
-async function liveSearch(query, options){
-  options = options || {};
-  if(LIVE_SEARCH_PROVIDER === 'exa'){
-    try{
-      var out = await exaSearch(query, options);
-      if(out && out.results && out.results.length){
-        turnMark('searchProvider_exa');
-        return out;
-      }
-      /* A clean empty result is not a failure -- but it is also nothing to
-         answer from, so the other provider is worth one try before giving up. */
-    }catch(err){
-      /* The user pressing stop is not an Exa outage. */
-      if(err && err.name === 'AbortError') throw err;
-    }
-    try{
-      var alt = await tavilySearch(query, options);
-      turnMark('searchProvider_tavilyFallback');
-      return alt;
-    }catch(err2){
-      if(err2 && err2.name === 'AbortError') throw err2;
-      /* Both providers are down. Return an empty payload rather than throwing:
-         the grounding layer treats no evidence as "say you could not find it",
-         which is a better answer than an error dialog. */
-      return { answer:'', results:[] };
-    }
+/* ================================================================
+   ONE CANONICAL EVIDENCE SHAPE
+
+   Two providers, three call sites and a reuse cache were each reading the
+   raw payload with their own idea of what the fields are called. Exa says
+   `text` and `publishedDate`; Tavily says `content` and `published_date`.
+   A field that arrives under the other name is not a slightly worse result,
+   it is a silently EMPTY one -- valid evidence, fetched, paid for, and then
+   dropped on the floor because the reader looked in the wrong place.
+
+   So normalisation happens once, here, and everything downstream --
+   Live Orb, Text Mode, evidence reuse, the grounding builder -- reads the
+   same object. There is no orb parser, no mobile parser, no second shape.
+
+   A malformed INDIVIDUAL result is discarded on its own; the valid results
+   beside it survive. One bad row in a response has never been a reason to
+   throw the response away.
+   ================================================================ */
+function normalizeResult(it){
+  if(!it || typeof it !== 'object') return null;
+  var url = it.url || it.link || it.id || '';
+  url = (typeof url === 'string') ? url.trim() : '';
+  if(!url) return null;                       /* nothing to cite, nothing to keep */
+
+  var content = it.content;
+  if(typeof content !== 'string' || !content) content = (typeof it.text === 'string' ? it.text : '');
+  if(typeof content !== 'string') content = '';
+
+  var raw = it.raw_content;
+  if(typeof raw !== 'string' || !raw) raw = (typeof it.rawContent === 'string' ? it.rawContent : '');
+  if(typeof raw !== 'string') raw = '';
+
+  var pub = it.published_date || it.publishedDate || it.published || '';
+  var title = it.title || it.name || '';
+  var score = Number(it.score);
+
+  return {
+    title: typeof title === 'string' ? title : '',
+    url: url,
+    content: content,
+    raw_content: raw,
+    published_date: typeof pub === 'string' ? pub : '',
+    score: isFinite(score) ? score : null
+  };
+}
+
+/* Evidence is "usable" when something in it could actually answer a
+   question -- not merely when the request came back 200. This is the check
+   that stops a well-formed empty response being treated as a search that
+   worked. */
+var EVIDENCE_MIN_CHARS = 24;
+function evidenceUsable(ev){
+  if(!ev) return false;
+  if(String(ev.answer || '').trim().length >= 20) return true;
+  return (ev.results || []).some(function(r){
+    return String(r.content || r.raw_content || '').trim().length >= EVIDENCE_MIN_CHARS;
+  });
+}
+
+function normalizeEvidence(query, raw, provider, status){
+  var results = [];
+  var rows = raw && Array.isArray(raw.results) ? raw.results : [];
+  var dropped = 0;
+  for(var i = 0; i < rows.length; i++){
+    var n = normalizeResult(rows[i]);
+    if(n) results.push(n); else dropped++;
   }
-  return await tavilySearch(query, options);
+  var ev = {
+    query: String(query || ''),
+    retrievedAt: Date.now(),
+    provider: provider || 'none',
+    status: status || SEARCH_STATUS.OK,
+    answer: raw && typeof raw.answer === 'string' ? raw.answer : '',
+    results: results,
+    dropped: dropped
+  };
+  ev.usable = evidenceUsable(ev);
+  return ev;
+}
+
+function emptyEvidence(query, status){
+  return { query:String(query||''), retrievedAt:Date.now(), provider:'none',
+           status:status || SEARCH_STATUS.NO_USABLE_EVIDENCE, answer:'', results:[],
+           dropped:0, usable:false };
+}
+
+async function exaSearch(query, options){
+  options = options || {};
+  var r;
+  try{
+    r = await fetchTimeout('/.netlify/functions/exa', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        query: String(query || '').slice(0, 400),
+        topic: options.topic || 'general',
+        timeRange: options.timeRange || undefined,
+        maxResults: options.maxResults || 6,
+        /* Ordinary questions get instant + a small evidence budget. Only the
+           research path asks for more, and it asks for it explicitly. */
+        deep: !!options.deep,
+        country: options.country || undefined,
+        includeDomains: options.includeDomains || undefined,
+        excludeDomains: options.excludeDomains || undefined,
+        timeout: options.timeout || undefined
+      })
+    }, options.timeout || 15000, options.signal);
+  }catch(e){
+    if(isCancellation(e)) throw e;
+    throw searchError(e && e.name === 'TimeoutError' ? SEARCH_STATUS.EXA_TIMEOUT
+                                                     : SEARCH_STATUS.EXA_REQUEST_FAILURE, e);
+  }
+
+  var d = null, readFailed = false;
+  try{ d = await r.json(); }
+  catch(e){
+    /* Reading the BODY can be cut off on its own -- a phone changing network,
+       a backgrounded tab -- long after the headers arrived cleanly. */
+    if(isCancellation(e)) throw e;
+    readFailed = true;
+  }
+  if(!r.ok) throw searchError(SEARCH_STATUS.EXA_HTTP_FAILURE,
+                              new Error((d && (d.error || d.message)) || ('HTTP ' + r.status)));
+  if(readFailed) throw searchError(SEARCH_STATUS.EXA_JSON_FAILURE, null);
+  if(!d || !Array.isArray(d.results)) throw searchError(SEARCH_STATUS.EXA_SCHEMA_FAILURE, null);
+
+  var ev = normalizeEvidence(query, d, 'exa', SEARCH_STATUS.OK);
+  if(!ev.usable) ev.status = ev.results.length ? SEARCH_STATUS.EXA_INVALID_EVIDENCE : SEARCH_STATUS.EXA_EMPTY;
+  return ev;
 }
 
 async function tavilySearch(query, options){
   options = options || {};
-  var r = await fetchTimeout('/.netlify/functions/tavily', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      query: String(query || '').slice(0, 400),
-      topic: options.topic || 'general',
-      timeRange: options.timeRange || undefined,
-      maxResults: options.maxResults || 8,
-      searchDepth: options.searchDepth || 'advanced',
-      /* Was never forwarded. The function defaults it on for advanced
-         searches, so extracted page content did arrive -- by accident, and
-         with the caller's intent invisible. Sending it makes the two agree
-         and lets a caller genuinely turn it off. */
-      rawContent: options.rawContent,
-      days: options.days || undefined,
-      country: options.country || undefined,
-      includeDomains: options.includeDomains || undefined,
-      excludeDomains: options.excludeDomains || undefined
-    })
-  }, options.timeout || 30000, options.signal);
-  var d = await r.json();
-  if(!r.ok) throw new Error(d && d.error ? d.error : 'Tavily search failed');
-  return d;
+  var r;
+  try{
+    r = await fetchTimeout('/.netlify/functions/tavily', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        query: String(query || '').slice(0, 400),
+        topic: options.topic || 'general',
+        timeRange: options.timeRange || undefined,
+        maxResults: options.maxResults || 8,
+        searchDepth: options.searchDepth || 'advanced',
+        /* Was never forwarded. The function defaults it on for advanced
+           searches, so extracted page content did arrive -- by accident, and
+           with the caller's intent invisible. Sending it makes the two agree
+           and lets a caller genuinely turn it off. */
+        rawContent: options.rawContent,
+        days: options.days || undefined,
+        country: options.country || undefined,
+        includeDomains: options.includeDomains || undefined,
+        excludeDomains: options.excludeDomains || undefined
+      })
+    }, options.timeout || 30000, options.signal);
+  }catch(e){
+    if(isCancellation(e)) throw e;
+    throw searchError(SEARCH_STATUS.TAVILY_FAILURE, e);
+  }
+  var d = null, readFailed = false;
+  try{ d = await r.json(); }
+  catch(e){ if(isCancellation(e)) throw e; readFailed = true; }
+  if(!r.ok || readFailed || !d) throw searchError(SEARCH_STATUS.TAVILY_FAILURE,
+                                  new Error((d && (d.error || d.message)) || ('HTTP ' + r.status)));
+  return normalizeEvidence(query, d, 'tavily', SEARCH_STATUS.OK);
+}
+
+/* ================================================================
+   ONE LOGICAL SEARCH, STRICTLY SEQUENTIAL
+
+   Exa Instant is asked first and, when it answers, is the only provider
+   asked at all. Tavily is reached for only after Exa has demonstrably not
+   produced usable evidence -- an outage, a timeout, a 200 with nothing in
+   it. Never both at once, and never a second provider running "just in
+   case", which would double the cost of every question to insure against a
+   failure that mostly does not happen.
+
+   Cancellation is the one thing that recovers from nothing: if the person
+   stopped the turn, no fallback runs, no "search unavailable" appears, and
+   no half-finished result is stored.
+   ================================================================ */
+/* How long Exa Instant gets before the fallback is worth more than waiting.
+
+   The measured healthy round trip is a few hundred milliseconds; the search
+   plan's own budget was 30 SECONDS for a current question, and that budget
+   was the whole deadline -- so a stalled provider held a spoken turn silent
+   for half a minute before anything else was even attempted. Ten times the
+   healthy time is a generous ceiling for deciding a provider is not coming;
+   past that, asking the other one is strictly faster than continuing to wait.
+
+   This can only shorten failures. It never truncates a healthy search, and
+   the plan's full budget still covers the operation as a whole, so the
+   fallback inherits whatever time is left rather than starting from zero. */
+var EXA_DEADLINE_MS = 6000;
+
+async function liveSearch(query, options){
+  options = options || {};
+  if(LIVE_SEARCH_PROVIDER !== 'exa') return await tavilySearch(query, options);
+
+  var budget = Number(options.timeout) || 15000;
+  var startedAt = Date.now();
+  var firstOpts = {};
+  for(var k in options) firstOpts[k] = options[k];
+  firstOpts.timeout = Math.min(budget, EXA_DEADLINE_MS);
+
+  var firstStatus = '';
+  try{
+    var out = await exaSearch(query, firstOpts);
+    if(out.usable) return out;                        /* the ordinary path: one request */
+    firstStatus = out.status;
+  }catch(err){
+    if(isCancellation(err)) throw err;                /* CANCELLED -- never a fallback */
+    firstStatus = err.searchStatus || SEARCH_STATUS.EXA_REQUEST_FAILURE;
+  }
+
+  try{
+    var rest = {};
+    for(var k2 in options) rest[k2] = options[k2];
+    /* Whatever is left of the operation's budget, with a floor: a fallback
+       given two hundred milliseconds is not a fallback. */
+    rest.timeout = Math.max(6000, budget - (Date.now() - startedAt));
+    var alt = await tavilySearch(query, rest);
+    alt.fallbackFrom = firstStatus;
+    alt.status = alt.usable ? SEARCH_STATUS.TAVILY_FALLBACK : SEARCH_STATUS.NO_USABLE_EVIDENCE;
+    return alt;
+  }catch(err2){
+    if(isCancellation(err2)) throw err2;
+    /* Both providers are out. Return evidence that says so rather than
+       throwing: the caller has to distinguish "nothing was found" from
+       "the turn was cancelled", and only one of those is an error. */
+    var none = emptyEvidence(query, SEARCH_STATUS.NO_USABLE_EVIDENCE);
+    none.fallbackFrom = firstStatus;
+    none.tavilyStatus = err2.searchStatus || SEARCH_STATUS.TAVILY_FAILURE;
+    return none;
+  }
 }
 
 function isDynamicQuery(q){
@@ -8435,6 +8914,21 @@ function voiceSystemPrompt(grounded){
      figure, the date and the name -- which is the whole of what a grounded
      answer is for. Text mode never had that pressure, and that is a large
      part of why its live answers were the exact ones. */
+  /* A THIRD MODE, for the turn where a search was genuinely attempted and
+     genuinely produced nothing. It is not the grounded prompt (there is no
+     evidence to ground in) and it must not be the ordinary one (which would
+     let the model answer a current question from memory as though nothing
+     had gone wrong). */
+  if(grounded === 'unavailable'){
+    return base +
+      'A live web search was attempted for this question just now and returned nothing usable, so you have NO current information about it. ' +
+      'Say plainly, in one short sentence, that you could not reach live information just now. ' +
+      'Do NOT state any date, score, price, ranking, release, office-holder or "latest" anything from memory, and do not guess -- not even approximately. ' +
+      'You may briefly answer only the part of the question that does not depend on current facts. Keep it to 1–2 short sentences. ' +
+      'You are mid-conversation. Read short or vague replies as answers to what you just asked.' +
+      memoryContext();
+  }
+
   var ground = !grounded ? 'Keep it to 1–3 short sentences. ' :
     'LIVE WEB CONTEXT below is fresh retrieval performed just now, not your training data. It is more current than anything you remember, so it WINS over your own knowledge on every point where they disagree. ' +
     'Answer ONLY from that evidence for anything time-sensitive. Lead with the direct answer in your first sentence. ' +
@@ -8475,6 +8969,11 @@ async function streamAI(messages, signal, liveContext, onDelta, opts){
   });
   var r;
   try{
+    /* The stage the latency audit could not see: everything between "the
+       evidence is ready" and "the model has been asked" was previously
+       folded into time-to-first-token, so prompt assembly and request setup
+       were invisible and therefore un-measurable. */
+    turnMark('modelStart');
     r = await fetch('/.netlify/functions/chat-stream', {
       method:'POST', headers:{'Content-Type':'application/json'}, body: body, signal: signal
     });
@@ -9038,23 +9537,24 @@ function buildSearchPlan(text, route){
   };
 }
 
-/* Two formulations of the same question, issued together and merged.
+/* Two formulations of the same question, merged into one evidence set.
 
    The rewrite is usually better than the raw sentence -- it is what the
    classifier is for -- but not always, and a spoken question arrives with
-   whatever the recogniser made of it. The old code handled that with a
-   RETRY: run the rewrite, and if it came back empty, run the raw text
-   afterwards. That only rescues the total failure, never the merely worse
-   result, and it pays for the rescue in series, which on a live question is
-   the one thing there is no time for.
+   whatever the recogniser made of it, so the raw sentence is worth keeping
+   as a rescue.
 
-   Running both at once costs no wall clock over running one, and the merge
-   is strictly better evidence: a page either formulation found is a page the
-   model gets to read.
+   It used to be issued in PARALLEL on every current question, which made one
+   utterance into two live searches -- and, once each of those could fall
+   back on its own, into as many as four provider requests for a single thing
+   the user said. That is a duplicate live search by any reading: it is
+   billed twice, it can chime twice, and its two halves can disagree about
+   which provider answered.
 
-   The second call is only made when it can actually pay for itself -- the
-   question is about something current AND the two formulations genuinely
-   differ. An ordinary grounded question still costs exactly one search. */
+   So the rescue is sequential and conditional now: the rewrite runs alone,
+   and the raw sentence runs only if the rewrite came back with nothing
+   usable. The common case costs exactly one request, the rescue still
+   exists, and there is only ever one search in flight for one utterance. */
 function mergeSearches(payloads){
   var seen = {}, merged = [], answer = '';
   payloads.forEach(function(web){
@@ -9083,29 +9583,48 @@ function mergeSearches(payloads){
   return { answer: answer, results: merged };
 }
 
+/* Every live search operation gets an id, so a result that arrives after the
+   turn it belonged to has been replaced can be recognised as such rather
+   than quietly overwriting the current one. */
+var searchSeq = 0;
+
 async function runSearchPlan(text, plan, signal){
   var opts = {};
   for(var k in plan.options) opts[k] = plan.options[k];
   opts.signal = signal;
 
-  var alt = String(text || '').trim();
-  var wantAlt = plan.current && alt && alt !== plan.searchQuery;
-
+  var searchId = ++searchSeq;
+  if(turnT) turnT.searchId = searchId;
+  var startedAt = Date.now();
   turnMark('searchStart');
-  var calls = [liveSearch(plan.searchQuery, opts)];
-  if(wantAlt){
-    /* Its failure must not take the primary down with it. */
-    calls.push(liveSearch(alt, opts).catch(function(){ return null; }));
-  }
-  var payloads = await Promise.all(calls);
-  turnMark('searchData');
-  var web = mergeSearches(payloads);
 
-  /* Both formulations found nothing. The raw sentence is the last thing
-     left to try, and only now is it worth waiting for. */
-  if(!web.results.length && !wantAlt && alt && alt !== plan.searchQuery){
-    web = mergeSearches([await liveSearch(alt, opts)]);
+  var primary = await liveSearch(plan.searchQuery, opts);
+  var used = [primary];
+
+  /* The rewrite found nothing usable and the raw sentence is a genuinely
+     different query. Only now is a second search worth the time it costs. */
+  var alt = String(text || '').trim();
+  if(!primary.usable && alt && alt !== plan.searchQuery){
+    try{
+      var second = await liveSearch(alt, opts);
+      if(second && second.results.length) used.push(second);
+    }catch(e){
+      if(isCancellation(e)) throw e;    /* a cancelled rescue is still a cancellation */
+    }
   }
+
+  turnMark('searchData');
+  var dataAt = Date.now();
+  var merged = mergeSearches(used);
+  var best = used[used.length - 1];
+  var web = normalizeEvidence(text, merged, best.provider, best.status);
+  web.searchId = searchId;
+  web.attempts = used.length;
+  web.startedAt = startedAt;
+  web.dataAt = dataAt;
+  if(!web.usable) web.status = SEARCH_STATUS.NO_USABLE_EVIDENCE;
+  if(best.fallbackFrom) web.fallbackFrom = best.fallbackFrom;
+  if(turnT){ turnT.searchStatus = web.status; turnT.provider = web.provider; }
   return web;
 }
 
@@ -9797,9 +10316,16 @@ async function sendMessage(text){
       turnMark('searchDone');
       sources = rankedSources(web);
       var liveContext = buildLiveContext(web, text);
-      rememberEvidence(text, liveContext);
+      /* The same two rules the orb follows, for the same reasons: evidence is
+         only remembered when it is real, and a search that produced nothing
+         usable does not get to become an ordinary answer from memory. One
+         pipeline, one contract, both modes. */
+      if(web.usable && liveContext) rememberEvidence(text, liveContext);
+      else { liveContext = ''; turnFail(web.status || SEARCH_STATUS.NO_USABLE_EVIDENCE); }
       var liveMessages = [{ role:'system', content: systemPrompt() +
-        ' You have been given live web results retrieved seconds ago. Answer ONLY from that evidence for anything time-sensitive. Lead with the direct answer in the first sentence. Give exact figures, names and dates as reported, and say when the information is from. If sources disagree, say so and give the most recent. If the evidence does not actually answer the question, say that plainly instead of guessing.' }]
+        (liveContext
+          ? ' You have been given live web results retrieved seconds ago. Answer ONLY from that evidence for anything time-sensitive. Lead with the direct answer in the first sentence. Give exact figures, names and dates as reported, and say when the information is from. If sources disagree, say so and give the most recent. If the evidence does not actually answer the question, say that plainly instead of guessing.'
+          : ' A live web search was attempted for this question just now and returned nothing usable, so you have NO current information about it. Say plainly that you could not reach live information just now. Do NOT state any date, score, price, ranking, release, office-holder or "latest" anything from memory, and do not guess. You may answer only the part that does not depend on current facts.') }]
         .concat(state.history.slice(-8))
         .concat([{ role:'user', content:text }]);
       streamMessages = liveMessages; streamLive = liveContext;
