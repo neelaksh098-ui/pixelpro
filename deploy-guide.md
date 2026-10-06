@@ -1237,9 +1237,18 @@ variables**:
 - `CLOUDFLARE_ACCOUNT_ID` — Cloudflare dashboard → Workers & Pages. The
   account ID is in the right-hand sidebar (a 32-character hex string).
 - `CLOUDFLARE_API_TOKEN` — Cloudflare dashboard → My Profile → API Tokens →
-  **Create Token** → *Create Custom Token*. Give it one permission:
+  **Create Token**. The quickest route is the ready-made **Workers AI**
+  template, which fills in the right permissions by itself.
+
+  Building it by hand instead takes TWO permission rows, not one — running
+  inference is not a read-only operation, whatever the endpoint looks like:
 
       Account · Workers AI · Read
+      Account · Workers AI · Edit
+
+  Cloudflare's own REST quickstart is explicit about this: "that token will
+  need permissions for both Workers AI - Read and Workers AI - Edit". With
+  only Read, every generation fails authentication.
 
   Scope it to the single account above, then copy the token once — Cloudflare
   does not show it again.
