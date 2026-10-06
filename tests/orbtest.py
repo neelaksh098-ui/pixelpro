@@ -124,6 +124,10 @@ async def main():
                     chipGlobe:!!b.querySelector('.web-chip svg'),
                     chipFavs:b.querySelectorAll('.web-chip .fav').length,
                     srcFavs:b.querySelectorAll('.sources .fav').length,
+                    favBox:[...b.querySelectorAll('.sources .fav')].map(e=>{
+                        const r=e.getBoundingClientRect();
+                        return Math.round(r.width)+'x'+Math.round(r.height);}),
+                    favImgs:b.querySelectorAll('.sources img.fav').length,
                     doms:[...b.querySelectorAll('.sources .dom')].map(e=>e.textContent),
                     text:b.textContent.slice(0,60)};}""")
         chk("the finished answer carries a globe, not a sentence",
@@ -132,6 +136,17 @@ async def main():
             fin is not None and "source" in fin["chip"], fin and fin["chip"])
         chk("the chip shows favicons", fin is not None and fin["chipFavs"] >= 1, fin)
         chk("each source row shows its favicon", fin is not None and fin["srcFavs"] >= 1, fin)
+        # The bug this replaces: .favs .fav sized the icons only inside the
+        # chip's overlapped stack, so the SAME markup in a source row matched
+        # no size rule and a press-bureau logo rendered at 96px in a 13px row.
+        chk("a source favicon is 14px, not whatever size the site ships",
+            fin is not None and fin["favBox"] and all(x == "14x14" for x in fin["favBox"]),
+            fin and fin["favBox"])
+        chk("...and a real image, not only the letter fallback",
+            fin is not None and fin["favImgs"] >= 1, fin and fin["favImgs"])
+        lazy = await pg.evaluate(
+            "()=>[...document.querySelectorAll('img.fav')].every(i=>i.getAttribute('loading')!=='lazy')")
+        chk("favicons are not deferred by lazy-loading", lazy is True)
         chk("each source row leads with the domain",
             fin is not None and any("apple.com" in d for d in fin["doms"]), fin and fin["doms"])
         chk("the live turn actually searched", "exa" in calls, calls)

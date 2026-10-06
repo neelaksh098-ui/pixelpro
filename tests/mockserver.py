@@ -27,11 +27,20 @@ CFG = {
     "tavily_status": 200,
 }
 
+# 64x64 solid PNG, base64. Deliberately larger than it will be displayed.
+FAVICON_64 = ("data:image/png;base64,"
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAPklEQVR42u3OMQEAAAgDoC251a3g"
+  "IQQyQ3JVAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPBtAVoYAAHsLzkJAAAAAElFTkSuQmCC")
+
 def exa_payload(n):
     rows = [
         {"title": "Apple unveils iPhone 17 Pro", "url": "https://www.apple.com/newsroom/iphone-17?src=hp",
          "text": "Apple today announced iPhone 17 Pro, its latest iPhone, available 19 September 2026 with the A19 Pro chip.",
-         "score": 0.94, "publishedDate": "2026-08-20", "favicon": ""},
+         "score": 0.94, "publishedDate": "2026-08-20",
+         # A real 64x64 image, inline, so the favicon under test actually
+         # decodes without leaving the machine. A natural size well above the
+         # 14px the row allows is the point: that is what went wrong.
+         "favicon": FAVICON_64},
         {"title": "iPhone 17 Pro hands on", "url": "https://www.theverge.com/iphone-17-pro-review",
          "text": "The iPhone 17 Pro is the newest iPhone Apple sells, replacing last year's iPhone 16 Pro.",
          "score": 0.81, "publishedDate": "2026-08-25", "favicon": ""},

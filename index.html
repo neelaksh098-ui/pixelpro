@@ -22,6 +22,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://accounts.google.com" />
+<!-- Source favicons. The connection is opened at page load so that by the
+     time an answer has sources to show, only the image bytes are outstanding
+     -- not a DNS lookup and a TLS handshake as well. -->
+<link rel="preconnect" href="https://www.google.com" crossorigin />
+<link rel="dns-prefetch" href="https://www.google.com" />
 <link rel="preconnect" href="https://apis.google.com" />
 <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
@@ -1251,9 +1256,11 @@ body.empty-state .suggests{display:flex}
 /* The favicon stack. Overlapped, ring-separated, 14px -- the size at which a
    site is recognisable and still punctuation rather than an image. */
 .favs{display:inline-flex;align-items:center;flex:none}
-.favs .fav{width:14px;height:14px;border-radius:50%;flex:none;background:var(--bg-2);
-  border:1px solid var(--line);box-shadow:0 0 0 1.5px var(--bg);object-fit:cover;
-  margin-left:-4px;position:relative}
+.fav{width:14px;height:14px;min-width:14px;max-width:14px;min-height:14px;max-height:14px;
+  border-radius:50%;flex:none;background:var(--bg-2);border:1px solid var(--line);
+  object-fit:cover;position:relative;display:inline-block;vertical-align:middle}
+/* Only the overlap is about the stack. */
+.favs .fav{box-shadow:0 0 0 1.5px var(--bg);margin-left:-4px}
 .favs .fav:first-child{margin-left:0}
 .fav-ltr{display:inline-flex;align-items:center;justify-content:center;font-size:8px;
   font-weight:800;color:var(--muted);text-transform:uppercase;line-height:1}
@@ -8783,6 +8790,13 @@ function normalizeResult(it){
   var pub = it.published_date || it.publishedDate || it.published || '';
   var title = it.title || it.name || '';
   var score = Number(it.score);
+  /* Exa returns a favicon with most results and it was being dropped here --
+     which is the same class of mistake this whole normaliser exists to stop,
+     just in the other direction: a field that arrives and is thrown away.
+     The cost was not cosmetic. Every icon then had to be fetched from the
+     fallback service instead, which is an extra third-party round trip per
+     source, and tells that service a domain it did not need to be told. */
+  var icon = it.favicon || it.icon || '';
 
   return {
     title: typeof title === 'string' ? title : '',
@@ -8790,7 +8804,8 @@ function normalizeResult(it){
     content: content,
     raw_content: raw,
     published_date: typeof pub === 'string' ? pub : '',
-    score: isFinite(score) ? score : null
+    score: isFinite(score) ? score : null,
+    favicon: typeof icon === 'string' ? icon : ''
   };
 }
 
@@ -9609,7 +9624,8 @@ function favHtml(src){
   var letter = (host || '?').charAt(0);
   var url = faviconUrl(src);
   if(!url) return '<span class="fav fav-ltr">' + esc(letter) + '</span>';
-  return '<img class="fav" src="' + esc(url) + '" alt="" loading="lazy" ' +
+  return '<img class="fav" src="' + esc(url) + '" alt="" width="14" height="14" ' +
+         'loading="eager" decoding="async" fetchpriority="high" referrerpolicy="no-referrer" ' +
          'onerror="this.outerHTML=&quot;<span class=\'fav fav-ltr\'>' + esc(letter) + '</span>&quot;" />';
 }
 function favStack(list, max){
