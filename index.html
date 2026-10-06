@@ -1267,6 +1267,24 @@ body.empty-state .suggests{display:flex}
 
 /* Source rows: favicon, then domain, then title. The domain is what people
    actually scan for, so it leads and the title follows at lower weight. */
+/* Collapsed until the chip is tapped. Height rather than display, so it can
+   animate; `visibility` so a collapsed list is not reachable by tab or read
+   out by a screen reader as though it were on screen. */
+.sources{max-height:0;overflow:hidden;visibility:hidden;margin-top:0;padding-top:0;
+  border-top:0;opacity:0;transition:max-height .24s cubic-bezier(.22,.8,.3,1),opacity .18s ease,
+  margin-top .24s ease,padding-top .24s ease}
+.sources.open{max-height:520px;visibility:visible;opacity:1;margin-top:10px;padding-top:10px;
+  border-top:1px dashed var(--line)}
+.web-chip{cursor:pointer;-webkit-appearance:none;appearance:none;font-family:inherit;
+  transition:background .15s ease,border-color .15s ease,color .15s ease}
+.web-chip:hover{background:var(--hover);color:var(--ink)}
+.web-chip[disabled]{cursor:default}
+.web-chip-caret{display:inline-flex;width:13px;height:13px;margin-left:1px;opacity:.65;
+  transition:transform .22s cubic-bezier(.22,.8,.3,1)}
+.web-chip-caret svg{width:100%;height:100%}
+.web-chip.open .web-chip-caret{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.sources,.web-chip-caret{transition:none!important}}
+
 /* One line per source, and it stays one line. The title is the only part
    allowed to give up space, because it is the only part that still means
    something truncated -- a wrapped "1mo ago" hanging under a row reads as a
@@ -2700,19 +2718,108 @@ function memKey(uid){ return 'pp-memory-' + (uid || 'guest'); }
 function loadMemory(){
   try{ return JSON.parse(store(memKey(currentUid())) || '[]'); }catch(e){ return []; }
 }
+/* HOW MUCH IS REMEMBERED, AND HOW MUCH OF IT IS SAID.
+
+   These are two different numbers and conflating them is why memory used to
+   be tiny. The old cap was fourteen facts total -- not fourteen per prompt,
+   fourteen in existence -- because every remembered fact was pasted into
+   every system prompt, so the store had to stay small or the prompt grew
+   without limit and time-to-first-token with it.
+
+   Separating them removes that ceiling. The store holds hundreds; each
+   prompt carries only the dozen or so that have something to do with what
+   was actually asked, chosen below. Memory can be large precisely because
+   retrieval is selective. */
+var MEMORY_MAX = 300;          /* facts kept, across every chat */
+var MEMORY_PROMPT_MAX = 16;    /* facts any one prompt may carry */
+
 function saveMemory(list){
-  try{ store(memKey(currentUid()), JSON.stringify(list.slice(-14))); }catch(e){}
+  try{ store(memKey(currentUid()), JSON.stringify(list.slice(-MEMORY_MAX))); }catch(e){}
   cloudPush();
 }
 function addMemoryFact(fact){
-  fact = String(fact || '').trim();
-  if(!fact || fact.length > 140) return;
+  fact = String(fact || '').trim().replace(/^[-*\u2022\s]+/, '');
+  if(!fact || fact.length > 180) return;
+  if(/^none$/i.test(fact)) return;
   var list = loadMemory();
   var lower = fact.toLowerCase();
-  for(var i=0;i<list.length;i++){ if(list[i].toLowerCase() === lower) return; }
+  for(var i=0;i<list.length;i++){
+    if(list[i].toLowerCase() === lower) return;
+    /* A restatement of something already known is not a new fact. Without
+       this, a subject discussed over several turns writes a near-duplicate
+       line each time and crowds out everything else. */
+    if(list[i].length > 24 && lower.length > 24 &&
+       (list[i].toLowerCase().indexOf(lower) >= 0 || lower.indexOf(list[i].toLowerCase()) >= 0)) return;
+  }
   list.push(fact);
   saveMemory(list);
   if(typeof renderMemoryChips === 'function') renderMemoryChips();
+}
+
+/* ================================================================
+   WHICH MEMORIES BELONG IN THIS PROMPT
+
+   With a store of hundreds, "all of them" is not an option: it would cost
+   more prompt than the question and bury the relevant line among ninety
+   irrelevant ones. So the facts that share words with what was just asked
+   come first -- that is what makes "how old is he" work in a brand-new chat
+   about someone discussed yesterday -- and the remaining room goes to the
+   most recent, which is what keeps an ordinary conversation feeling
+   continuous when nothing matches.
+   ================================================================ */
+var memFocus = '';
+
+/* THE LAST THING THAT HAD A SUBJECT.
+
+   Kept apart from the fact list and persisted, because it answers a
+   different question. The fact list is "what do I know"; this is "what were
+   we just talking about" -- and that is what a pronoun in a brand-new chat
+   refers to. Mining the fact list for it was tried and picks whatever was
+   written down most recently, which on a store of hundreds is almost never
+   the subject: "how old is he" resolved to a note about the user's own
+   project, and would have searched for that.
+
+   Greetings and pleasantries deliberately do not overwrite it. Saying hello
+   does not change who "he" is. */
+var GREETING_ONLY = /^\s*(hi+|hey+|hello+|yo|sup|namaste|hola|good (morning|evening|afternoon|night)|thanks?|thank you|thx|ty|ok(ay)?|cool|nice|great|bye+|goodbye|gn|gm|how are you|what'?s up)\b[\s,!.?]*$/i;
+function subjectKey(){ return 'pp-subject-' + (currentUid() || 'guest'); }
+function lastSubject(){
+  try{ return store(subjectKey()) || ''; }catch(e){ return ''; }
+}
+function rememberSubject(text){
+  var t = String(text || '').trim();
+  if(!t || GREETING_ONLY.test(t)) return;
+  if(ANAPHOR_ONLY.test(t) && t.split(/\s+/).length <= 6) return;   /* itself a follow-up */
+  var terms = (typeof evidenceContentTerms === 'function') ? evidenceContentTerms(t) : [];
+  if(!terms.length) return;
+  try{ store(subjectKey(), terms.slice(0, 6).join(' ')); }catch(e){}
+}
+
+function setMemoryFocus(text){
+  memFocus = String(text || '');
+  rememberSubject(text);
+}
+
+function memorySelect(list, focus, limit){
+  var terms = (typeof evidenceContentTerms === 'function') ? evidenceContentTerms(focus) : [];
+  if(!terms.length) return list.slice(-limit);
+  var scored = list.map(function(fact, i){
+    var low = ' ' + fact.toLowerCase() + ' ';
+    var hits = 0;
+    terms.forEach(function(t){ if(low.indexOf(t) >= 0) hits++; });
+    return { fact: fact, i: i, hits: hits };
+  });
+  var relevant = scored.filter(function(x){ return x.hits > 0; })
+    .sort(function(a, b){ return (b.hits - a.hits) || (b.i - a.i); })
+    .slice(0, limit);
+  var taken = {};
+  relevant.forEach(function(x){ taken[x.i] = 1; });
+  var out = relevant.map(function(x){ return x.fact; });
+  /* Fill the rest with the newest, newest-last so the prompt reads in order. */
+  for(var j = list.length - 1; j >= 0 && out.length < limit; j--){
+    if(!taken[j]) out.push(list[j]);
+  }
+  return out;
 }
 /* ================================================================
    ONE CONVERSATION, TWO WAYS OF HAVING IT
@@ -2742,7 +2849,14 @@ function rememberTurn(userText, assistantText){
 function memoryContext(){
   var list = loadMemory();
   if(!list.length) return '';
-  return '\n\nWhat you remember about this user from earlier conversations (use it naturally to personalize answers and recommendations; never dump this list verbatim unless asked): \n- ' + list.join('\n- ');
+  var picked = memorySelect(list, memFocus, MEMORY_PROMPT_MAX);
+  if(!picked.length) return '';
+  return '\n\nWHAT YOU REMEMBER from earlier conversations with this user — both ' +
+    'things about them and subjects the two of you have discussed before. Use it to ' +
+    'resolve references ("he", "that place", "the one I mentioned") and to personalize, ' +
+    'across chats as well as within one. If something here answers the question, use it ' +
+    'rather than asking again. Never read this list out verbatim unless asked:\n- ' +
+    picked.join('\n- ');
 }
 /* Lightweight background extraction, fired after a normal reply — same
    fire-and-forget pattern as the chat auto-titling below. Silently a
@@ -2752,34 +2866,53 @@ async function extractMemory(userText, assistantText){
     if(navigator.onLine === false) return;
     userText = String(userText || '');
     if(userText.length < 8) return;
+    /* WHAT COUNTS AS WORTH REMEMBERING GOT WIDER.
+
+       This used to extract one fact and was told explicitly not to save
+       "one-off factual questions" -- so asking who someone is, then asking
+       their age, remembered nothing at all, and the second question had to
+       be asked in the same breath as the first or it made no sense. The
+       SUBJECT of a conversation is exactly what a follow-up refers back to,
+       the next day and in a different chat. It is saved now, alongside the
+       facts about the person asking, and up to three lines per exchange
+       rather than one. */
     var out = await callAI([
-      { role:'system', content:'You extract durable personal facts worth remembering across future chats: name, ongoing projects, interests, goals, preferences, skill level, exam or course, recurring topics. From this exchange, reply with ONE short fact (under 12 words, no trailing punctuation) worth saving for future personalization, or reply with exactly NONE if nothing durable is worth saving. Do not save one-off factual questions, definitions, or small talk.' },
-      { role:'user', content:'User said: ' + userText.slice(0, 300) + '\nAssistant replied: ' + String(assistantText || '').slice(0, 300) }
+      { role:'system', content:
+        'You maintain a long-term memory for an assistant. From one exchange, write the ' +
+        'durable things worth remembering for FUTURE conversations. Two kinds count:\n' +
+        '1. About the user: name, work, projects, interests, goals, preferences, skill ' +
+        'level, course or exam, location, people and things they mention as theirs.\n' +
+        '2. Subjects discussed: who or what was asked about, with the single key detail ' +
+        'that identifies it — so a later question like "how old is he" or "what about ' +
+        'that place" can be resolved. Name the subject explicitly; never write "he" or ' +
+        '"it" as the subject of a memory.\n' +
+        'Rules: up to 3 lines, one fact per line, each under 16 words, no bullets, no ' +
+        'numbering, no trailing punctuation. Skip greetings, pleasantries, arithmetic, ' +
+        'and anything that will be false next week (today\'s weather, a live score). ' +
+        'If nothing is worth keeping, reply with exactly NONE.' },
+      { role:'user', content:'User said: ' + userText.slice(0, 400) + '\nAssistant replied: ' + String(assistantText || '').slice(0, 500) }
     ], false, null);
-    var fact = String(out || '').split('\n')[0].replace(/^["'.\s]+/, '').replace(/["'.\s]+$/, '').trim();
-    if(!fact || /^none$/i.test(fact)) return;
-    addMemoryFact(fact);
+    String(out || '').split('\n').slice(0, 3).forEach(function(line){
+      var fact = line.replace(/^[-*\u2022\d.)\s]+/, '').replace(/^["'\s]+/, '').replace(/["'.\s]+$/, '').trim();
+      if(fact && !/^none$/i.test(fact)) addMemoryFact(fact);
+    });
   }catch(e){ /* memory is best-effort */ }
 }
-/* Turn memory into ChatGPT-style "continue where you left off" hero chips. */
+/* The hero used to offer "Continue: <remembered fact>" chips. They were
+   removed deliberately: a blank page with one question on it is the whole
+   invitation, and the chips put the app's filing system in front of the
+   person instead -- three buttons restating what it had written down about
+   them, which is a different and much stranger offer than "what can I help
+   with?". Memory still does its job; it does it in the answers, not as
+   furniture on the way in.
+
+   Kept as a no-op rather than deleted because several call sites fire it
+   whenever memory changes. */
 function renderMemoryChips(){
   var wrap = document.getElementById('chips');
   if(!wrap) return;
-  var mem = loadMemory();
-  if(!mem.length){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
-  var picks = mem.slice(-3).reverse();
+  wrap.style.display = 'none';
   wrap.innerHTML = '';
-  picks.forEach(function(fact){
-    var b = document.createElement('button');
-    b.type = 'button'; b.className = 'chip';
-    b.textContent = 'Continue: ' + fact;
-    b.addEventListener('click', function(){
-      hideWelcome();
-      sendMessage('Continue helping me with: ' + fact);
-    });
-    wrap.appendChild(b);
-  });
-  wrap.style.display = 'flex';
 }
 
 /* ---------- resume the conversation in progress across reloads ---------- */
@@ -6541,6 +6674,7 @@ async function liveAsk(question){
     return;
   }
   live.transcript.push({ role:'user', content:question });
+  setMemoryFocus(question);     /* which memories this turn's prompt carries */
   liveCaption(question, 'user');
   turnStart();
   liveGo('processing');
@@ -9592,32 +9726,57 @@ function addMessage(role, html, opts){
    Attaching them is now a separate step a caller can run at the point the
    text has stopped changing. Idempotent, because the streaming path and the
    non-streaming path both end up calling it. */
+/* THE CHIP IS THE CONTROL; THE LIST IS WHAT IT OPENS.
+
+   A permanent SOURCES footer under every grounded answer is a block of
+   secondary information competing with the answer, on every single turn --
+   and under an aggressive search bias that is now almost every turn. The
+   chip already says the honest thing ("2 sources", with the sites' own
+   icons); the full list is what you want only when you decide to check, so
+   it waits behind a tap.
+
+   Collapsed by default, kept in the DOM rather than built on demand, so the
+   first tap is instant and nothing has to be re-fetched. */
 function appendSourceMeta(bubble, opts){
   if(!bubble || !opts) return;
   if(bubble.querySelector('.web-chip') || bubble.querySelector('.sources')) return;
   var list = opts.sources || [];
-  if(opts.searched){
-    var chip = document.createElement('div');
-    chip.className = 'web-chip';
-    chip.innerHTML = '<span class="think2-globe" style="animation:none">' + GLOBE_SVG + '</span>' +
-      (list.length ? favStack(list, 3) + '<span>' + list.length +
-                     (list.length === 1 ? ' source' : ' sources') + '</span>'
-                   : '<span>Live web</span>');
-    bubble.appendChild(chip);
-  }
-  if(list.length){
-    var sw = document.createElement('div'); sw.className = 'sources';
-    var inner = '<span class="lbl">SOURCES</span>';
-    list.slice(0, 3).forEach(function(it, i){
-      var host = sourceHost(it.link);
-      inner += '<a href="' + esc(it.link) + '" target="_blank" rel="noopener">' +
-               '<b>' + (i + 1) + '</b>' + favHtml(it) +
-               (host ? '<span class="dom">' + esc(host) + '</span>' : '') +
-               '<span class="ttl">' + esc(it.title) + '</span>' +
-               (it.date ? '<span class="src">· ' + timeAgo(it.date) + '</span>' : '') + '</a>';
-    });
-    sw.innerHTML = inner; bubble.appendChild(sw);
-  }
+  if(!opts.searched) return;
+
+  var chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'web-chip';
+  chip.setAttribute('aria-expanded', 'false');
+  chip.innerHTML = '<span class="think2-globe" style="animation:none">' + GLOBE_SVG + '</span>' +
+    (list.length ? favStack(list, 3) + '<span>' + list.length +
+                   (list.length === 1 ? ' source' : ' sources') + '</span>' +
+                   '<span class="web-chip-caret" aria-hidden="true">' +
+                   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+                   'stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>'
+                 : '<span>Live web</span>');
+  bubble.appendChild(chip);
+  if(!list.length) { chip.disabled = true; return; }
+
+  var sw = document.createElement('div');
+  sw.className = 'sources';
+  var inner = '';
+  list.slice(0, 8).forEach(function(it, i){
+    var host = sourceHost(it.link);
+    inner += '<a href="' + esc(it.link) + '" target="_blank" rel="noopener">' +
+             '<b>' + (i + 1) + '</b>' + favHtml(it) +
+             (host ? '<span class="dom">' + esc(host) + '</span>' : '') +
+             '<span class="ttl">' + esc(it.title) + '</span>' +
+             (it.date ? '<span class="src">· ' + timeAgo(it.date) + '</span>' : '') + '</a>';
+  });
+  sw.innerHTML = inner;
+  bubble.appendChild(sw);
+
+  chip.addEventListener('click', function(){
+    var open = sw.classList.toggle('open');
+    chip.classList.toggle('open', open);
+    chip.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if(open) scrollDown();
+  });
 }
 function addResponseMeta(bubble, elapsedMs, usedLive){
   /* Quiet icon-only action row under each answer, the way Claude and ChatGPT
@@ -9884,6 +10043,47 @@ function isCurrentQuery(q){
    ================================================================ */
 
 /* Everything that decides WHAT to search for and HOW hard to look. */
+/* ================================================================
+   WHO IS "HE"?
+
+   A follow-up refers back; a search engine does not. "How old is he" sent
+   verbatim returns nothing about the person just discussed, and under a
+   bias that sends most questions to the web that stopped being a rare
+   corner and became an ordinary turn.
+
+   The subject is recovered from the most recent thing in the conversation
+   that HAD one -- the last user message that is not itself all pronouns --
+   and appended to the query only. The question put to the model is never
+   rewritten: the model has the conversation and resolves the pronoun
+   properly; it is the search that needs the help.
+   ================================================================ */
+var ANAPHOR_ONLY = /\b(he|him|his|she|her|hers|they|them|their|theirs|it|its|that|this|those|these|there)\b/i;
+function resolveAnaphora(query){
+  var q = String(query || '').trim();
+  if(!q) return q;
+  var words = q.split(/\s+/).filter(Boolean);
+  if(words.length > 9) return q;              /* long enough to stand alone */
+  if(!ANAPHOR_ONLY.test(q)) return q;
+
+  var hist = (typeof sharedHistory === 'function') ? sharedHistory() : [];
+  var terms = [];
+  for(var i = hist.length - 1; i >= 0 && !terms.length; i--){
+    if(hist[i].role !== 'user') continue;
+    var prev = String(hist[i].content || '');
+    if(prev === q) continue;
+    var t = (typeof evidenceContentTerms === 'function') ? evidenceContentTerms(prev) : [];
+    if(t.length) terms = t.slice(0, 4);
+  }
+  /* Nothing in this chat named a subject -- but the last chat did. That is
+     what makes "how old is he" work the next morning, in a new chat. */
+  if(!terms.length){
+    var carried = lastSubject();
+    if(carried) terms = carried.split(/\s+/).slice(0, 4);
+  }
+  if(!terms.length) return q;
+  return q + ' ' + terms.join(' ');
+}
+
 function buildSearchPlan(text, route){
   route = route || {};
   var weather = isWeatherQuery(text);
@@ -9899,6 +10099,10 @@ function buildSearchPlan(text, route){
      something a search engine handles well. The orb never used it, so it
      searched raw speech -- including whatever the recogniser mangled. */
   var searchQuery = route.searchQuery || (weather ? (text + ' current weather forecast today') : text);
+  /* "How old is he" is a fine thing to say and a useless thing to search
+     for. Under an aggressive bias these reach the web often, so the subject
+     is carried in from the turn that named it. */
+  searchQuery = resolveAnaphora(searchQuery);
 
   /* "weather here" / "near me" -> ground it in the shared location's city */
   if(typeof locationOn !== 'undefined' && locationOn && typeof currentLocation !== 'undefined' &&
@@ -10582,6 +10786,7 @@ async function sendMessage(text){
   } else {
     addMessage('user', esc(text));
   }
+  setMemoryFocus(text);         /* which memories this turn's prompt carries */
   addThinking('Thinking');
 
   /* Deep search takes over the whole turn: a research loop, its own live

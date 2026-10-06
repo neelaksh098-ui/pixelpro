@@ -261,6 +261,75 @@ async def main():
         chk("...and it ran its own search rather than reusing stale evidence",
             "exa" in calls, calls)
 
+        # ---------- 7. memory: large store, selective recall, cross-chat ----------
+        caps = await pg.evaluate("()=>({max:MEMORY_MAX, prompt:MEMORY_PROMPT_MAX})")
+        chk("the memory store holds hundreds of facts", caps["max"] >= 200, caps)
+        chk("but one prompt carries only a slice", caps["prompt"] <= 24, caps)
+
+        mem = await pg.evaluate("""()=>{
+            const facts=[];
+            for(let i=0;i<120;i++) facts.push('Unrelated background fact number '+i);
+            facts.push('Pralhad Joshi is India Union Education Minister appointed July 2026');
+            saveMemory(facts);
+            setMemoryFocus('how old is Pralhad Joshi');
+            const ctx = memoryContext();
+            return {kept:loadMemory().length, len:ctx.length,
+                    hasSubject:ctx.indexOf('Pralhad Joshi')>=0,
+                    lines:(ctx.match(/\\n- /g)||[]).length};}""")
+        chk("a large store is persisted whole", mem["kept"] >= 120, mem)
+        chk("the fact matching the question is selected into the prompt",
+            mem["hasSubject"] is True, mem)
+        chk("...and the prompt carries a slice, not the whole store",
+            mem["lines"] <= 24 and mem["len"] < 3000, mem)
+
+        ana = await pg.evaluate("""()=>{
+            state.history=[{role:'user',content:'who is Pralhad Joshi'},
+                           {role:'assistant',content:'Union Education Minister of India.'}];
+            const inChat = resolveAnaphora('how old is he');
+            const plain  = resolveAnaphora('what is the latest iPhone');
+            setMemoryFocus('who is Pralhad Joshi');
+            setMemoryFocus('hello');          // a greeting must not move the subject
+            state.history=[];                 // a brand-new chat
+            return {inChat:inChat, plain:plain, newChat:resolveAnaphora('how old is he')};}""")
+        chk("a pronoun follow-up searches for the subject, not the pronoun",
+            'joshi' in ana["inChat"].lower(), ana["inChat"])
+        chk("a self-contained question is left alone",
+            ana["plain"] == 'what is the latest iPhone', ana["plain"])
+        chk("and the subject carries into a brand-new chat",
+            'joshi' in ana["newChat"].lower(), ana["newChat"])
+
+        # ---------- 8. sources live behind the chip ----------
+        hero = await pg.evaluate("""()=>{ renderMemoryChips();
+            const w=document.getElementById('chips');
+            return {html:(w&&w.innerHTML)||'', disp:(w&&w.style.display)||''};}""")
+        chk("the new-chat screen offers no Continue chips",
+            hero["html"] == '' and hero["disp"] == 'none', hero)
+
+        calls.clear()
+        await pg.request.get("http://127.0.0.1:8880/__cfg?exa_ms=300&ttft=180")
+        await pg.evaluate("()=>{ sendMessage('who won the latest fifa match'); }")
+        await pg.wait_for_timeout(7000)
+        coll = await pg.evaluate("""()=>{
+            const b=[...document.querySelectorAll('.msg.bot .bubble')].pop();
+            const sw=b&&b.querySelector('.sources'), chip=b&&b.querySelector('.web-chip');
+            if(!sw||!chip) return null;
+            const before=getComputedStyle(sw).visibility;
+            chip.click();
+            const openCls=sw.classList.contains('open');
+            const after=getComputedStyle(sw).visibility;
+            chip.click();
+            return {before:before, after:after, openCls:openCls,
+                    closedAgain:!sw.classList.contains('open'),
+                    isButton:chip.tagName==='BUTTON'};}""")
+        chk("the source list is hidden until asked for",
+            coll is not None and coll["before"] == "hidden", coll)
+        chk("tapping the chip reveals it",
+            coll is not None and coll["openCls"] and coll["after"] == "visible", coll)
+        chk("tapping again puts it away",
+            coll is not None and coll["closedAgain"], coll)
+        chk("the chip is a real button, not a div",
+            coll is not None and coll["isButton"], coll)
+
         chk("no JS errors anywhere in the run", not errs, errs[:3])
         print(json.dumps({"pass": len(P), "fail": len(F)}))
         for f in F: print("FAIL:", f)

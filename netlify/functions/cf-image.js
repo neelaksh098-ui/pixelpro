@@ -5,7 +5,7 @@
 //
 //   POST https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}
 //   Authorization: Bearer {api_token}
-//   { "prompt": "<1..2048 chars>", "seed": <positive int>, "steps": <1..8> }
+//   { "prompt": "<1..2048 chars>", "steps": <1..8> }   <- the WHOLE schema
 //   -> { "success": true, "result": { "image": "<base64 JPEG>" } }
 //
 // Two response shapes exist across Workers AI image models and the difference
@@ -51,32 +51,51 @@ exports.handler = async (event) => {
 
   const model = process.env.CLOUDFLARE_IMAGE_MODEL || DEFAULT_MODEL;
 
+  // THE SCHEMA IS THE CONTRACT, NOT THE CURL EXAMPLE.
+  //
+  // This used to also send `seed`, because Cloudflare's own quickstart shows
+  // it in the curl snippet. FLUX.1 [schnell]'s published input schema allows
+  // exactly two properties -- `prompt` and `steps` -- with
+  // additionalProperties: false, so every request was rejected:
+  //
+  //   HTTP 400  AiError: Bad input: Additional or unevaluated properties
+  //             '/seed' at '/' not allowed
+  //
+  // and the app silently served the fallback provider instead. An example in
+  // prose is not an interface; the schema is.
   const body = { prompt };
   // Documented range is 1..8 with a default of 4. Schnell is distilled for
   // few-step sampling: past about 6 the extra steps cost latency without
   // buying detail, which is the whole reason this model is the fast one.
   const steps = Number(payload.steps);
   body.steps = Number.isFinite(steps) ? Math.min(8, Math.max(1, Math.round(steps))) : 4;
-  // A seed is sent so a repeated prompt is not a repeated picture. Omitting
-  // it lets the service pick, but then "generate it again" can come back
-  // identical, which reads as a failure.
-  const seed = Number(payload.seed);
-  body.seed = Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : Math.floor(Math.random() * 2147483646) + 1;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 55000);
 
+  const call = (sendBody) => fetch(CF_BASE + encodeURIComponent(ACCOUNT) + "/ai/run/" + model, {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + TOKEN,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify(sendBody),
+    signal: ctrl.signal,
+  });
+
   try {
-    const r = await fetch(CF_BASE + encodeURIComponent(ACCOUNT) + "/ai/run/" + model, {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + TOKEN,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
+    let r = await call(body);
+
+    // Workers AI models do not share one input schema, and a model that
+    // rejects a property we sent says so with a 400 rather than ignoring it.
+    // Rather than hard-code which fields each model tolerates, drop back to
+    // the one property every text-to-image model has -- the prompt -- and try
+    // once more. Costs nothing when the first request is accepted, and keeps
+    // a model swap from turning into a silent outage.
+    if (r.status === 400 && Object.keys(body).length > 1) {
+      r = await call({ prompt });
+    }
 
     const ctype = String(r.headers.get("content-type") || "").toLowerCase();
 
@@ -104,7 +123,10 @@ exports.handler = async (event) => {
       return { statusCode: r.status === 200 ? 502 : r.status, headers: CORS, body: JSON.stringify({ error: String(msg), stage: "cloudflare" }) };
     }
 
-    const img = d.result && d.result.image;
+    // The REST envelope puts the model's output under `result`; the model's
+    // own schema calls the field `image`. Both spellings are accepted so a
+    // change to the envelope does not read as "no image".
+    const img = (d.result && d.result.image) || d.image;
     if (typeof img !== "string" || !img) {
       return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: "Cloudflare returned no image data.", stage: "cloudflare" }) };
     }

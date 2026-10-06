@@ -1253,6 +1253,19 @@ variables**:
   Scope it to the single account above, then copy the token once — Cloudflare
   does not show it again.
 
+A note on the request body, because it cost a round of debugging: FLUX.1
+[schnell]'s input schema allows exactly two properties, `prompt` and `steps`,
+with `additionalProperties: false`. Cloudflare's own curl example shows a
+`seed` field as well; sending it is rejected outright with
+
+    HTTP 400  AiError: Bad input: Additional or unevaluated properties
+              '/seed' at '/' not allowed
+
+The function sends only what the schema allows, and retries once with the
+prompt alone if any model answers 400 — so swapping the model cannot turn
+into a silent outage. If you add parameters here, check the model's schema
+rather than its example.
+
 Optional:
 
 - `CLOUDFLARE_IMAGE_MODEL` — defaults to `@cf/black-forest-labs/flux-1-schnell`.
