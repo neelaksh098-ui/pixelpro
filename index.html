@@ -7215,8 +7215,43 @@ var ROUTE_MARGIN = 3;          /* evidence gap required to decide locally */
 function routeYear(){ return new Date().getFullYear(); }
 
 /* ---------- layer 0: absolutes ---------- */
-var ROUTE_HARD_DIRECT = [
+/* ================================================================
+   HOW EAGER IS THE SEARCH?
+
+   'aggressive' — search unless the sentence is plainly NOT about the world:
+      a greeting, arithmetic, a question about the assistant itself, or a job
+      handed to it (write this, fix this, translate this). Everything else
+      goes to the live web, including things the model could answer from
+      memory. The trade is deliberate and it is not free: nearly every
+      message costs a search request, and a grounded turn is several hundred
+      milliseconds slower than one answered from memory. What it buys is that
+      nothing current is ever answered from training data.
+
+   'balanced' — the previous behaviour: definitions, how-tos and descriptions
+      are answered directly, and only questions that lean current search.
+
+   One constant switches it. Nothing else needs changing.
+   ================================================================ */
+var SEARCH_BIAS = 'aggressive';
+
+/* Direct in BOTH modes. Not knowledge questions at all: these are either
+   addressed to the assistant or handed to it as work, and a search engine
+   has nothing to contribute to any of them. */
+var ROUTE_DIRECT_ALWAYS = [
   /^\s*[-+*/().\d\s^%×÷=,]+\s*$/,                                   /* pure arithmetic */
+  /* ARITHMETIC WRITTEN OUT.
+
+     "what is 25% of 300" is maths wearing the clothes of a question, and the
+     symbols-only rule above cannot see it: it is full of words. Under an
+     aggressive bias that mattered -- the sentence fell through to the
+     whitelist's default and ran a web search to divide two numbers. A search
+     engine is a poor calculator and a slow one. */
+  /^\s*(what('s| is)\s+)?[-+]?\d[\d,.]*\s*(%|percent)\s+(of|off)\s+[-+]?\d/i,
+  /^\s*(what('s| is)\s+)?[-+]?\d[\d,.]*\s*(\+|-|\*|x|×|\/|÷|plus|minus|times|multiplied by|divided by|mod|to the power of)\s*[-+]?\d/i,
+  /^\s*(what('s| is)\s+)?(the\s+)?(square root|cube root|factorial|log|ln|sine|cosine|tangent|sin|cos|tan)\s+of\s+[-+]?\d/i,
+  /* Unit conversion: a fixed ratio, not a fact about the world. Excludes
+     currency, where the rate genuinely changes and a search is right. */
+  /^\s*(convert\s+|what('s| is)\s+)?[-+]?\d[\d,.]*\s*(km|m|cm|mm|mi|miles?|ft|feet|foot|in|inch(es)?|yd|yards?|kg|g|mg|lbs?|pounds?|oz|ounces?|°?[cf]|celsius|fahrenheit|kelvin|l|ml|litres?|liters?|gal|gallons?|mph|kph|km\/h|hours?|hrs?|minutes?|mins?|seconds?|secs?|days?|weeks?|months?|years?|bytes?|kb|mb|gb|tb)\s+(to|in|into)\s+[a-z°]{1,14}\s*\??\s*$/i,
   /^\s*(hi+|hey+|hello+|yo|sup|namaste|hola|salaam|good (morning|evening|afternoon|night)|thanks?|thank you|thx|ty|ok|okay|k|kk|cool|nice|great|lol|lmao|hmm+|bye+|goodbye|see you|gn|gm)\b[\s,!.?😊🙂👍]*(there|man|bro|buddy|dude|friend|pixel|so much|a lot|very much|again)?[\s!.?😊🙂👍]*$/i,
   /^(?!.*\b(in|at|for)\s+[a-z]{3,})[^]*\b(what('s| is) the time|current time|what time is it|time (right now|is it)|what('s| is) today'?s date|today'?s date|what('s| is) the date|what day is (it|today)|which day is (it|today)|what year is it)\b/i,
   /\b(where am i|my (current )?location|what('s| is) my location|which city am i in|what city am i in)\b/i,
@@ -7233,6 +7268,25 @@ var ROUTE_HARD_DIRECT = [
      web cannot solve your equation or fix your code, and these were scoring
      zero either way and paying a classifier round trip to establish it. */
   /^\s*(solve|calculate|compute|work out|fix|debug|refactor|simplify|factor|expand|convert|proofread|shorten|lengthen|outline|brainstorm)\b/i,
+  /* Work, not a question: the web cannot write your poem, translate your
+     paragraph or explain your error message. Searching for these is not
+     merely wasteful, it produces a worse answer than not searching. */
+  /* Verbs that are ALWAYS work, whatever follows them: producing or
+     transforming text is not something a search engine can be asked to do. */
+  /^\s*(write|draft|compose|rewrite|re-write|translate|summari[sz]e|paraphrase|rephrase|polish|proofread|correct|edit|debug|refactor)\b/i,
+  /* Verbs that are work only when they point AT SOMETHING IN THE THREAD.
+     "explain this error" is work; "explain gravity" is a question about the
+     world and, under an aggressive bias, is worth grounding. The referent is
+     the whole distinction, so it is required rather than assumed. */
+  /^\s*(explain|describe|check|review|improve|fix|analyse|analyze|interpret)\s+(this|that|it|these|those|my|the above|the below|the following)\b/i,
+  /^\s*(what|which)\s+does\s+(this|that|it)\b/i,                   /* about the thread */
+  /\b(in|from|above|earlier|previously)\s+(this|the)\s+(chat|conversation|thread)\b/i
+];
+
+/* Direct in 'balanced' only. Every one of these is a knowledge question the
+   model can usually answer well from memory -- and that is exactly the bet
+   'aggressive' declines to make. */
+var ROUTE_DIRECT_KNOWLEDGE = [
   /* "How do I ..." is a how-to, and "tell me about X" is a description. Both
      were reaching the classifier on a 0-0 score -- a round trip, and a chance
      of a search, for "how do I center a div". The lookahead is what keeps
@@ -7250,6 +7304,11 @@ var ROUTE_HARD_DIRECT = [
      short subject so only genuine definition questions qualify. */
   /^\s*(what|which)\s+(is|are)\s+(a|an|the)?\s*(?!.*\b(latest|newest|new|current|currently|today|tonight|now|recent|price|cost|rate|score|result|winner|won|weather|forecast|temperature|news|release|released|launch|launched|version|available|stock|value|ceo|president|prime minister|pm|cm|chief minister|captain|coach|champion|best|top|trending|update|updated)\b)[a-z][a-z\s-]{0,32}\??\s*$/i
 ];
+
+var ROUTE_HARD_DIRECT = SEARCH_BIAS === 'aggressive'
+  ? ROUTE_DIRECT_ALWAYS
+  : ROUTE_DIRECT_ALWAYS.concat(ROUTE_DIRECT_KNOWLEDGE);
+
 var ROUTE_HARD_WEB = [
   /\b(search (the )?(web|internet|online)|search for\b|look (it|this|that|\w+) up( online)?|google (it|this|that|the|for|a|an|\w+)\b|check online|browse the web|find (it )?online|latest info on)\b/i,
   /https?:\/\/\S+/i,                                                 /* a URL to go and read */
@@ -7688,9 +7747,38 @@ function routeDecide(text){
              why: why.concat(['follow-up, inherited ' + routeLastDecision]) };
   }
 
+  /* THE WHITELIST IS THE WHOLE OF 'DIRECT' UNDER AN AGGRESSIVE BIAS.
+
+     The scoring layer exists to weigh a question that could go either way,
+     and under this bias there is no "either way" left: anything that is not
+     on the short list of things the web cannot help with is a question about
+     the world, and it searches. Leaving the scores able to return 'direct'
+     put "what is Python", "explain gravity" and "what is quantum computing"
+     back on the model's memory, which is exactly the outcome this bias was
+     set to stop. The scores are still computed, and still reported in `why`,
+     because they are what the diagnostics read. */
+  if(SEARCH_BIAS === 'aggressive'){
+    return { decision:'web', confidence: Math.min(1, 0.6 + Math.max(0, webScore - directScore)/20),
+             why: why.concat(['aggressive bias: not on the direct whitelist']),
+             webScore:webScore, directScore:directScore };
+  }
+
   var margin = webScore - directScore;
   if(margin >= ROUTE_MARGIN) return { decision:'web', confidence: Math.min(1, 0.6 + margin/20), why:why };
   if(-margin >= ROUTE_MARGIN) return { decision:'direct', confidence: Math.min(1, 0.6 + (-margin)/20), why:why };
+
+  /* UNDECIDED MEANS SEARCH.
+
+     In 'balanced' this returned 'ask', which paid a classifier round trip to
+     settle a question the local signals could not. Under 'aggressive' there
+     is nothing left to settle: anything that got this far is a question about
+     the world that did not match the short list of things the web cannot
+     help with, so it searches -- locally decided, no round trip, and faster
+     than asking a model whether to look something up. */
+  if(SEARCH_BIAS === 'aggressive'){
+    return { decision:'web', confidence:0.6, why:why.concat(['default: search unless clearly not about the world']),
+             webScore:webScore, directScore:directScore };
+  }
   return { decision:'ask', confidence:0, why:why, webScore:webScore, directScore:directScore };
 }
 
@@ -7777,35 +7865,76 @@ async function generateImage(prompt){
      every attempt costs a generation, and two pictures for one request is
      money spent to throw one of them away. */
 
+  /* A FALLBACK CHAIN HIDES THE THING YOU NEED TO KNOW.
+
+     Every provider failure used to be swallowed by a bare `catch(e){}` and
+     the next one tried, so a picture always appeared and there was no way --
+     from inside the app, from the console, from anywhere -- to find out that
+     the primary had failed, let alone why. A key with the wrong permissions
+     and a key that works look identical from the outside.
+
+     Each attempt is recorded now: which provider, whether it served, and the
+     stage and message if it did not. Nothing is shown to an ordinary user,
+     who got their image and does not care; it goes to the console and to
+     window.imageDiag() for whoever is setting the keys up. */
+  var attempts = [];
+  function note(provider, ok, detail){
+    attempts.push({ provider: provider, ok: ok, detail: detail || '' });
+    if(!ok) console.warn('[image] ' + provider + ' did not serve: ' + (detail || 'unknown'));
+  }
+
+  async function tryProvider(name, url, payload, ext){
+    try{
+      var rr = await fetchTimeout(url, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      }, 60000, null);
+      var dd = null;
+      try{ dd = await rr.json(); }catch(_){ dd = null; }
+      if(rr.ok && dd && dd.dataUrl){
+        note(name, true, 'served');
+        done(dd.dataUrl, 'pixel-image-' + Date.now() + '.' + ext);
+        return true;
+      }
+      note(name, false, 'HTTP ' + rr.status +
+           ((dd && dd.stage) ? ' [' + dd.stage + ']' : '') +
+           ((dd && dd.error) ? ' ' + dd.error : ''));
+    }catch(e){
+      note(name, false, (e && e.name === 'TimeoutError') ? 'timed out' : ((e && e.message) || 'network error'));
+    }
+    return false;
+  }
+
   /* 1 — Cloudflare Workers AI (FLUX.1 [schnell]). Primary: four diffusion
      steps makes it the fast one, and it runs on the same account as the rest
      of the edge setup. */
-  try{
-    var rc = await fetchTimeout('/.netlify/functions/cf-image', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ prompt: prompt, steps: 4 })
-    }, 60000, null);
-    var dc = await rc.json();
-    if(rc.ok && dc && dc.dataUrl){ done(dc.dataUrl, 'pixel-image-' + Date.now() + '.jpg'); return; }
-  }catch(e){}
+  if(await tryProvider('cloudflare', '/.netlify/functions/cf-image',
+                       { prompt: prompt, steps: 4 }, 'jpg')){ window.__imgDiag = attempts; return; }
 
   /* 2 — Stability AI (sd3.5-large-turbo), for a Cloudflare outage or an
      unset key. Kept rather than deleted: it is a different model family, so
      it is a genuine second opinion and not just a second server. */
-  try{
-    var r = await fetchTimeout('/.netlify/functions/stability-image', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ prompt: prompt, aspectRatio: '1:1' })
-    }, 60000, null);
-    var d = await r.json();
-    if(r.ok && d && d.dataUrl){ done(d.dataUrl, 'pixel-image-' + Date.now() + '.webp'); return; }
-  }catch(e){}
+  if(await tryProvider('stability', '/.netlify/functions/stability-image',
+                       { prompt: prompt, aspectRatio: '1:1' }, 'webp')){ window.__imgDiag = attempts; return; }
 
+  window.__imgDiag = attempts;
   /* 3 — keyless fallback, so this never dead-ends if both keys are unset */
   clearInterval(stageTimer);
   imageStage(bubble, 'Finishing up…');
   generateImageViaPollinations(bubble, prompt);
 }
+/* What happened the last time an image was generated, and why the provider
+   you expected may not have been the one that served it. Call imageDiag()
+   in the browser console. */
+function imageDiag(){
+  var a = window.__imgDiag || [];
+  if(!a.length) return 'No image has been generated yet in this session.';
+  return a.map(function(x){
+    return (x.ok ? 'SERVED   ' : 'failed   ') + x.provider + ' — ' + x.detail;
+  }).join('\n');
+}
+window.imageDiag = imageDiag;
+
 function downloadCodeFile(code, ext){
   var blob = new Blob([code], { type:'text/plain' });
   var url = URL.createObjectURL(blob);

@@ -155,17 +155,50 @@ async def main():
             bool(streamed) and len(str(streamed[-1].get("liveContext", ""))) > 200,
             len(str(streamed[-1].get("liveContext", ""))) if streamed else 0)
 
-        # ---------- 4. a basic question stays off the web ----------
+        # ---------- 4. the direct whitelist stays off the web ----------
+        # Under SEARCH_BIAS='aggressive' the web is the DEFAULT. Only the
+        # short whitelist -- greetings, arithmetic, questions about the
+        # assistant, and work handed to it -- answers without searching.
+        # "what is python" deliberately searches now; it used to be the
+        # example of a question that should not.
         calls.clear()
-        await pg.evaluate("()=>{ sendMessage('what is python'); }")
+        await pg.evaluate("()=>{ sendMessage('hello there'); }")
         await pg.wait_for_timeout(4000)
-        chk("a basic question calls no search provider",
+        chk("a greeting calls no search provider",
             "exa" not in calls and "tavily" not in calls, calls)
         basic = await pg.evaluate("""()=>{
             const b=[...document.querySelectorAll('.msg.bot .bubble')].pop();
             return b ? {chip:!!b.querySelector('.web-chip'), srcs:!!b.querySelector('.sources')} : null;}""")
         chk("...and shows no globe or sources on the answer",
             basic is not None and not basic["chip"] and not basic["srcs"], basic)
+
+        calls.clear()
+        await pg.evaluate("()=>{ sendMessage('what is 25% of 300'); }")
+        await pg.wait_for_timeout(4000)
+        chk("arithmetic written out in words calls no search provider",
+            "exa" not in calls and "tavily" not in calls, calls)
+
+        # The whole contract, as a table, decided locally with no round trip.
+        bias = await pg.evaluate("""()=>{
+            const f=q=>{ routeLastDecision=null; return routeDecide(q).decision; };
+            const direct=["hi","hello","thanks","how are you","bye","12 * 48",
+              "what is 25% of 300","convert 10 km to miles","5 kg in pounds",
+              "solve x^2 - 4 = 0","what time is it","who made you",
+              "write me a short poem about rain","translate this to hindi: good morning",
+              "summarize this paragraph for me","fix my python code",
+              "explain this error","can you help me","what do you think"];
+            const web=["what is the latest iPhone","who won the latest fifa match",
+              "what is the weather today","what is the current price of gold",
+              "who is the pm of india","what is python","explain gravity",
+              "tell me about the taj mahal","how do I center a div",
+              "what is quantum computing","best laptop for students",
+              "is the new pixel any good","nvidia stock","top movies this year"];
+            return {bias:SEARCH_BIAS,
+                    leakedToWeb:direct.filter(q=>f(q)!=='direct'),
+                    leakedToDirect:web.filter(q=>f(q)!=='web')};}""")
+        chk("the search bias is aggressive", bias["bias"] == "aggressive", bias["bias"])
+        chk("nothing on the direct whitelist searches", not bias["leakedToWeb"], bias["leakedToWeb"])
+        chk("everything else searches", not bias["leakedToDirect"], bias["leakedToDirect"])
 
         # ---------- 5. THE LIVE ORB, end to end ----------
         calls.clear(); bodies.clear()
