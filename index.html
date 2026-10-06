@@ -78,36 +78,91 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]):not([data-theme="dark"]){
-    --bg:#212121; --bg-2:#181818; --card:#2A2A2A; --ink:#ECECEC; --muted:#9B9B9B;
-    --line:#3A3A3A; --line-strong:#4A4A4A; --accent:#5B8DEF; --accent-deep:#7CA3F5;
-    --user-bg:#303030; --user-ink:#ECECEC; --code-bg:#0B0D12; --code-ink:#D5DAE3;
-    --hover:rgba(255,255,255,.06); --active:rgba(255,255,255,.10);
-    --shadow:0 20px 45px -18px rgba(0,0,0,.55); --shadow-sm:0 2px 10px rgba(0,0,0,.3);
+    --bg:#000000; --bg-2:#000000; --card:#090909; --ink:#FFFFFF; --muted:#A6A6A6;
+    --line:#1C1C1C; --line-strong:#2C2C2C; --accent:#6E9BFF; --accent-deep:#8FB3FF;
+    --user-bg:#121212; --user-ink:#FFFFFF; --code-bg:#070707; --code-ink:#E6E6E6;
+    --hover:rgba(255,255,255,.07); --active:rgba(255,255,255,.12);
+    --shadow:0 20px 45px -18px rgba(0,0,0,.9); --shadow-sm:0 1px 0 rgba(255,255,255,.05);
   }
 }
+/* ================================================================
+   TRUE BLACK
+
+   Not "dark grey". #000000, on the page and on every surface the page is
+   made of -- which on an OLED phone is the difference between a dim panel
+   and pixels that are simply off, and is where the look comes from.
+
+   Three things keep that from reading as cheap:
+
+     1. Surfaces separate by HAIRLINE, not by fill. On #212121 a panel could
+        be #2A2A2A and you would see the step. On #000000 a fill light enough
+        to see is light enough to ruin the black, so the border does the work
+        and the fill stays at #090909 -- present, never a grey box.
+     2. Text is #FFFFFF, not #ECECEC. Off-white on near-black is the usual
+        compromise against halation on a backlit panel; on true black the
+        contrast is the point, and the secondary tier moves UP to #A6A6A6 so
+        it stays legible rather than sinking into the background.
+     3. Drop shadows do nothing on black -- there is nothing darker to cast
+        into -- so --shadow-sm becomes a one-pixel top highlight instead. The
+        light comes from above, the way it does on real hardware.
+   ================================================================ */
 [data-theme="dark"]{
-  --bg:#212121;
-  --bg-2:#181818;
-  --card:#2A2A2A;
-  --ink:#ECECEC;
-  --muted:#9B9B9B;
-  --line:#3A3A3A;
-  --line-strong:#4A4A4A;
-  --accent:#5B8DEF;
-  --accent-deep:#7CA3F5;
-  --gold:#D4A22A;
-  --gold-bright:#E8BC4E;
-  --amber:#E8AE3C;
-  --user-bg:#303030;
-  --user-ink:#ECECEC;
-  --code-bg:#0B0D12;
-  --code-ink:#D5DAE3;
-  --hover:rgba(255,255,255,.06);
-  --active:rgba(255,255,255,.10);
-  --shadow:0 20px 45px -18px rgba(0,0,0,.55);
-  --shadow-sm:0 2px 10px rgba(0,0,0,.3);
+  --bg:#000000;
+  --bg-2:#000000;
+  --card:#090909;
+  --ink:#FFFFFF;
+  --muted:#A6A6A6;
+  --line:#1C1C1C;
+  --line-strong:#2C2C2C;
+  --accent:#6E9BFF;
+  --accent-deep:#8FB3FF;
+  --gold:#E8C35A;
+  --gold-bright:#F3D77F;
+  --amber:#F0B94A;
+  --user-bg:#121212;
+  --user-ink:#FFFFFF;
+  --code-bg:#070707;
+  --code-ink:#E6E6E6;
+  --hover:rgba(255,255,255,.07);
+  --active:rgba(255,255,255,.12);
+  --shadow:0 20px 45px -18px rgba(0,0,0,.9);
+  --shadow-sm:0 1px 0 rgba(255,255,255,.05);
   --shadow-gold:none;
 }
+
+/* THE MARK GOES WHITE.
+
+   In light theme the logo is blue, deep blue and amber -- three hues that
+   read as a considered palette on white and as a cluster of coloured dots on
+   true black. Monochrome is what the black asks for: one colour, white,
+   with the shape carried by OPACITY instead of hue, so the pixel-art
+   arrangement survives and nothing competes with the page. */
+:root[data-theme="dark"] .mark span,
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span{ background:rgba(255,255,255,.92) }
+:root[data-theme="dark"] .mark span:nth-child(1),
+:root[data-theme="dark"] .mark span:nth-child(3),
+:root[data-theme="dark"] .mark span:nth-child(7),
+:root[data-theme="dark"] .mark span:nth-child(9),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span:nth-child(1),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span:nth-child(3),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span:nth-child(7),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span:nth-child(9){ background:transparent }
+:root[data-theme="dark"] .mark span:nth-child(2),
+:root[data-theme="dark"] .mark span:nth-child(8),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span:nth-child(2),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span:nth-child(8){ background:rgba(255,255,255,.62) }
+:root[data-theme="dark"] .mark span:nth-child(5),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .mark span:nth-child(5){ background:#FFFFFF }
+
+:root[data-theme="dark"] .landing-mark span,
+:root:not([data-theme="light"]):not([data-theme="dark"]) .landing-mark span{ background:rgba(255,255,255,.55) }
+:root[data-theme="dark"] .landing-mark span:nth-child(1),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .landing-mark span:nth-child(1){ background:#FFFFFF }
+:root[data-theme="dark"] .landing-mark span:nth-child(4),
+:root:not([data-theme="light"]):not([data-theme="dark"]) .landing-mark span:nth-child(4){ background:rgba(255,255,255,.80) }
+
+:root[data-theme="dark"] .boot-mark span,
+:root:not([data-theme="light"]):not([data-theme="dark"]) .boot-mark span{ background:rgba(255,255,255,.9) }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 ::selection{background:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--ink)}
@@ -1173,6 +1228,49 @@ body.empty-state .suggests{display:flex}
 .think2-ico{font-size:15px;line-height:1}
 .think2-label{will-change:background-position}
 .web-chip{display:inline-flex;align-items:center;gap:7px;margin-bottom:10px;padding:5px 11px;border-radius:999px;background:var(--bg-2);border:1px solid var(--line);color:var(--muted);font-size:12.5px;font-weight:500;animation:chipIn .28s cubic-bezier(.22,.8,.3,1) both}
+
+/* ================================================================
+   A GLOBE, NOT A SENTENCE
+
+   The status used to read "Searching live web…" with a magnifying-glass
+   emoji. Two problems. It announced a mechanism nobody asked about -- what
+   the person wants to know is that an answer is coming, not which subsystem
+   is busy -- and it made the web path look like a different, slower product
+   than the ordinary one. The label is "Thinking…" on every path now, and the
+   fact that the web was involved is carried by a 15px outlined globe and, as
+   soon as the count is known, the sources themselves.
+   ================================================================ */
+.think2-globe{width:15px;height:15px;flex:none;color:var(--muted);opacity:.9;
+  animation:globeSpin 9s linear infinite}
+.think2-globe svg{width:100%;height:100%;display:block}
+@keyframes globeSpin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+.think2-srcs{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);
+  animation:chipIn .26s cubic-bezier(.22,.8,.3,1) both}
+.think2-sep{opacity:.45}
+
+/* The favicon stack. Overlapped, ring-separated, 14px -- the size at which a
+   site is recognisable and still punctuation rather than an image. */
+.favs{display:inline-flex;align-items:center;flex:none}
+.favs .fav{width:14px;height:14px;border-radius:50%;flex:none;background:var(--bg-2);
+  border:1px solid var(--line);box-shadow:0 0 0 1.5px var(--bg);object-fit:cover;
+  margin-left:-4px;position:relative}
+.favs .fav:first-child{margin-left:0}
+.fav-ltr{display:inline-flex;align-items:center;justify-content:center;font-size:8px;
+  font-weight:800;color:var(--muted);text-transform:uppercase;line-height:1}
+
+/* Source rows: favicon, then domain, then title. The domain is what people
+   actually scan for, so it leads and the title follows at lower weight. */
+/* One line per source, and it stays one line. The title is the only part
+   allowed to give up space, because it is the only part that still means
+   something truncated -- a wrapped "1mo ago" hanging under a row reads as a
+   layout accident, which it was. */
+.sources a{align-items:center!important;gap:7px;min-width:0;flex-wrap:nowrap}
+.sources .fav{margin-left:0}
+.sources .dom{color:var(--ink);font-weight:600;font-size:12px;flex:none;white-space:nowrap}
+.sources .ttl{color:var(--muted);font-size:12.5px;flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sources .src{flex:none;white-space:nowrap;font-size:11.5px;opacity:.75}
+@media (prefers-reduced-motion:reduce){.think2-globe{animation:none!important}}
 @keyframes chipIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
 
 /* the little Pixel mark that travels along with the answer as it writes */
@@ -2252,7 +2350,7 @@ html,body{overscroll-behavior:none}
       </nav>
       <div class="settings-panel" id="settingsPanel"></div>
     </div>
-    <p class="settings-support">Contact Support: <a href="mailto:mnaithani4@gmail.com">mnaithani4@gmail.com</a></p>
+    <p class="settings-support">Contact Support: <a href="mailto:neelaksh098@gmail.com">neelaksh098@gmail.com</a></p>
   </div>
 </div>
 
@@ -2400,7 +2498,7 @@ html,body{overscroll-behavior:none}
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
         <span>Usage</span>
       </button>
-      <a class="acct-item" id="acctContactBtn" href="mailto:mnaithani4@gmail.com">
+      <a class="acct-item" id="acctContactBtn" href="mailto:neelaksh098@gmail.com">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg>
         <span>Contact us</span>
       </a>
@@ -4422,12 +4520,20 @@ var LIVE_STATUS = {
   listening:'Listening…',
   user:'Listening…',
   processing:'Thinking…',
-  searching:'Searching the web…',
+  /* Same word as every other path. The orb is speaking to someone who is
+     listening, not reading a progress log: "Thinking…" is what is true, and
+     naming the retrieval engine instead only makes the grounded answer feel
+     like the slow one. The count of sources is appended once it is real. */
+  searching:'Thinking…',
   responding:'Speaking…'
 };
 function liveStatusText(){
   if(live.muted) return 'Microphone muted — tap to unmute';
-  return LIVE_STATUS[live.state] || LIVE_STATUS.idle;
+  var base = LIVE_STATUS[live.state] || LIVE_STATUS.idle;
+  if(live.srcCount && (live.state === 'searching' || live.state === 'processing')){
+    base += ' · ' + live.srcCount + (live.srcCount === 1 ? ' source' : ' sources');
+  }
+  return base;
 }
 function liveRender(){
   var ov = document.getElementById('liveOverlay');
@@ -6290,6 +6396,10 @@ function specCancel(why){
   var s = spec;
   spec = null;                 /* cleared first: every callback checks identity */
   s.cancelled = true;
+  /* The count on screen belonged to this speculation's search. The question
+     is being replaced, so the number is about to be wrong -- clear it rather
+     than let the next turn inherit a stale source count. */
+  if(!s.adopted && live.srcCount && s.srcCount === live.srcCount){ live.srcCount = 0; liveRender(); }
   try{ if(s.abort) s.abort.abort(); }catch(e){}
 }
 
@@ -6330,6 +6440,7 @@ function specStart(text){
     searchDone: false,
     evidenceMissing: false,
     searchStatus: '',
+    srcCount: 0,
     failed: false,
     cancelled: false,
     adopted: false,
@@ -6361,6 +6472,11 @@ function specStart(text){
            question never needed the web" to everything downstream. */
         if(web.usable && ctx) s.lc = ctx;
         else { s.lc = ''; s.evidenceMissing = true; s.searchStatus = web.status; }
+        s.srcCount = ctx ? (web.results || []).length : 0;
+        /* Only if this speculation is still the live one. A superseded
+           speculation announcing its source count would be describing work
+           that is about to be thrown away. */
+        if((spec === s || s.adopted) && s.srcCount){ live.srcCount = s.srcCount; liveRender(); }
         s.mark('searchDone');
         s.searchMarks = { start: web.startedAt || null, data: web.dataAt || null };
       }
@@ -6508,6 +6624,7 @@ async function liveAsk(question){
          both known. An adopted speculation did this turn's search, so its
          evidence is this turn's evidence and a follow-up may reuse it; a
          speculation that was never adopted deliberately remembers nothing. */
+      if(claimed.srcCount && !live.srcCount){ live.srcCount = claimed.srcCount; liveRender(); }
       if(turnT){
         turnT.routeId = claimed.routeId || null;
         turnT.route = claimed.routeName || '';
@@ -6559,6 +6676,7 @@ async function liveAsk(question){
        before the search is announced, so a reused turn makes no sound and
        goes straight to the model -- which is the whole point of it. */
     var evidenceMissing = false;
+    live.srcCount = 0;
     var reused = needsWeb ? reusableEvidence(question, !!(resolved.route && resolved.route.inherited)) : '';
     if(reused){
       lc = reused;
@@ -6608,6 +6726,9 @@ async function liveAsk(question){
       /* Evidence size is a latency input, not a curiosity: time to first
          token scales with it. It belongs beside the timings it explains. */
       if(turnT){ turnT.ctxChars = lc.length; turnT.sources = (liveWeb.results || []).length; }
+      /* Only the sources that actually made it into the evidence, so the
+         number on screen is the number the answer was written from. */
+      if(lc) live.srcCount = (liveWeb.results || []).length;
       turnMark('searchDone');
       liveGo('processing');
     }
@@ -7644,7 +7765,26 @@ async function generateImage(prompt){
     setTimeout(function(){ showGeneratedImage(bubble, src, prompt, name); }, 180);
   }
 
-  /* 1 — Stability AI (sd3.5-large-turbo) */
+  /* Three providers, strictly in order, and each one is only reached because
+     the one before it did not produce an image. Nothing runs in parallel:
+     every attempt costs a generation, and two pictures for one request is
+     money spent to throw one of them away. */
+
+  /* 1 — Cloudflare Workers AI (FLUX.1 [schnell]). Primary: four diffusion
+     steps makes it the fast one, and it runs on the same account as the rest
+     of the edge setup. */
+  try{
+    var rc = await fetchTimeout('/.netlify/functions/cf-image', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ prompt: prompt, steps: 4 })
+    }, 60000, null);
+    var dc = await rc.json();
+    if(rc.ok && dc && dc.dataUrl){ done(dc.dataUrl, 'pixel-image-' + Date.now() + '.jpg'); return; }
+  }catch(e){}
+
+  /* 2 — Stability AI (sd3.5-large-turbo), for a Cloudflare outage or an
+     unset key. Kept rather than deleted: it is a different model family, so
+     it is a genuine second opinion and not just a second server. */
   try{
     var r = await fetchTimeout('/.netlify/functions/stability-image', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -7654,7 +7794,7 @@ async function generateImage(prompt){
     if(r.ok && d && d.dataUrl){ done(d.dataUrl, 'pixel-image-' + Date.now() + '.webp'); return; }
   }catch(e){}
 
-  /* 2 — keyless fallback, so this never dead-ends if Stability is unset/rate-limited */
+  /* 3 — keyless fallback, so this never dead-ends if both keys are unset */
   clearInterval(stageTimer);
   imageStage(bubble, 'Finishing up…');
   generateImageViaPollinations(bubble, prompt);
@@ -8852,9 +8992,6 @@ function isDynamicQuery(q){
   return strong.test(q) || multilingual.test(q);
 }
 
-function searchLabel(q){
-  return isDynamicQuery(q) ? 'Live web search…' : 'Thinking…';
-}
 
 /* ================================================================
    AI BRAIN  —  Groq only for fast everyday answers
@@ -9069,9 +9206,6 @@ function isDynamicQuery(q){
   return false;
 }
 
-function searchLabel(q){
-  return isDynamicQuery(q) ? 'Searching the live web…' : 'Thinking…';
-}
 
 /* ================================================================
    CHAT UI
@@ -9296,24 +9430,50 @@ function addMessage(role, html, opts){
   b.innerHTML = html;
   /* answers read clean, with no logo permanently parked beside them */
   m.appendChild(b);
-  if(opts.searched){
-    var chip = document.createElement('div');
-    chip.className = 'web-chip';
-    chip.innerHTML = '<span aria-hidden="true">\ud83c\udf10</span> Searched on live web';
-    b.appendChild(chip);
-  }
-  if(opts.sources && opts.sources.length){
-    var s = document.createElement('div'); s.className = 'sources';
-    var inner = '<span class="lbl">SOURCES</span>';
-    opts.sources.slice(0, 3).forEach(function(it, i){
-      inner += '<a href="' + esc(it.link) + '" target="_blank" rel="noopener"><b>' + (i + 1) + '</b>' +
-               esc(it.title) + (it.date ? ' <span class="src">· ' + timeAgo(it.date) + '</span>' : '') + '</a>';
-    });
-    s.innerHTML = inner; b.appendChild(s);
-  }
+  appendSourceMeta(b, opts);
   $chat.appendChild(m);
   scrollDown();
   return b;
+}
+/* THE CHIP AND THE SOURCES, ATTACHED AFTER THE TEXT IS FINAL.
+
+   These used to be appended to the bubble at the moment it was created --
+   which, on the streaming path, is the moment BEFORE the answer starts
+   arriving. Every repaint then did `bubble.innerHTML = md(full)`, and
+   innerHTML replaces the element's entire contents: the chip and the whole
+   source list were destroyed by the first token and never came back. They
+   rendered only on the non-streaming path, which is the one almost nothing
+   uses, so live answers have been arriving with no visible sources at all.
+
+   Attaching them is now a separate step a caller can run at the point the
+   text has stopped changing. Idempotent, because the streaming path and the
+   non-streaming path both end up calling it. */
+function appendSourceMeta(bubble, opts){
+  if(!bubble || !opts) return;
+  if(bubble.querySelector('.web-chip') || bubble.querySelector('.sources')) return;
+  var list = opts.sources || [];
+  if(opts.searched){
+    var chip = document.createElement('div');
+    chip.className = 'web-chip';
+    chip.innerHTML = '<span class="think2-globe" style="animation:none">' + GLOBE_SVG + '</span>' +
+      (list.length ? favStack(list, 3) + '<span>' + list.length +
+                     (list.length === 1 ? ' source' : ' sources') + '</span>'
+                   : '<span>Live web</span>');
+    bubble.appendChild(chip);
+  }
+  if(list.length){
+    var sw = document.createElement('div'); sw.className = 'sources';
+    var inner = '<span class="lbl">SOURCES</span>';
+    list.slice(0, 3).forEach(function(it, i){
+      var host = sourceHost(it.link);
+      inner += '<a href="' + esc(it.link) + '" target="_blank" rel="noopener">' +
+               '<b>' + (i + 1) + '</b>' + favHtml(it) +
+               (host ? '<span class="dom">' + esc(host) + '</span>' : '') +
+               '<span class="ttl">' + esc(it.title) + '</span>' +
+               (it.date ? '<span class="src">· ' + timeAgo(it.date) + '</span>' : '') + '</a>';
+    });
+    sw.innerHTML = inner; bubble.appendChild(sw);
+  }
 }
 function addResponseMeta(bubble, elapsedMs, usedLive){
   /* Quiet icon-only action row under each answer, the way Claude and ChatGPT
@@ -9405,6 +9565,87 @@ function addThinking(label){
   m.appendChild(b); $chat.appendChild(m); scrollDown();
   startThinkingPhases();
 }
+var GLOBE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>' +
+  '<path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg>';
+
+/* The host, as a person would say it: "theverge.com", not
+   "www.theverge.com/tech/2026/...". */
+function sourceHost(url){
+  try{
+    var h = new URL(String(url)).hostname.replace(/^www\./, '');
+    return h || '';
+  }catch(e){ return ''; }
+}
+
+/* A site's icon, at the smallest size that is still recognisable.
+
+   Exa returns one on most results and that is used when present -- it came
+   with the evidence and costs no extra request. When it does not, the icon
+   is fetched from Google's favicon service, which is what every assistant
+   that shows these does, because the alternative -- requesting
+   https://<site>/favicon.ico directly -- fails or hangs on a large fraction
+   of sites and would make the row jump about while it resolves.
+
+   WORTH KNOWING: that fallback tells Google which domains appeared in your
+   results. It is a domain, never the question and never anything of yours,
+   and an icon that fails to load degrades to a letter chip rather than a
+   broken image. Set FAVICON_REMOTE to false to turn the fallback off and use
+   letter chips for anything Exa did not supply an icon for. */
+var FAVICON_REMOTE = true;
+function faviconUrl(src){
+  if(src && src.favicon) return src.favicon;
+  if(!FAVICON_REMOTE) return '';
+  var host = sourceHost(src && (src.link || src.url));
+  return host ? ('https://www.google.com/s2/favicons?sz=64&domain=' + encodeURIComponent(host)) : '';
+}
+
+/* One favicon, with the letter chip already in place as its fallback: the
+   image replaces the letter only once it has actually decoded, so a site
+   that has no icon never shows a broken one. */
+function favHtml(src){
+  var host = sourceHost(src && (src.link || src.url));
+  var letter = (host || '?').charAt(0);
+  var url = faviconUrl(src);
+  if(!url) return '<span class="fav fav-ltr">' + esc(letter) + '</span>';
+  return '<img class="fav" src="' + esc(url) + '" alt="" loading="lazy" ' +
+         'onerror="this.outerHTML=&quot;<span class=\'fav fav-ltr\'>' + esc(letter) + '</span>&quot;" />';
+}
+function favStack(list, max){
+  var out = '<span class="favs">';
+  (list || []).slice(0, max || 3).forEach(function(src){ out += favHtml(src); });
+  return out + '</span>';
+}
+
+/* Turns the thinking row into the web one: globe in place of the pulsing
+   dot, same "Thinking…" label. Called the moment a real search starts, so
+   the globe is never shown for a turn that answered without one. */
+function setThinkingWeb(){
+  var dot = document.querySelector('.think2-dot');
+  if(dot) dot.style.display = 'none';
+  var ic = document.getElementById('thinkIco');
+  if(ic && !ic.querySelector('svg')){ ic.className = 'think2-globe'; ic.innerHTML = GLOBE_SVG; }
+}
+
+/* ...and appends the count once the sources are actually in hand:
+   "Thinking… · ◐◑ 2 sources". Not a guess -- it is the number of distinct
+   sites whose text was handed to the model. */
+function setThinkingSources(sources){
+  var n = (sources || []).length;
+  if(!n) return;
+  setThinkingWeb();
+  var row = document.querySelector('#thinking .think2');
+  if(!row) return;
+  var old = row.querySelector('.think2-srcs');
+  if(old) old.remove();
+  var el = document.createElement('span');
+  el.className = 'think2-srcs';
+  el.innerHTML = '<span class="think2-sep">·</span>' + favStack(sources, 3) +
+                 '<span>' + n + (n === 1 ? ' source' : ' sources') + '</span>';
+  row.appendChild(el);
+}
+
 function setThinking(label, icon){
   stopThinkingPhases();
   var l = document.getElementById('thinkLbl'); if(l) l.textContent = label;
@@ -9773,7 +10014,9 @@ function rankedSources(web){
   return (web && web.results ? web.results : []).slice()
     .sort(function(a,b){ return (Number(b.score)||0) - (Number(a.score)||0); })
     .slice(0,8)
-    .map(function(it){ return { title: it.title || it.url, link: it.url, date: it.published_date || '' }; });
+    .map(function(it){ return { title: it.title || it.url, link: it.url,
+                                date: it.published_date || '',
+                                favicon: it.favicon || '' }; });
 }
 
 function isNormalLocalRequest(q){
@@ -9788,7 +10031,9 @@ function isNormalLocalRequest(q){
   return false;
 }
 function isDynamicQuery(q){ return !isNormalLocalRequest(q); }
-function searchLabel(q){ return isNormalLocalRequest(q) ? 'Thinking…' : 'Searching the live web…'; }
+/* One label for every path. Whether the web was used is shown, not said --
+   see the globe in setThinkingWeb(). */
+function searchLabel(){ return 'Thinking…'; }
 
 /* ---------- send flow ---------- */
 
@@ -10019,7 +10264,7 @@ async function deepResearch(question, bubble, signal){
       round++;
       panel.rounds = round;
       panel.plannedRounds = Math.max(panel.rounds, Math.min(roundCap(), DEEP_HARD_ROUNDS));
-      var roundStep = panel.step('Searching the web · ' + queries.length + ' queries');
+      var roundStep = panel.step('Researching · ' + queries.length + ' queries');
       var doneCount = 0;
       var roundNew = 0;
       await deepRunSearches(queries, signal, function(q, web){
@@ -10028,7 +10273,7 @@ async function deepResearch(question, bubble, signal){
         roundNew += added;
         panel.sources = sources.length;
         panel.foot();
-        roundStep.update('Searching · ' + doneCount + '/' + queries.length + ' — “' + q.slice(0, 46) + (q.length > 46 ? '…' : '') + '”');
+        roundStep.update('Researching · ' + doneCount + '/' + queries.length + ' — “' + q.slice(0, 46) + (q.length > 46 ? '…' : '') + '”');
         /* research is ~70% of the visible progress, writing is the rest */
         panel.progress(0.04 + 0.66 * Math.min(1, (round - 1 + doneCount / queries.length) / DEEP_MAX_ROUNDS));
       });
@@ -10308,13 +10553,17 @@ async function sendMessage(text){
       streamMessages = reuseMessages; streamLive = reusedText;
     } else if(!imgForThisTurn && needsLive){
       turnMark('routeDone');
-      setThinking('Searching live web…', '\ud83d\udd0e');
+      setThinking('Thinking…');
+      setThinkingWeb();
       /* Identical behaviour to before, now expressed as the shared plan the
          orb runs too. Nothing about text mode changes. */
       var plan = buildSearchPlan(text, route);
       var web = await runSearchPlan(text, plan, currentAbort ? currentAbort.signal : null);
       turnMark('searchDone');
       sources = rankedSources(web);
+      /* The count is real: these are the sites whose text is about to be
+         handed to the model, counted after de-duplication. */
+      setThinkingSources(sources);
       var liveContext = buildLiveContext(web, text);
       /* The same two rules the orb follows, for the same reasons: evidence is
          only remembered when it is real, and a search that produced nothing
@@ -10373,6 +10622,8 @@ async function sendMessage(text){
     removeThinking();
     if(!bubbleEl) bubbleEl = addMessage('bot', '', { sources: sources, searched: needsLive });
     if(!imgForThisTurn) bubbleEl.innerHTML = md(reply);
+    /* After the final repaint, never before it. */
+    appendSourceMeta(bubbleEl, { sources: sources, searched: needsLive });
     scrollDown();
     haptic('done');               /* answer over — two beats */
     (function(){
@@ -10448,7 +10699,7 @@ async function sendMessage(text){
         var waitText = waitMatch ? (waitMatch[2] !== undefined ? (waitMatch[1] + 'm ' + Math.round(waitMatch[2]) + 's') : (waitMatch[1] + (rawErr.match(/m/i) ? 'm' : 's'))) : 'a few minutes';
         msg = '<p><strong>Pixel Pro is getting a lot of questions right now.</strong></p><p class="err-detail">Please try again in about ' + esc(waitText) + '.</p>';
       } else if(lowerErr.indexOf('tavily') >= 0){
-        msg = '<p><strong>Live web search is unavailable.</strong></p><p class="err-detail">' + safeErr + '</p>';
+        msg = '<p><strong>Live information is unavailable right now.</strong></p><p class="err-detail">' + safeErr + '</p>';
       } else {
         msg = '<p><strong>Pixel AI is temporarily unavailable.</strong></p><p class="err-detail">' + safeErr + '</p>';
       }
