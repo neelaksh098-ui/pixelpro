@@ -1304,3 +1304,22 @@ The browser tests live in `tests/` and need Playwright plus a Chromium build:
 `tests/mockserver.py` stands in for every Netlify function, and
 `tests/shims.py` replaces speech recognition and the Cartesia WebSocket.
 Everything else under test is the real application code.
+
+## Finding out what models your account actually has
+
+`netlify/functions/cf-models.js` is a read-only listing of the Workers AI
+catalogue as your account sees it. It exists because the catalogue and its
+input schemas move faster than any page describing them, and a wrong schema
+is not a small error — a single unexpected property is rejected outright
+(see the `/seed` note above).
+
+    /.netlify/functions/cf-models                 every model, grouped by task
+    /.netlify/functions/cf-models?task=video      only tasks matching "video"
+    /.netlify/functions/cf-models?name=ltx        only models matching "ltx"
+    /.netlify/functions/cf-models?schema=@cf/...  the full schema for one model
+
+For each model it reports the exact input property names and whether the
+schema is strict (`additionalProperties: false`), which is the pair that
+decides how the model can be called at all.
+
+It generates nothing and runs nothing, and the API token stays on the server.
