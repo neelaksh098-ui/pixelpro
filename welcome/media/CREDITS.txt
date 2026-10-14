@@ -1,0 +1,6 @@
+Photo credits (all free to use; taken from the scikit-image sample data set)
+
+espresso.jpg    "Coffee cup" by Rachel Michetti, courtesy of Pikolo Espresso Bar. CC0 (no copyright restrictions).
+cat.jpg         "Chelsea the cat" by Stefan van der Walt. CC0 (no copyright restrictions).
+rocket.jpg      DSCOVR on Falcon 9 at Launch Complex 40, Cape Canaveral. Photo by SpaceX, released into the public domain.
+deep-field.jpg  Hubble eXtreme Deep Field. NASA / ESA, public domain.

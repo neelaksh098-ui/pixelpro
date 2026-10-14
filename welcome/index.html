@@ -1,0 +1,2518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pixel Pro AI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Introducing Pixel Pro AI, a free AI assistant created by Neelaksh Naithani. Live web answers, voice, photos, and English, Hindi and many more languages.">
+<meta name="theme-color" content="#05070F">
+<meta property="og:title" content="Pixel Pro AI">
+<meta property="og:description" content="Ask anything. Get answers. A free AI assistant created by Neelaksh Naithani.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect x='10.5' y='0' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3Crect x='0' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='10.5' width='9' height='9' rx='2' fill='%23FFB43A'/%3E%3Crect x='21' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='21' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700;800&family=Noto+Sans+JP:wght@700&family=Mrs+Saint+Delafield&family=Inter:wght@400;500;600;700;800&family=Instrument+Serif&display=swap">
+<script>document.documentElement.classList.add('js')</script>
+<style>
+/* Layout: a cinematic launch reel. Full-bleed pinned chapters, type set huge on a left-anchored grid,
+   and the 3×3 pixel cross from the Pixel Pro logo recurring as the motif. Single dark look by design. */
+:root{
+  --void:#05070F;      /* page ground: blue-biased black */
+  --panel:#0A0F22;     /* raised surfaces */
+  --ink:#EEF2FF;       /* primary text */
+  --ink-2:#C6CEEC;     /* secondary bright text */
+  --mist:#8D97BA;      /* muted text */
+  --blue:#5672FF;      /* brand pixel blue */
+  --deep:#2E46E2;      /* brand deep blue */
+  --spark:#FFB43A;     /* the amber centre pixel */
+  --good:#8BE6A8;
+  --bad:#FF8F85;
+  --line:rgba(160,178,255,.13);
+  --line-2:rgba(160,178,255,.24);
+  --glass:rgba(10,14,32,.66);
+  --f-display:"Bricolage Grotesque","Noto Sans Devanagari",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-body:"Geist","Noto Sans Devanagari",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --t-hero:clamp(3.5rem,14.5vw,11.5rem);
+  --t-xl:clamp(2.5rem,6.4vw,5.4rem);
+  --t-l:clamp(1.9rem,4.4vw,3.6rem);
+  --t-m:clamp(1.35rem,2.2vw,1.85rem);
+  --maxw:1280px;
+  --ease:cubic-bezier(.2,.75,.1,1);
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;background:var(--void)}
+body{margin:0;background:var(--void);color:var(--ink);font:400 1.0625rem/1.6 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:clip}
+.js body:not(.entered),body.studio-open{overflow:hidden}
+::selection{background:var(--blue);color:var(--ink)}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+img,video,canvas{max-width:100%}
+:focus-visible{outline:2px solid var(--spark);outline-offset:3px;border-radius:8px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:-.035em;line-height:.96;margin:0;text-wrap:balance}
+p{margin:0}
+.wrap{width:100%;max-width:var(--maxw);margin-inline:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:768px){.wrap{padding-left:max(40px,env(safe-area-inset-left,0px));padding-right:max(40px,env(safe-area-inset-right,0px))}}
+.eyebrow{font:500 .75rem/1.2 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mist)}
+.eyebrow b{color:var(--spark);font-weight:500}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* film grain over everything, very faint */
+body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;opacity:.05;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ---------- pixel mark (the logo) ---------- */
+.mark{--s:28px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:calc(var(--s)*.08);width:var(--s);height:var(--s);flex:none}
+.mark i{border-radius:22%;background:var(--blue)}
+.mark i:nth-child(1),.mark i:nth-child(3),.mark i:nth-child(7),.mark i:nth-child(9){visibility:hidden}
+.mark i:nth-child(2),.mark i:nth-child(8){background:var(--deep)}
+.mark i:nth-child(5){background:var(--spark);box-shadow:0 0 calc(var(--s)*.4) rgba(255,180,58,.55)}
+
+/* ---------- shining text ---------- */
+.shine{background:linear-gradient(100deg,#BFC9F6 0%,#FFFFFF 18%,#D3DBFF 34%,#FFFFFF 44%,#FFD58A 50%,#FFFFFF 56%,#D3DBFF 66%,#FFFFFF 82%,#BFC9F6 100%);background-size:260% 100%;background-position:120% 0;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:shine 7s var(--ease) infinite}
+@keyframes shine{0%{background-position:120% 0}55%,100%{background-position:-25% 0}}
+
+/* ---------- buttons ---------- */
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:10px;height:52px;padding:0 26px;border-radius:999px;border:0;font:600 1rem/1 var(--f-body);letter-spacing:-.01em;text-decoration:none;white-space:nowrap;overflow:hidden;isolation:isolate;transition:transform .35s var(--ease),box-shadow .35s var(--ease),background .35s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--ink);color:var(--void);box-shadow:0 14px 44px -12px rgba(86,114,255,.9),0 0 0 1px rgba(255,255,255,.6) inset}
+.btn-primary:hover{box-shadow:0 18px 60px -10px rgba(86,114,255,1),0 0 0 1px #fff inset;transform:translateY(-2px)}
+.btn-primary::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgba(255,180,58,.75) 48%,rgba(255,255,255,.9) 52%,transparent 70%);transform:translateX(-130%);animation:sweep 4.2s var(--ease) infinite 1.4s}
+@keyframes sweep{0%{transform:translateX(-130%)}45%,100%{transform:translateX(130%)}}
+.btn-ghost{background:rgba(255,255,255,.04);color:var(--ink);box-shadow:0 0 0 1px var(--line-2) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.btn-ghost:hover{background:rgba(255,255,255,.09)}
+.btn-sm{height:40px;padding:0 18px;font-size:.875rem}
+.btn svg{width:18px;height:18px;flex:none}
+
+/* ---------- opening titles (the gate) ---------- */
+@property --ga{syntax:'<angle>';initial-value:0deg;inherits:false}
+.gate{display:none}
+.js .gate{position:fixed;inset:0;z-index:150;display:grid;place-items:safe center;overflow-y:auto;overscroll-behavior:contain;cursor:pointer;background:var(--void);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:max(24px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-bottom,0px));transition:opacity .9s var(--ease),visibility 0s .9s}
+.js .gate[hidden]{display:none}
+.gate-canvas{position:fixed;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+.gate::after{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 75% at 50% 45%,transparent 52%,rgba(0,0,0,.78) 100%)}
+.gate-hud{position:fixed;left:0;right:0;top:calc(20px + env(safe-area-inset-top,0px));z-index:2;display:flex;justify-content:space-between;gap:16px;padding-left:max(22px,env(safe-area-inset-left,0px));padding-right:max(22px,env(safe-area-inset-right,0px));font:500 .64rem/1 var(--f-mono);letter-spacing:.22em;text-transform:uppercase;color:var(--mist);pointer-events:none;transition:opacity .8s var(--ease)}
+.gate-hud .rec::before{content:"";display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:var(--spark);box-shadow:0 0 8px var(--spark);vertical-align:1px;animation:blink 1.6s steps(2) infinite}
+.gate-hud span{white-space:nowrap}
+.gate-hud b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.gate.s3 .gate-hud{opacity:.55}
+.gate-inner{position:relative;z-index:1;display:grid;justify-items:center;text-align:center;gap:18px;max-width:640px}
+.gate-slot{width:84px;height:84px;margin-bottom:12px;display:grid;place-items:center}
+.gate-slot .mark{--s:84px;opacity:0}
+.gate.no-canvas .gate-slot .mark{opacity:1}
+.gate-title{position:relative;margin:0;padding:0 .1em .04em;font-size:clamp(3rem,11vw,6.5rem);font-weight:800;letter-spacing:-.05em;line-height:.92}
+/* the title is written on by a light: a soft mask wipe with a glowing edge travelling with it */
+.js .gate .gate-title{-webkit-mask-image:linear-gradient(90deg,#000 44%,transparent 56%);mask-image:linear-gradient(90deg,#000 44%,transparent 56%);-webkit-mask-size:260% 100%;mask-size:260% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:100% 0;mask-position:100% 0;filter:blur(6px);transition:-webkit-mask-position 1.5s cubic-bezier(.55,.05,.25,1),mask-position 1.5s cubic-bezier(.55,.05,.25,1),filter 1.2s var(--ease)}
+.js .gate.s1 .gate-title{-webkit-mask-position:0 0;mask-position:0 0;filter:none}
+.gate-flare{position:absolute;left:0;top:50%;z-index:2;width:3px;height:150%;transform:translate(-50%,-50%);pointer-events:none;opacity:0;background:linear-gradient(transparent,rgba(255,236,200,.95) 45%,#fff 50%,rgba(255,236,200,.95) 55%,transparent);box-shadow:0 0 22px 6px rgba(255,190,90,.55),0 0 80px 18px rgba(86,114,255,.35)}
+.gate-flare::after{content:"";position:absolute;left:50%;top:50%;width:min(80vw,520px);height:2px;transform:translate(-50%,-50%);background:linear-gradient(90deg,transparent,rgba(160,180,255,.55) 30%,rgba(255,240,214,.95) 50%,rgba(160,180,255,.55) 70%,transparent)}
+.gate.s1 .gate-flare{animation:gateFlare 1.5s cubic-bezier(.55,.05,.25,1) both}
+@keyframes gateFlare{0%{left:-6%;opacity:0}12%{opacity:1}85%{opacity:1}100%{left:104%;opacity:0}}
+.gate-rev{opacity:0;transform:translateY(16px);filter:blur(8px);transition:opacity 1s var(--ease),transform 1s var(--ease),filter 1s var(--ease)}
+.gate.s2 .gate-rev.r2,.gate.s3 .gate-rev.r3{opacity:1;transform:none;filter:none}
+.gate.s2 .gate-copy{transition-delay:.15s}
+.gate-copy{color:var(--mist);max-width:34ch}
+.gate-actions{position:relative;margin-top:10px}
+.gate-actions::before{content:"";position:absolute;inset:-9px;border-radius:999px;pointer-events:none;box-shadow:0 0 0 1px rgba(255,180,58,.55);opacity:0}
+.gate.s3 .gate-actions::before{animation:gateRing 2.6s var(--ease) infinite 1s}
+@keyframes gateRing{0%{transform:scale(.92);opacity:.9}100%{transform:scale(1.22);opacity:0}}
+.gate-enter{position:relative;display:inline-flex;align-items:center;gap:14px;height:62px;padding:0 28px 0 32px;border-radius:999px;border:1.5px solid transparent;cursor:pointer;isolation:isolate;overflow:hidden;color:var(--ink);font:600 1.06rem/1 var(--f-body);letter-spacing:-.01em;
+  background:linear-gradient(180deg,#141B38,#0A0F22) padding-box,conic-gradient(from var(--ga),rgba(255,255,255,.1) 0 58%,var(--spark) 70%,#fff 76%,var(--blue) 86%,rgba(255,255,255,.1) 100%) border-box;
+  box-shadow:0 22px 60px -18px rgba(86,114,255,.85),inset 0 1px 0 rgba(255,255,255,.12);animation:gateSpin 3.4s linear infinite;transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
+.gate-enter:hover{transform:translateY(-2px);box-shadow:0 28px 70px -16px rgba(86,114,255,1),inset 0 1px 0 rgba(255,255,255,.16)}
+.gate-enter:active{transform:scale(.97)}
+.gate-enter::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgba(255,220,160,.22) 48%,rgba(255,255,255,.3) 52%,transparent 70%);transform:translateX(-130%);animation:sweep 4.2s var(--ease) infinite 1.6s}
+@keyframes gateSpin{to{--ga:360deg}}
+.ge-eq{display:inline-flex;align-items:flex-end;gap:2.5px;height:16px}
+.ge-eq i{width:3px;border-radius:2px;background:var(--spark);box-shadow:0 0 8px rgba(255,180,58,.6);animation:eq 1.1s ease-in-out infinite}
+.ge-eq i:nth-child(2){animation-delay:-.35s}.ge-eq i:nth-child(3){animation-delay:-.7s}.ge-eq i:nth-child(4){animation-delay:-.2s}
+.gate-meta{font:500 .68rem/1.6 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--mist)}
+.gate-muted{border:0;background:none;padding:6px 4px;font:inherit;letter-spacing:inherit;text-transform:inherit;color:var(--ink-2);text-decoration:underline;text-underline-offset:4px;text-decoration-color:rgba(198,206,236,.35);cursor:pointer}
+.gate-muted:hover{color:var(--ink)}
+@media (max-height:560px){.gate-slot{width:52px;height:52px;margin-bottom:0}.gate-slot .mark{--s:52px}.gate-inner{gap:10px}.gate-title{font-size:clamp(2.2rem,12vh,3.4rem)}.gate-copy{display:none}.gate-enter{height:52px}}
+.gate.leaving{opacity:0;visibility:hidden;transition:opacity .85s var(--ease) .2s,visibility 0s 1.05s}
+.gate.leaving .gate-inner{opacity:0;transform:scale(1.08);filter:blur(12px);transition:opacity .35s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
+.gate.leaving .gate-hud{opacity:0}
+
+/* ---------- nav ---------- */
+.nav{position:fixed;top:0;left:0;right:0;z-index:80;padding-top:env(safe-area-inset-top,0px);border-bottom:1px solid transparent;transition:background .5s,border-color .5s}
+.nav.scrolled{background:rgba(5,7,15,.6);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border-bottom-color:var(--line)}
+.nav-inner{display:flex;align-items:center;gap:20px;height:64px}
+.brand{white-space:nowrap;flex:none;display:flex;align-items:center;gap:10px;text-decoration:none;font:700 1.125rem/1 var(--f-display);letter-spacing:-.025em}
+.brand small{font:500 .65rem/1 var(--f-mono);letter-spacing:.14em;color:var(--spark);padding:4px 6px;border:1px solid rgba(255,180,58,.4);border-radius:6px}
+@media (max-width:380px){.nav-inner{gap:10px}.brand small{display:none}}
+.nav-links{display:none;gap:28px;margin-left:auto;font-size:.875rem;color:var(--mist)}
+.nav-links a{text-decoration:none;transition:color .2s}.nav-links a:hover{color:var(--ink)}
+.nav-actions{display:flex;align-items:center;gap:10px;margin-left:auto}
+@media (min-width:900px){.nav-links{display:flex}.nav-actions{margin-left:12px}}
+.sound-btn{min-width:128px;justify-content:center;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:999px;border:0;background:rgba(255,255,255,.05);box-shadow:0 0 0 1px var(--line-2) inset;font:500 .72rem/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mist)}
+.sound-btn svg{width:16px;height:16px}
+.sound-btn[aria-pressed="true"]{color:var(--ink);box-shadow:0 0 0 1px rgba(255,180,58,.5) inset}
+.sound-btn .eq{display:none;gap:2px;align-items:flex-end;height:12px}
+.sound-btn[aria-pressed="true"] .eq{display:flex}
+.sound-btn[aria-pressed="true"] .off{display:none}
+.sound-btn .eq i{width:2px;background:var(--spark);border-radius:1px;animation:eq 1s ease-in-out infinite}
+.sound-btn .eq i:nth-child(2){animation-delay:-.4s}.sound-btn .eq i:nth-child(3){animation-delay:-.7s}
+@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+@media (max-width:520px){.sound-btn{min-width:0}.sound-btn .lbl{display:none}.nav .btn-sm{padding:0 14px}}
+
+/* ---------- hero ---------- */
+.hero{position:relative;min-height:100vh;min-height:100svh;display:grid;place-items:center;overflow:clip;isolation:isolate;padding-block:84px 76px}
+.hero-bg{position:absolute;inset:0;z-index:-1;pointer-events:none;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
+.aurora{position:absolute;width:70vmax;height:70vmax;border-radius:50%;filter:blur(70px);opacity:.6;animation:drift 20s ease-in-out infinite alternate}
+.aurora.a1{background:radial-gradient(circle,rgba(46,70,226,.9),transparent 62%);top:-32vmax;left:-22vmax}
+.aurora.a2{background:radial-gradient(circle,rgba(255,180,58,.38),transparent 60%);bottom:-40vmax;right:-20vmax;animation-duration:26s}
+.aurora.a3{background:radial-gradient(circle,rgba(86,114,255,.55),transparent 60%);top:-10vmax;right:-38vmax;opacity:.4;animation-duration:30s}
+@keyframes drift{to{transform:translate(6vmax,4vmax) scale(1.08)}}
+.floor{position:absolute;left:-25%;right:-25%;bottom:-6%;height:58%;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:64px 64px;transform:perspective(700px) rotateX(64deg);transform-origin:50% 100%;-webkit-mask-image:linear-gradient(to top,#000 5%,transparent 80%);mask-image:linear-gradient(to top,#000 5%,transparent 80%);animation:floor 6s linear infinite}
+@keyframes floor{to{background-position:0 64px}}
+.sparks{position:absolute;inset:0}
+.sparks i{position:absolute;width:var(--z,4px);height:var(--z,4px);border-radius:1px;background:var(--c,var(--blue));opacity:0;animation:twinkle var(--d,5s) ease-in-out infinite var(--dl,0s);box-shadow:0 0 10px var(--c,var(--blue))}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:.9;transform:scale(1)}}
+.hero-inner{display:grid;justify-items:center;text-align:center;gap:18px;will-change:transform,opacity}
+.hero-logo{position:relative;width:min(680px,100%);height:clamp(220px,36vh,400px);display:grid;place-items:center;margin:-10px 0 -22px}
+.hero-logo canvas{opacity:0;transition:opacity 1.2s var(--ease)}
+.hero-logo.is-3d canvas{opacity:1}
+.hero-fallback{--s:clamp(96px,14vh,140px);transition:opacity .8s var(--ease),transform .8s var(--ease);filter:drop-shadow(0 0 40px rgba(86,114,255,.45))}
+.hero-logo.is-3d .hero-fallback{opacity:0;transform:scale(.8)}
+.hero-title{font-size:clamp(3.3rem,11.5vw,9rem);font-weight:800;letter-spacing:-.06em;line-height:.9;padding-bottom:.08em;display:flex;flex-wrap:wrap;justify-content:center;column-gap:.22em}
+.metal{display:inline-block;padding:0 .05em .06em;background-image:linear-gradient(100deg,transparent 0 40%,rgba(255,240,214,.95) 48%,rgba(255,190,90,.9) 50%,transparent 60%),linear-gradient(180deg,#FFFFFF 0%,#E6EBFB 36%,#B3BDE2 70%,#7E8AB8 100%);background-size:320% 100%,100% 100%;background-position:160% 0,0 0;background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:glint 8s var(--ease) infinite 3s}
+.metal.ai{background-image:linear-gradient(100deg,transparent 0 40%,rgba(255,255,255,.95) 50%,transparent 60%),linear-gradient(180deg,#FFF1D2 0%,#FFC867 45%,#E8921E 80%,#B8680C 100%)}
+@keyframes glint{0%{background-position:160% 0,0 0}38%,100%{background-position:-60% 0,0 0}}
+.hero-by{font:500 .72rem/1.3 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mist)}
+.hero-by b{color:var(--ink);font-weight:500}
+@media (max-height:880px) and (min-width:700px){.hero-copy{display:none}}
+@media (max-height:500px) and (orientation:landscape){.hero{padding-block:72px 16px}.hero-inner{gap:8px}.hero-logo{height:28vh;margin:0}.hero-inner>.eyebrow,.hero-copy{display:none}.hero-title{font-size:clamp(2.4rem,13vh,3.6rem)}}
+.hero-sub{font:650 clamp(1.45rem,3.4vw,2.5rem)/1.1 var(--f-display);letter-spacing:-.035em;color:var(--mist)}
+.hero-sub b{color:var(--ink);font-weight:inherit}
+.hero-copy{max-width:44ch;color:var(--mist)}
+.ctas{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:6px}
+/* entrance after the gate */
+.js body:not(.entered) .hero-inner>*{opacity:0;transform:translateY(34px);filter:blur(14px)}
+.entered .hero-inner>*{transition:opacity 1.2s var(--ease),transform 1.2s var(--ease),filter 1.2s var(--ease)}
+.js body:not(.entered) .hero-title .metal{clip-path:inset(0 0 100% 0);transform:translateY(.4em)}
+.entered .hero-title .metal{transition:clip-path 1.4s var(--ease),transform 1.4s var(--ease);transition-delay:.35s}
+.entered .hero-title .metal.ai{transition-delay:.6s}
+.entered .hero-inner>:nth-child(2){transition-delay:.12s}.entered .hero-inner>:nth-child(3){transition-delay:.3s}.entered .hero-inner>:nth-child(4){transition-delay:.42s}.entered .hero-inner>:nth-child(5){transition-delay:.54s}.entered .hero-inner>:nth-child(6){transition-delay:.66s}.entered .hero-inner>:nth-child(7){transition-delay:.8s}
+
+/* ---------- the reel (scroll-driven film) ---------- */
+.reel{position:relative;height:560vh}
+.reel-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;background:var(--void)}
+.reel-canvas,.reel-video{position:absolute;inset:0;width:100%;height:100%;display:block}
+.reel-video{object-fit:cover;display:none}
+.reel-stage.has-video .reel-video{display:block}
+.reel-stage.has-video .reel-canvas{display:none}
+.reel-shade{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 70% at 50% 45%,transparent 40%,rgba(5,7,15,.9) 100%),linear-gradient(to top,rgba(5,7,15,.92) 0%,rgba(5,7,15,0) 42%)}
+.reel-hud{position:absolute;left:0;right:0;top:calc(84px + env(safe-area-inset-top,0px))}
+.reel-hud .wrap{display:flex;justify-content:space-between;gap:16px;font:500 .7rem/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--mist)}
+.rec{display:inline-flex;align-items:center;gap:8px}
+.rec::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--spark);box-shadow:0 0 10px var(--spark);animation:blink 1.6s steps(2) infinite}
+@keyframes blink{50%{opacity:.2}}
+.tc{font-variant-numeric:tabular-nums}
+.reel-hud span{white-space:nowrap}
+@media (max-width:600px){.hud-long{display:none}}
+.reel-caps{position:absolute;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px))}
+.caps-box{position:relative;height:clamp(230px,36vh,330px)}
+.cap{position:absolute;left:0;right:0;bottom:0;display:grid;gap:14px;max-width:680px;opacity:0;will-change:opacity,transform}
+.cap h2{font-size:var(--t-xl)}
+.cap p:not(.eyebrow){color:var(--ink-2);max-width:40ch;font-size:clamp(1rem,1.4vw,1.15rem)}
+.cap .eyebrow{color:var(--spark)}
+.reel-rail{position:absolute;top:50%;right:max(16px,env(safe-area-inset-right,0px));transform:translateY(-50%);width:2px;height:min(42vh,320px);background:var(--line-2);border-radius:2px}
+.reel-rail b{position:absolute;left:0;top:0;width:100%;height:calc(var(--p,0)*100%);background:linear-gradient(var(--blue),var(--spark));border-radius:2px;box-shadow:0 0 12px var(--spark)}
+.reel-rail i{position:absolute;left:50%;width:8px;height:8px;border-radius:2px;transform:translate(-50%,-50%);background:var(--void);box-shadow:0 0 0 1px var(--line-2) inset;transition:background .3s,box-shadow .3s}
+.reel-rail i.on{background:var(--spark);box-shadow:0 0 10px var(--spark)}
+@media (min-width:768px){.reel-rail{right:max(28px,env(safe-area-inset-right,0px))}}
+.reel-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:12px;font:500 .7rem/1 var(--f-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-2);pointer-events:none;transition:opacity .5s}
+.reel-hint .mouse{width:24px;height:38px;border-radius:14px;box-shadow:0 0 0 1.5px var(--ink-2) inset;position:relative}
+.reel-hint .mouse::after{content:"";position:absolute;left:50%;top:8px;width:3px;height:7px;border-radius:2px;background:var(--spark);transform:translateX(-50%);animation:wheel 1.8s var(--ease) infinite}
+@keyframes wheel{to{transform:translate(-50%,12px);opacity:0}}
+
+/* ---------- statement (words light up while scrolling) ---------- */
+.statement{position:relative;height:250vh}
+.statement-sticky{position:sticky;top:0;height:100vh;height:100svh;display:flex;align-items:center}
+.statement-text{font:700 clamp(1.9rem,5vw,4.4rem)/1.06 var(--f-display);letter-spacing:-.038em;max-width:19em;text-wrap:pretty}
+.statement-text .w{opacity:.14;transition:opacity .45s var(--ease),color .45s}
+.statement-text .w.lit{opacity:1}
+.statement-text .acc.lit{color:var(--spark)}
+
+/* ---------- galaxy title (scales down while pinned) ---------- */
+.zoomsec{position:relative;height:230vh}
+.zoom-sticky{position:sticky;top:0;height:100vh;height:100svh;display:grid;place-items:center;overflow:hidden}
+.zoom-box{display:grid;justify-items:center;gap:22px;text-align:center}
+.zoom-title{font:800 clamp(4.2rem,18vw,15rem)/.92 var(--f-display);letter-spacing:-.065em;white-space:nowrap;padding:0 .04em .06em;background-image:url("media/deep-field.jpg"),linear-gradient(105deg,#6F86FF 0%,#C7D2FF 42%,#FFFFFF 55%,#FFC977 100%);background-size:cover,100% 100%;background-position:center;background-blend-mode:screen;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;filter:saturate(1.15) drop-shadow(0 0 34px rgba(86,114,255,.3));transform-origin:50% 55%}
+.zoom-sub{display:grid;gap:10px;justify-items:center}
+.zoom-sub b{font:650 var(--t-m)/1.1 var(--f-display);letter-spacing:-.03em;color:var(--ink)}
+.zoom-sub b em{font-style:normal;color:var(--spark)}
+
+/* ---------- section scaffolding ---------- */
+.section{position:relative;padding-block:clamp(96px,13vw,170px)}
+.sec-head{display:grid;gap:18px;max-width:780px;margin-bottom:clamp(40px,6vw,72px)}
+.sec-head h2{font-size:var(--t-xl)}
+.sec-head p:not(.eyebrow){color:var(--mist);max-width:48ch;font-size:1.125rem}
+
+/* reveal on scroll (only for things that start below the fold) */
+.reveal-ready{opacity:0;transform:translateY(46px);filter:blur(10px)}
+.reveal-ready.in{opacity:1;transform:none;filter:none;transition:opacity 1.1s var(--ease),transform 1.1s var(--ease),filter 1.1s var(--ease);transition-delay:var(--dl,0s)}
+
+/* ---------- bento features ---------- */
+.bento{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+.card{grid-column:span 6;position:relative;display:flex;flex-direction:column;gap:12px;min-height:320px;padding:clamp(22px,3vw,32px);border-radius:28px;overflow:hidden;isolation:isolate;background:linear-gradient(180deg,rgba(22,30,64,.72),rgba(9,13,30,.82));box-shadow:0 0 0 1px var(--line) inset;min-width:0}
+.card::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(520px circle at var(--mx,50%) var(--my,-20%),rgba(86,114,255,.2),transparent 42%);opacity:0;transition:opacity .5s}
+.card::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:radial-gradient(260px circle at var(--mx,50%) var(--my,-20%),rgba(255,200,110,.85),transparent 45%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);opacity:0;transition:opacity .5s;pointer-events:none}
+.card:hover::before,.card:hover::after{opacity:1}
+.card h3{font-size:clamp(1.55rem,2.5vw,2.05rem);line-height:1.02}
+.card>p:not(.eyebrow){color:var(--mist);max-width:42ch}
+.card .eyebrow{color:var(--spark)}
+.viz{margin-top:auto;padding-top:18px}
+.c-web .viz{margin-block:auto}
+.c-free{justify-content:center}
+@media (min-width:900px){
+  .c-web{grid-column:span 4}.c-voice{grid-column:span 2}
+  .c-photo{grid-column:span 2}.c-news{grid-column:span 4}
+  .c-free,.c-chat{grid-column:span 3}
+}
+/* shared bits used by the demo chat and the headlines label */
+.src-label{font:500 .65rem/1 var(--f-mono);letter-spacing:.18em;color:var(--mist)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips span{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:999px;background:rgba(86,114,255,.12);box-shadow:0 0 0 1px rgba(86,114,255,.3) inset;font-size:.8125rem;color:var(--ink-2)}
+.chips b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--blue);color:var(--ink);font:600 .7rem/1 var(--f-mono)}
+@keyframes chip{from{opacity:0;transform:translateY(10px) scale(.9)}}
+.live{display:inline-flex;align-items:center;gap:7px;font:500 .68rem/1 var(--f-mono);letter-spacing:.18em;color:var(--bad)}
+.live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--bad);animation:blink 1.4s steps(2) infinite}
+/* free */
+.zero{font:800 clamp(5.5rem,13vw,9.5rem)/.85 var(--f-display);letter-spacing:-.06em}
+.free-list{display:flex;flex-wrap:wrap;gap:8px}
+.free-list span{padding:8px 12px;border-radius:999px;box-shadow:0 0 0 1px var(--line-2) inset;font-size:.875rem;color:var(--ink-2)}
+
+/* ---------- prompt track (horizontal while pinned) ---------- */
+.track-sec{position:relative}
+.track-sticky{position:sticky;top:0;height:100vh;height:100svh;box-sizing:border-box;padding-top:64px;display:flex;flex-direction:column;justify-content:center;gap:clamp(28px,5vh,56px);overflow:hidden}
+@media (max-height:800px){.track-sticky{gap:clamp(14px,3vh,28px)}}
+@media (max-height:500px){.track-sticky{justify-content:flex-start;padding-top:calc(72px + env(safe-area-inset-top,0px));gap:12px}.track-sticky .sec-head h2{font-size:1.5rem}.pcard{min-height:0;padding:16px 18px;gap:10px}.pc-img{height:22vh;aspect-ratio:auto}.track{align-items:flex-start}}
+.track-sticky .sec-head{margin-bottom:0}
+.track{display:flex;gap:18px;width:max-content;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));will-change:transform}
+@media (min-width:768px){.track{padding-left:max(40px,calc((100vw - var(--maxw))/2 + 40px));padding-right:max(40px,env(safe-area-inset-right,0px))}}
+.pcard{position:relative;flex:none;width:min(78vw,400px);min-height:clamp(220px,32vh,280px);padding:26px;border-radius:26px;display:flex;flex-direction:column;gap:16px;background:linear-gradient(160deg,rgba(30,42,96,.85),rgba(10,14,32,.9));box-shadow:0 0 0 1px var(--line) inset;overflow:hidden}
+.pcard.hot{background:linear-gradient(160deg,rgba(255,180,58,.24),rgba(10,14,32,.92) 60%);box-shadow:0 0 0 1px rgba(255,180,58,.35) inset}
+.pcard .eyebrow{color:var(--spark)}
+.pcard q{font:650 clamp(1.45rem,2.6vw,2rem)/1.1 var(--f-display);letter-spacing:-.03em;quotes:"“" "”"}
+.pc-img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;border-radius:16px;box-shadow:0 0 0 1px var(--line) inset}
+.pcard-photo q{font-size:clamp(1.25rem,2vw,1.6rem)}
+.pcard .ask{margin-top:auto;display:flex;align-items:center;gap:10px;font-size:.875rem;color:var(--mist)}
+.pcard .ask .mark{--s:16px}
+.track-bar{height:2px;background:var(--line);border-radius:2px;overflow:hidden}
+.track-bar i{display:block;height:100%;width:calc(var(--p,0)*100%);background:linear-gradient(90deg,var(--blue),var(--spark))}
+
+/* ---------- demo chat ---------- */
+.demo-grid{display:grid;gap:clamp(36px,6vw,72px);align-items:center}
+@media (min-width:980px){.demo-grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}}
+.demo-grid .sec-head{margin-bottom:0}
+.msg.pop,#chatBody .pop{animation:chip .5s var(--ease) backwards}
+@keyframes dot{0%,60%,100%{transform:none;opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+
+/* ---------- languages ---------- */
+.langs{text-align:center;overflow:clip}
+.langs-inner{display:grid;justify-items:center;gap:26px}
+.greet{display:grid;font:800 clamp(4.2rem,17vw,13rem)/1.05 var(--f-display);letter-spacing:-.05em}
+.greet span{grid-area:1/1;padding-top:.3em;margin-top:-.3em;opacity:0;transform:translateY(40px) scale(.96);filter:blur(16px);transition:opacity .9s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
+.greet span.on{opacity:1;transform:none;filter:none}
+.greet span[lang="hi"]{font-family:"Noto Sans Devanagari",var(--f-display);letter-spacing:-.02em}
+.greet span[lang="ja"]{font-family:"Noto Sans JP",var(--f-display);letter-spacing:0}
+.lang-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:6px;border-radius:999px;box-shadow:0 0 0 1px var(--line-2) inset;background:rgba(255,255,255,.03)}
+.lang-pills span{padding:9px 18px;border-radius:999px;font-size:.9375rem;color:var(--mist);transition:background .5s,color .5s}
+.lang-pills span.on{background:var(--ink);color:var(--void)}
+.langs-copy{color:var(--mist);max-width:40ch;font-size:1.125rem}
+
+/* ---------- creator signature ---------- */
+.sign{text-align:center;overflow:clip}
+.sign-inner{display:grid;justify-items:center;gap:18px}
+.sign-line{font:650 clamp(1.5rem,3.6vw,2.6rem)/1.1 var(--f-display);letter-spacing:-.035em;color:var(--mist)}
+.signature{position:relative;margin:4px 0 2px;font:400 clamp(2.7rem,11.5vw,10rem)/1.2 "Mrs Saint Delafield","Brush Script MT",cursive;letter-spacing:0;padding:0 .2em;white-space:nowrap;max-width:100%}
+.sig-ink{display:inline-block;padding:0 .3em 0 .15em;margin:0 -.3em 0 -.15em;background:linear-gradient(100deg,#FFFFFF 0%,#FFE3AE 40%,#FFB43A 62%,#FFFFFF 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 22px rgba(255,180,58,.28))}
+.sig-pen{position:absolute;top:50%;left:var(--pen,100%);width:10px;height:10px;border-radius:50%;background:#FFF3DA;box-shadow:0 0 16px 6px rgba(255,180,58,.75),0 0 60px 20px rgba(255,180,58,.25);transform:translate(-50%,-50%);opacity:0;pointer-events:none}
+.js .signature.ready .sig-ink{clip-path:inset(-20% 100% -20% -6%)}
+.js .signature.writing .sig-ink{clip-path:inset(-20% -12% -20% -6%);transition:clip-path 2.6s cubic-bezier(.45,.05,.3,1)}
+.js .signature.writing .sig-pen{animation:pen 2.6s cubic-bezier(.45,.05,.3,1) forwards}
+@keyframes pen{0%{left:6%;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:96%;opacity:0}}
+.sign-in{color:var(--ink)}
+.sign-copy{color:var(--mist);max-width:44ch}
+
+/* ---------- final call ---------- */
+.cta{position:relative;overflow:clip;isolation:isolate;text-align:center;padding-block:clamp(120px,18vw,220px)}
+.cta::before{content:"";position:absolute;left:50%;top:50%;width:160vmax;height:160vmax;transform:translate(-50%,-50%);z-index:-1;background:repeating-conic-gradient(from 0deg,rgba(86,114,255,.10) 0deg 4deg,transparent 4deg 14deg);-webkit-mask-image:radial-gradient(circle,#000 0,transparent 42%);mask-image:radial-gradient(circle,#000 0,transparent 42%);animation:rays 60s linear infinite}
+.cta::after{content:"";position:absolute;left:50%;top:50%;width:min(900px,120vw);height:min(900px,120vw);transform:translate(-50%,-50%);z-index:-1;background:radial-gradient(circle,rgba(255,180,58,.18),rgba(46,70,226,.18) 35%,transparent 65%)}
+@keyframes rays{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.cta-inner{display:grid;justify-items:center;gap:24px}
+.cta .mark{--s:72px;animation:float 6s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(-12px) rotate(4deg)}}
+.cta h2{padding-inline:.06em;font-size:clamp(3.4rem,12vw,9.5rem);font-weight:800;letter-spacing:-.055em;line-height:.9;padding-bottom:.05em}
+.cta-sub{font:650 var(--t-m)/1.15 var(--f-display);letter-spacing:-.03em;color:var(--mist)}
+
+/* ---------- footer ---------- */
+.foot{border-top:1px solid var(--line);padding-block:40px max(40px,env(safe-area-inset-bottom,0px))}
+.foot .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:18px;font-size:.875rem;color:var(--mist)}
+.foot-brand{display:flex;align-items:center;gap:12px}
+.mark-btn{border:0;background:none;padding:6px;border-radius:10px;line-height:0}
+.foot-brand b{color:var(--ink);font-family:var(--f-display)}
+
+/* ---------- narration subtitle pill ---------- */
+.vpill{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:90;display:flex;align-items:center;gap:14px;width:max-content;max-width:min(720px,calc(100% - 32px));padding:12px 20px 12px 14px;border-radius:22px;background:var(--glass);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);box-shadow:0 0 0 1px var(--line-2) inset,0 20px 60px -20px rgba(0,0,0,.8);opacity:0;transform:translate(-50%,24px);transition:opacity .45s var(--ease),transform .45s var(--ease);pointer-events:none}
+.vpill.show{opacity:1;transform:translate(-50%,0)}
+.vp-bars{display:flex;align-items:center;gap:3px;height:24px;flex:none}
+.vp-bars i{width:3px;border-radius:2px;background:var(--spark);height:calc(4px + var(--l,0) * var(--k,1) * 20px);transition:height .08s linear}
+.vp-text{font-size:.9375rem;line-height:1.4;color:var(--mist);min-width:0}
+.vp-text .s{color:var(--ink)}
+@media (min-width:1100px){.vpill{left:auto;right:max(24px,env(safe-area-inset-right,0px));transform:translateY(24px);max-width:min(440px,34vw)}.vpill.show{transform:none}}
+@media (max-width:1099px){.vpill{top:calc(74px + env(safe-area-inset-top,0px));bottom:auto;transform:translate(-50%,-16px);padding:8px 14px 8px 10px;max-width:calc(100% - 24px)}.vpill.show{transform:translate(-50%,0)}.vp-text{font-size:.875rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;top:calc(76px + env(safe-area-inset-top,0px));z-index:210;max-width:min(520px,calc(100% - 32px));padding:12px 18px;border-radius:14px;background:var(--panel);box-shadow:0 0 0 1px var(--line-2) inset,0 20px 50px -20px #000;font-size:.9rem;color:var(--ink-2);transform:translate(-50%,-12px);opacity:0;transition:.35s var(--ease)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- Voice Studio (hidden panel) ---------- */
+.studio{position:fixed;inset:0;z-index:220}
+.studio-scrim{position:absolute;inset:0;background:rgba(3,5,12,.66);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;transition:opacity .4s}
+.studio-panel{position:absolute;top:0;right:0;bottom:0;width:min(480px,100%);display:flex;flex-direction:column;background:var(--panel);box-shadow:-1px 0 0 var(--line-2),-40px 0 120px -40px rgba(46,70,226,.6);transform:translateX(100%);transition:transform .5s var(--ease);padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.studio.open .studio-scrim{opacity:1}
+.studio.open .studio-panel{transform:none}
+.st-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:22px 22px 16px;border-bottom:1px solid var(--line)}
+.st-head h2{font-size:2rem;margin-top:8px}
+.st-close{width:40px;height:40px;border-radius:12px;border:0;background:rgba(255,255,255,.06);font-size:1.4rem;line-height:1}
+.st-body{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 22px 32px}
+.st-group{display:grid;gap:10px;padding-block:20px;border-bottom:1px solid var(--line)}
+.st-group:last-of-type{border-bottom:0}
+.st-group h3,.st-group summary{font:500 .72rem/1.2 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--spark)}
+.st-group summary{cursor:pointer;list-style-position:inside}
+details.st-group[open] summary{margin-bottom:6px}
+.st-note{font-size:.8125rem;line-height:1.5;color:var(--mist)}
+.st-note code{font-family:var(--f-mono);font-size:.78rem;color:var(--ink-2);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:5px}
+.studio label{font-size:.8125rem;color:var(--ink-2)}
+.studio input[type=text],.studio input[type=password],.studio input[type=url],.studio select,.studio textarea{width:100%;min-width:0;padding:11px 13px;border-radius:12px;border:0;background:var(--void);box-shadow:0 0 0 1px var(--line-2) inset;color:var(--ink);font:400 1rem/1.35 var(--f-body)}
+.studio textarea{resize:vertical;min-height:64px;font-size:.9375rem}
+.studio input:focus,.studio select:focus,.studio textarea:focus{outline:none;box-shadow:0 0 0 1.5px var(--blue) inset}
+.st-row{display:flex;gap:8px;align-items:stretch}
+.st-row>:first-child{flex:1;min-width:0}
+.st-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.07);box-shadow:0 0 0 1px var(--line-2) inset;font-size:.875rem;font-weight:500;white-space:nowrap}
+.st-btn:hover{background:rgba(255,255,255,.12)}
+.st-btn.main{background:var(--ink);color:var(--void);box-shadow:none}
+.st-btn:disabled{opacity:.5;cursor:progress}
+.st-btns{display:flex;flex-wrap:wrap;gap:8px}
+.st-range{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px}
+.st-range input{grid-column:1/-1;width:100%;accent-color:var(--blue)}
+.st-range output{font:500 .8rem/1 var(--f-mono);color:var(--mist);font-variant-numeric:tabular-nums}
+.st-check{display:flex;align-items:flex-start;gap:10px}
+.st-check input{margin-top:3px;width:18px;height:18px;accent-color:var(--spark);flex:none}
+.st-status{min-height:1.4em;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.04);font:400 .82rem/1.45 var(--f-mono);color:var(--mist)}
+.st-status:empty{display:none}
+.st-status.ok{color:var(--good)}.st-status.err{color:var(--bad)}
+.st-mode{display:inline-flex;align-items:center;gap:8px;font:500 .72rem/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.st-mode::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--mist)}
+.st-mode.on::before{background:var(--good);box-shadow:0 0 8px var(--good)}
+
+/* ---------- quality tiers (set on <html data-q> by the page) ---------- */
+/* medium: drop the full-screen grain layer and the heaviest blurs */
+:root[data-q="medium"] body::after,:root[data-q="low"] body::after{display:none}
+:root[data-q="medium"] .reveal-ready,:root[data-q="low"] .reveal-ready{filter:none}
+:root[data-q="medium"].js body:not(.entered) .hero-inner>*,:root[data-q="low"].js body:not(.entered) .hero-inner>*{filter:none}
+/* low: no backdrop blur, no animated giant glows, no drop-shadow filters on moving text */
+:root[data-q="low"] .aurora{animation:none;filter:blur(40px)}
+:root[data-q="low"] .floor,:root[data-q="low"] .sparks i{animation:none}
+:root[data-q="low"] .sparks i{opacity:.45}
+:root[data-q="low"] .nav.scrolled{background:rgba(5,7,15,.94);backdrop-filter:none;-webkit-backdrop-filter:none}
+:root[data-q="low"] .vpill,:root[data-q="low"] .btn-ghost,:root[data-q="low"] .studio-scrim{backdrop-filter:none;-webkit-backdrop-filter:none}
+:root[data-q="low"] .vpill{background:rgba(10,14,32,.96)}
+:root[data-q="low"] .zoom-title{filter:saturate(1.15)}
+:root[data-q="low"] .sig-ink{filter:none}
+:root[data-q="low"] .cta::before{animation:none}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;transition-delay:0s!important}
+  html{scroll-behavior:auto}
+  .reveal-ready{opacity:1;transform:none;filter:none}
+}
+</style>
+<link rel="stylesheet" href="css/device.css">
+</head>
+<body>
+
+<!-- ============ INTRO GATE ============ -->
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+  <canvas class="gate-canvas" id="gateCanvas" aria-hidden="true"></canvas>
+  <div class="gate-hud" aria-hidden="true"><span class="rec">Pixel Pro<span class="hud-long"> · Opening titles</span></span><span>Loading <b id="gateLoad">000</b>%</span></div>
+  <div class="gate-inner">
+    <div class="gate-slot" id="gateSlot" aria-hidden="true"><span class="mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+    <p class="eyebrow gate-rev r2">Neelaksh Naithani presents</p>
+    <h1 class="gate-title" id="gateTitle"><span class="metal">Pixel Pro</span> <span class="metal ai">AI</span><i class="gate-flare" aria-hidden="true"></i></h1>
+    <p class="gate-copy gate-rev r2">A short film you play by scrolling, told out loud by Pixel Pro itself.</p>
+    <div class="gate-actions gate-rev r3">
+      <button class="gate-enter" id="enterSound" type="button">Enter Pixel Pro<span class="ge-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></button>
+    </div>
+    <p class="gate-meta gate-rev r3">Sound on · Headphones recommended · <button class="gate-muted" id="enterSilent" type="button">Enter muted</button></p>
+  </div>
+</div>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="Pixel Pro AI, back to top">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      Pixel Pro <small>AI</small>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#reel">The film</a>
+      <a href="#features">Features</a>
+      <a href="#demo">Demo</a>
+      <a href="#languages">Languages</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="sound-btn" id="soundBtn" type="button" aria-pressed="false">
+        <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="lbl" id="soundLbl">Sound off</span>
+      </button>
+      <a class="btn btn-primary btn-sm" data-app href="#start">Try Pixel Pro</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ============ HERO ============ -->
+<section class="hero" id="top">
+  <div class="hero-bg" aria-hidden="true">
+    <div class="aurora a1"></div><div class="aurora a2"></div><div class="aurora a3"></div>
+    <div class="floor"></div>
+    <div class="sparks" id="sparks"></div>
+  </div>
+  <div class="wrap hero-inner" id="heroInner">
+    <div class="hero-logo" id="heroLogo" aria-hidden="true">
+      <span class="mark hero-fallback"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+    <p class="eyebrow">Introducing</p>
+    <h1 class="hero-title"><span class="metal">Pixel Pro</span><span class="metal ai">AI</span></h1>
+    <p class="hero-sub">Ask anything. <b>Get answers.</b></p>
+    <p class="hero-copy">A free AI assistant that searches the live web, listens when you speak, looks at your photos and answers in English, <span lang="hi">हिंदी</span> and many more languages.</p>
+    <div class="ctas">
+      <a class="btn btn-primary" data-app href="#start">Try Pixel Pro
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <a class="btn btn-ghost" href="#reel">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+        Play the film
+      </a>
+    </div>
+    <p class="hero-by">Created by <b>Neelaksh Naithani</b></p>
+  </div>
+</section>
+
+<!-- ============ THE REEL: scroll-driven film ============ -->
+<section class="reel" id="reel" aria-label="The Pixel Pro film. Scroll to play it.">
+  <div class="reel-stage" id="reelStage">
+    <canvas class="reel-canvas" id="reelCanvas" aria-hidden="true"></canvas>
+    <video class="reel-video" id="reelVideo" muted playsinline preload="auto" aria-hidden="true"></video>
+    <div class="reel-shade" aria-hidden="true"></div>
+    <div class="reel-hud" aria-hidden="true">
+      <div class="wrap"><span class="rec">Pixel Pro<span class="hud-long"> · The film</span></span><span><span class="tc hud-long" id="tc">00:00:00</span><span class="hud-long"> · </span><span class="tc" id="frame">FRAME 0000</span></span></div>
+    </div>
+    <div class="reel-hint" id="reelHint" aria-hidden="true"><span class="mouse"></span>Scroll to play</div>
+    <div class="reel-rail" id="rail" aria-hidden="true"><b></b><i style="top:18%"></i><i style="top:48%"></i><i style="top:72%"></i><i style="top:94%"></i></div>
+    <div class="reel-caps">
+      <div class="wrap">
+        <div class="caps-box">
+          <div class="cap" data-cap="0.07,0.13,0.36,0.41">
+            <p class="eyebrow">Chapter 1 · Pixels</p>
+            <h2>Every answer starts with a single pixel.</h2>
+            <p>You type a question, or say it out loud. Pixel Pro turns it into a clear answer in seconds.</p>
+          </div>
+          <div class="cap" data-cap="0.44,0.49,0.62,0.66">
+            <p class="eyebrow">Chapter 2 · The live web</p>
+            <h2>Fresh facts, straight from the web.</h2>
+            <p>When a question needs today's information, Pixel Pro searches as it answers and lists the sources it used.</p>
+          </div>
+          <div class="cap" data-cap="0.68,0.73,0.85,0.88">
+            <p class="eyebrow">Chapter 3 · Voice</p>
+            <h2>It listens. It speaks.</h2>
+            <p>Tap the mic, ask out loud, and hear the answer read back to you.</p>
+          </div>
+          <div class="cap" data-cap="0.90,0.95,2,3">
+            <p class="eyebrow">Chapter 4 · Pixel Pro</p>
+            <h2>This is Pixel Pro.</h2>
+            <p>Created by Neelaksh Naithani. Free to use, with no sign&#8209;up.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATEMENT ============ -->
+<section class="statement" id="statement">
+  <div class="statement-sticky">
+    <div class="wrap">
+      <p class="statement-text" id="statementText">Pixel Pro reads the live web, listens when you speak, looks at your photos and answers in English, <span class="acc" lang="hi">हिंदी</span> and almost any language you ask in. Free for everyone, with nothing to sign up for.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GALAXY TITLE ============ -->
+<section class="zoomsec" id="zoom" aria-label="Pixel Pro">
+  <div class="zoom-sticky">
+    <div class="wrap zoom-box">
+      <p class="zoom-title" id="zoomTitle">Pixel Pro</p>
+      <div class="zoom-sub" id="zoomSub">
+        <b>Your AI assistant. <em>Created by Neelaksh Naithani.</em></b>
+        <span class="eyebrow">Free · Live web · Voice · Photos</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PHONE SHOWCASE ============ -->
+<!-- ============ PHONE SHOWCASE (device module: css/device.css + js/device.js) ============ -->
+<section class="pp-device-section" id="meet" aria-labelledby="ppMeetTitle">
+  <div class="pp-stage">
+    <div class="pp-backdrop" aria-hidden="true">
+      <div class="pp-beam"></div>
+      <div class="pp-glow"></div>
+      <div class="pp-glow pp-glow--amber"></div>
+      <div class="pp-fade"></div>
+    </div>
+
+    <header class="pp-intro">
+      <p class="pp-eyebrow">On your phone</p>
+      <h2 class="pp-title" id="ppMeetTitle">Meet <span class="pp-metal">Pixel Pro.</span></h2>
+      <p class="pp-lede">The whole assistant in your phone's browser. Nothing to install.</p>
+    </header>
+
+    <!-- the phone (decorative: the captions and callouts carry the story for screen readers) -->
+    <div class="pp-scene" aria-hidden="true">
+      <div class="pp-floor"></div>
+      <div class="pp-phone">
+        <i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i>
+        <i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i>
+        <i class="pp-key pp-key--act"></i><i class="pp-key pp-key--up"></i><i class="pp-key pp-key--dn"></i><i class="pp-key pp-key--pwr"></i>
+        <div class="pp-face">
+          <div class="pp-bezel">
+            <div class="pp-screen">
+
+              <!-- ======= the real Pixel Pro app, dark theme ======= -->
+              <div class="pp-ui pp-app">
+                <div class="pp-statusbar">
+                    <span class="pp-clock">9:41</span>
+                    <span class="pp-sys">
+                      <svg viewBox="0 0 18 12" width="18" height="12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+                      <svg viewBox="0 0 16 12" width="16" height="12" fill="currentColor"><path d="M8 11.6 5.7 9.2a3.3 3.3 0 0 1 4.6 0Z"/><path d="M3.5 7a6.4 6.4 0 0 1 9 0l-1.5 1.5a4.3 4.3 0 0 0-6 0Z"/><path d="M1.2 4.7a9.6 9.6 0 0 1 13.6 0l-1.5 1.5a7.5 7.5 0 0 0-10.6 0Z"/></svg>
+                      <svg viewBox="0 0 27 13" width="27" height="13" fill="currentColor"><rect x=".5" y=".5" width="23" height="12" rx="3.6" fill="none" stroke="currentColor" opacity=".45"/><rect x="2.2" y="2.2" width="17.4" height="8.6" rx="2"/><path d="M25.2 4.6v3.8a2 2 0 0 0 0-3.8Z" opacity=".5"/></svg>
+                    </span>
+                  </div>
+                <header class="pp-top">
+                  <span class="pp-ib pp-ib--menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
+                  <span class="pp-top-r"><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4M9 6v12M14 3v18M19 8v8"/></svg></span><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span></span>
+                </header>
+
+                <div class="pp-main">
+                  <div class="pp-hero"><p class="pp-hero-h">What can I<br>help with?</p></div>
+                  <div class="pp-thread">
+                    <div class="pp-msg pp-msg--user pp-q">
+                      <div class="pp-bubble"><img class="pp-sent-img" src="media/rocket.jpg" width="640" height="427" alt="A white rocket standing on its launch pad at twilight, with four tall lattice towers around it" decoding="async">What rocket is this?</div>
+                    </div>
+                    <div class="pp-msg pp-msg--bot pp-thinking-row">
+                      <span class="pp-think2"><span class="pp-think2-dot"></span><span class="pp-think2-label pp-think-lbl">Searching the web</span></span>
+                    </div>
+                    <div class="pp-msg pp-msg--bot pp-answer">
+                      <p class="pp-answer-text">That's a <strong>SpaceX Falcon 9</strong> standing on its launch pad at Cape Canaveral, Florida. The tall towers around it are lightning masts that protect the rocket before launch.</p>
+                      <span class="pp-web-chip"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">s</span><span class="pp-fav">e</span></span><span>2 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span>
+                      <div class="pp-sources">
+                        <span class="pp-src-a"><b>1</b><span class="pp-fav">s</span><span class="pp-dom">spacex.com</span><span class="pp-ttl">Falcon 9 | SpaceX</span></span>
+                        <span class="pp-src-a"><b>2</b><span class="pp-fav">e</span><span class="pp-dom">en.wikipedia.org</span><span class="pp-ttl">Falcon 9 - Wikipedia</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pp-composer-wrap">
+                  <div class="pp-attachment"><div class="pp-attachment-in"><img class="pp-thumb" src="media/rocket.jpg" width="640" height="427" alt="" decoding="async"><span class="pp-nm">rocket.jpg</span><span class="pp-rm">&times;</span></div></div>
+                  <div class="pp-composer">
+                    <div class="pp-plus-menu">
+                      <span class="pp-plus-item pp-mi-photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Add photo</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Create an image</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/><path d="M11 8v6"/><path d="M8 11h6"/></svg><span>Deep search</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg><span>Search the web</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Email me this</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>Your location</span></span>
+                      <i class="pp-plus-sep"></i>
+                      <span class="pp-plus-label">MODEL</span>
+                      <span class="pp-tier">Moderate<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                    </div>
+                    <div class="pp-pill">
+                      <span class="pp-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+                      <span class="pp-input"><span class="pp-typed"></span><i class="pp-caret"></i><span class="pp-ph">Ask anything</span></span>
+                      <span class="pp-think-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8A3 3 0 0 0 16 16v-2.2A3 3 0 0 0 15 8a3 3 0 0 0-3-3z"/><path d="M12 5v14"/></svg></span>
+                      <span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span>
+                      <span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span>
+                    </div>
+                  </div>
+                  <div class="pp-suggests">
+                    <span class="pp-suggest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Create an image</span>
+                    <span class="pp-suggest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Write or edit</span>
+                    <span class="pp-suggest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>Search the web</span>
+                  </div>
+                  <p class="pp-fine">Pixel Pro can make mistakes — verify important info.</p>
+                </div>
+                <i class="pp-homebar"></i>
+              </div>
+              <!-- ======= /app ======= -->
+
+              <i class="pp-island"><i></i></i>
+              <i class="pp-sleep"></i>
+              <i class="pp-glass"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <svg class="pp-leaders" aria-hidden="true" focusable="false">
+      <g class="pp-ld"><path d=""/><circle class="pp-ld-halo" r="9" cx="-40" cy="-40"/><circle class="pp-ld-dot" r="3.5" cx="-40" cy="-40"/></g>
+      <g class="pp-ld"><path d=""/><circle class="pp-ld-halo" r="9" cx="-40" cy="-40"/><circle class="pp-ld-dot" r="3.5" cx="-40" cy="-40"/></g>
+      <g class="pp-ld"><path d=""/><circle class="pp-ld-halo" r="9" cx="-40" cy="-40"/><circle class="pp-ld-dot" r="3.5" cx="-40" cy="-40"/></g>
+    </svg>
+
+    <!-- callouts: shown beside the phone on wide screens (order = order they appear) -->
+    <ul class="pp-callouts">
+      <li class="pp-callout" data-target="photo"><b>Photos, understood.</b><span>Add a picture and ask what's in it.</span></li>
+      <li class="pp-callout" data-target="sources"><b>Answers with sources you can open.</b><span>Fresh facts from the web, with links to check them.</span></li>
+      <li class="pp-callout" data-target="think"><b>Think longer for harder questions.</b><span>Tap Think for a more thorough answer.</span></li>
+    </ul>
+
+    <!-- one caption that changes with the story (beside the phone, or under it on small screens) -->
+    <div class="pp-caption" aria-hidden="true">
+      <p class="pp-cap"><span class="pp-cap-k">01</span><b>Photos, understood.</b><span>Add a picture and ask what's in it.</span></p>
+      <p class="pp-cap"><span class="pp-cap-k">02</span><b>Answers with sources you can open.</b><span>Fresh facts from the web, with links to check them.</span></p>
+      <p class="pp-cap"><span class="pp-cap-k">03</span><b>Think longer for harder questions.</b><span>Tap Think for a more thorough answer.</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">What it can do</p>
+      <h2>One assistant. A lot of answers.</h2>
+      <p>Everything below is already inside Pixel Pro. Open it in your browser and start asking.</p>
+    </div>
+    <div class="bento" id="bento">
+      <article class="card c-web reveal">
+        <p class="eyebrow">Live web answers</p>
+        <h3>Ask about today, not last year.</h3>
+        <p>Pixel Pro searches the web when your question needs fresh facts, then shows the sources under its answer.</p>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--web" aria-hidden="true">
+            <div class="pp-msg pp-msg--user"><div class="pp-bubble">How tall is the Statue of Unity?</div></div>
+            <div class="pp-msg pp-msg--bot"><p>The Statue of Unity in Gujarat is <strong>182 metres</strong> tall, about twice the height of the Statue of Liberty.</p><span class="pp-web-chip pp-open"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">w</span><span class="pp-fav">g</span></span><span>2 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span><div class="pp-sources"><span class="pp-src-a"><b>1</b><span class="pp-fav">w</span><span class="pp-dom">wikipedia.org</span><span class="pp-ttl">Statue of Unity - Wikipedia</span></span><span class="pp-src-a"><b>2</b><span class="pp-fav">g</span><span class="pp-dom">gujarattourism.com</span><span class="pp-ttl">Statue of Unity, Kevadia</span></span></div></div>
+          </div>
+        </div>
+      </article>
+      <article class="card c-voice reveal" style="--dl:.1s">
+        <p class="eyebrow">Voice</p>
+        <h3>Say it. Hear it.</h3>
+        <p>Speak your question and Pixel Pro reads the answer aloud.</p>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--live" aria-hidden="true">
+            <div class="pp-live-top"><span class="pp-live-tag">Pixel Live</span><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></div>
+            <p class="pp-live-you">“Say good morning in Hindi”</p>
+            <p class="pp-live-cap"><span lang="hi">सुप्रभात</span> (Suprabhat)</p>
+            <div class="pp-orb"><i></i></div>
+            <p class="pp-live-state">Listening…</p>
+          </div>
+        </div>
+      </article>
+      <article class="card c-photo reveal" data-voice="photos">
+        <p class="eyebrow">Photos</p>
+        <h3>Show it a photo.</h3>
+        <p>Add a picture and ask what's in it.</p>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--photo">
+            <div class="pp-msg pp-msg--user"><div class="pp-bubble"><img class="pp-sent-img" src="media/espresso.jpg" width="600" height="400" alt="An espresso with golden crema in a red cup on a red saucer with a spoon, on a wooden table" loading="lazy" decoding="async">What drink is this?</div></div>
+            <div class="pp-msg pp-msg--bot"><p>That's an <strong>espresso</strong> with a golden crema, served in a red cup on a saucer with a spoon.</p></div>
+          </div>
+        </div>
+      </article>
+      <article class="card c-news reveal" style="--dl:.1s">
+        <p class="eyebrow">Headlines <span class="live">LIVE</span></p>
+        <h3>Today's news, in your language.</h3>
+        <p>Ask for today's news in English or <span lang="hi">हिंदी</span>. Pixel Pro searches the live web and links every source.</p>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--news" aria-hidden="true">
+            <div class="pp-msg pp-msg--user"><div class="pp-bubble">What's in the news today?</div></div>
+            <div class="pp-msg pp-msg--bot"><span class="pp-think2"><span class="pp-think2-dot"></span><span class="pp-think2-label">Searching the web</span></span></div>
+            <div class="pp-msg pp-msg--bot pp-news-ans"><p>Here are today's top stories from India and around the world, each with a link to its source.</p><span class="pp-web-chip"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">a</span><span class="pp-fav">b</span><span class="pp-fav">c</span></span><span>4 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span></div>
+            <div class="pp-pill"><span class="pp-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="pp-input"><span class="pp-ph">Ask anything</span></span><span class="pp-think-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8A3 3 0 0 0 16 16v-2.2A3 3 0 0 0 15 8a3 3 0 0 0-3-3z"/><path d="M12 5v14"/></svg></span><span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span><span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></div>
+          </div>
+        </div>
+      </article>
+      <article class="card c-free reveal" data-voice="free">
+        <p class="eyebrow">Price</p>
+        <div class="zero shine">₹0</div>
+        <h3>Free. Really.</h3>
+        <div class="free-list"><span>No sign-up</span><span>No API key</span><span>Nothing to install</span></div>
+      </article>
+      <article class="card c-chat reveal" style="--dl:.1s">
+        <p class="eyebrow">Your chats</p>
+        <h3>Pick up where you left off.</h3>
+        <p>Recent chats stay in the sidebar. Light mode or dark, your choice.</p>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--side" aria-hidden="true">
+            <div class="pp-sb">
+              <div class="pp-sb-head"><b>Pixel Pro</b><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></span></div>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>New Chat</span>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search</span>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Library</span>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1.4"/><path d="M8.5 13v2M15.5 13v2"/></svg>Agents</span>
+              <span class="pp-sb-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>Chats</span>
+              <span class="pp-sb-item pp-on">Jaipur trip on a budget</span>
+              <span class="pp-sb-item">Photosynthesis in simple Hindi</span>
+              <span class="pp-sb-item">Leave email to my manager</span>
+              <span class="pp-sb-item">What rocket is this?</span>
+              <div class="pp-sb-acct"><span class="pp-sb-av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span class="pp-sb-meta"><b>Guest</b><small>Free</small></span><span class="pp-sb-up">Sign in</span></div>
+            </div>
+            <div class="pp-sb-peek">
+              <div class="pp-msg pp-msg--user"><div class="pp-bubble">Plan a 3-day Jaipur trip on a student budget.</div></div>
+              <div class="pp-msg pp-msg--bot"><p>Here's a simple plan that keeps costs low:</p><p><strong>Day 1:</strong> Amber Fort in the morning, then sunset at Nahargarh Fort.</p></div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROMPT TRACK (scrolls sideways) ============ -->
+<section class="track-sec" id="prompts">
+  <div class="track-sticky">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">Things people ask</p>
+        <h2>Homework to headlines.</h2>
+      </div>
+    </div>
+    <div class="track" id="track">
+      <article class="pcard"><p class="eyebrow">Homework</p><q>Explain photosynthesis in simple Hindi.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard hot"><p class="eyebrow">Travel</p><q>When should I visit Darjeeling, and what should I pack?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard"><p class="eyebrow">Work</p><q>Write a polite email asking for two days of leave.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard"><p class="eyebrow">News</p><q lang="hi">आज की बड़ी ख़बरें क्या हैं?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard hot"><p class="eyebrow">Kitchen</p><q>A 20-minute dinner with paneer and spinach.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard pcard-photo"><p class="eyebrow">Photos</p><img class="pc-img" src="media/cat.jpg" width="451" height="300" alt="A striped tabby cat with green eyes looking at the camera" loading="lazy"><q>What kind of cat is this?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+    </div>
+    <div class="wrap"><div class="track-bar" id="trackBar"><i></i></div></div>
+  </div>
+</section>
+
+<!-- ============ DEMO ============ -->
+<section class="section" id="demo">
+  <div class="wrap demo-grid">
+    <div class="sec-head reveal">
+      <p class="eyebrow">See it answer</p>
+      <h2>Clear answers you can check.</h2>
+      <p>Pixel Pro writes in plain language, keeps the steps in order and shows where its facts came from.</p>
+      <div><button class="btn btn-ghost btn-sm" id="demoReplay" type="button">Replay the chat</button></div>
+    </div>
+    <div class="chat reveal pp-ui pp-demo" style="--dl:.12s" aria-label="Example chat">
+      <div class="pp-demo-top"><span class="pp-ib pp-ib--menu" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span><span class="pp-demo-tag">Example chat</span><span class="pp-demo-r" aria-hidden="true"><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4M9 6v12M14 3v18M19 8v8"/></svg></span><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span></span></div>
+      <div class="pp-demo-body" id="chatBody">
+        <div class="pp-msg pp-msg--user me"><div class="pp-bubble">Plan a 3-day Jaipur trip on a student budget.</div></div>
+        <div class="pp-msg pp-msg--bot bot">
+          <p>Here's a simple plan that keeps costs low:</p>
+          <p><strong>Day 1:</strong> Amber Fort in the morning, then Panna Meena ka Kund and sunset at Nahargarh Fort.</p>
+          <p><strong>Day 2:</strong> City Palace, Jantar Mantar and Hawa Mahal, then street food for dinner.</p>
+          <p><strong>Day 3:</strong> Albert Hall Museum, then shopping at Johari and Bapu Bazaar.</p>
+          <p><strong>Tip:</strong> a composite ticket covers several monuments, and students with ID pay less.</p>
+          <span class="pp-web-chip"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">t</span><span class="pp-fav">w</span></span><span>2 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span>
+        </div>
+      </div>
+      <template id="demoThinking"><div class="pp-msg pp-msg--bot"><span class="pp-think2"><span class="pp-think2-dot"></span><span class="pp-think2-label">Searching the web</span></span></div></template>
+      <div class="pp-demo-composer" aria-hidden="true"><div class="pp-pill"><span class="pp-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="pp-input"><span class="pp-ph">Ask anything</span></span><span class="pp-think-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8A3 3 0 0 0 16 16v-2.2A3 3 0 0 0 15 8a3 3 0 0 0-3-3z"/><path d="M12 5v14"/></svg></span><span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span><span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></div><p class="pp-fine">Pixel Pro can make mistakes — verify important info.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LANGUAGES ============ -->
+<section class="section langs" id="languages" data-voice="languages">
+  <div class="wrap langs-inner">
+    <p class="eyebrow">Speaks your language</p>
+    <div class="greet" id="greet" aria-label="Hello, in English, Hindi and many other languages">
+      <span class="on shine" lang="en" aria-hidden="true">Hello</span>
+      <span class="shine" lang="hi" aria-hidden="true">नमस्ते</span>
+      <span class="shine" lang="es" aria-hidden="true">Hola</span>
+      <span class="shine" lang="fr" aria-hidden="true">Bonjour</span>
+      <span class="shine" lang="ja" aria-hidden="true">こんにちは</span>
+      <span class="shine" lang="it" aria-hidden="true">Ciao</span>
+      <span class="shine" lang="de" aria-hidden="true">Hallo</span>
+    </div>
+    <div class="lang-pills" id="langPills" aria-hidden="true"><span class="on">English</span><span lang="hi">हिंदी</span><span>Many more</span></div>
+    <p class="langs-copy">Ask in English, <span lang="hi">हिंदी</span> or almost any other language, and Pixel Pro replies in the same language. Ask for the news in English or <span lang="hi">हिंदी</span> too.</p>
+  </div>
+</section>
+
+<!-- ============ CREATOR ============ -->
+<section class="section sign" id="creator" data-voice="creator" aria-labelledby="signTitle signature">
+  <div class="wrap sign-inner">
+    <p class="eyebrow">The creator</p>
+    <h2 class="sign-line" id="signTitle">Designed and created by</h2>
+    <p class="signature" id="signature"><span class="sig-ink">Neelaksh Naithani</span><i class="sig-pen" aria-hidden="true"></i></p>
+    <p class="sign-line sign-in">in India.</p>
+    <p class="sign-copy">Pixel Pro is an AI assistant by Neelaksh Naithani, built under NeelOutLoud Website Builders.</p>
+  </div>
+</section>
+
+<!-- ============ FINAL CALL ============ -->
+<section class="cta" id="start" data-voice="finale">
+  <div class="wrap cta-inner">
+    <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    <h2 class="shine">Ask anything.</h2>
+    <p class="cta-sub">Get answers. Free, in seconds.</p>
+    <div class="ctas">
+      <a class="btn btn-primary" data-app href="#start">Try Pixel Pro
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <button class="btn btn-ghost" id="replayStory" type="button">Watch the film again</button>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-brand">
+      <button class="mark-btn" id="secretMark" type="button" tabindex="-1" aria-hidden="true">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </button>
+      <span><b>Pixel Pro AI</b> · Created by Neelaksh Naithani · NeelOutLoud Website Builders</span>
+    </div>
+    <span>Pixel Pro can make mistakes. Check important info. © 2026</span>
+  </div>
+</footer>
+
+<!-- narration subtitles -->
+<div class="vpill" id="voicePill" aria-live="polite">
+  <span class="vp-bars" aria-hidden="true"><i style="--k:.5"></i><i style="--k:.9"></i><i style="--k:1"></i><i style="--k:.75"></i><i style="--k:.45"></i></span>
+  <span class="vp-text" id="vpText"></span>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<!-- ============ VOICE STUDIO (hidden) ============
+     Open it by typing "studio" anywhere on the page, tapping the footer logo 5 times,
+     or adding #studio to the end of the address. -->
+<div class="studio" id="studio" hidden>
+  <div class="studio-scrim" data-close></div>
+  <section class="studio-panel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+    <header class="st-head">
+      <div>
+        <p class="eyebrow">Hidden panel · <span class="st-mode" id="stMode">Browser voice</span></p>
+        <h2 id="stTitle">Voice Studio</h2>
+      </div>
+      <button class="st-close" type="button" data-close aria-label="Close Voice Studio">×</button>
+    </header>
+    <div class="st-body">
+      <div class="st-group">
+        <h3>ElevenLabs</h3>
+        <label for="stKey">API key</label>
+        <div class="st-row">
+          <input id="stKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk_…">
+          <button class="st-btn" id="stKeyShow" type="button">Show</button>
+        </div>
+        <p class="st-note">Saved only in this browser, never in the website files. Get a key at elevenlabs.io, under Developers, then API Keys.</p>
+        <label for="stVoice">Voice</label>
+        <div class="st-row">
+          <select id="stVoice"></select>
+          <button class="st-btn" id="stLoadVoices" type="button">Load my voices</button>
+        </div>
+        <label for="stVoiceId">Voice ID</label>
+        <input id="stVoiceId" type="text" autocomplete="off" spellcheck="false" placeholder="Paste any ElevenLabs voice ID">
+        <label for="stModel">Model</label>
+        <select id="stModel">
+          <option value="eleven_multilingual_v2">Multilingual v2 (best quality)</option>
+          <option value="eleven_v3">Eleven v3 (most expressive)</option>
+          <option value="eleven_turbo_v2_5">Turbo v2.5 (fast)</option>
+          <option value="eleven_flash_v2_5">Flash v2.5 (fastest, cheapest)</option>
+        </select>
+        <div class="st-range"><label for="stStability">Stability</label><output id="oStability"></output><input id="stStability" type="range" min="0" max="1" step="0.05"></div>
+        <div class="st-range"><label for="stSimilarity">Similarity</label><output id="oSimilarity"></output><input id="stSimilarity" type="range" min="0" max="1" step="0.05"></div>
+        <div class="st-range"><label for="stStyle">Style</label><output id="oStyle"></output><input id="stStyle" type="range" min="0" max="1" step="0.05"></div>
+        <div class="st-range"><label for="stSpeed">Speed</label><output id="oSpeed"></output><input id="stSpeed" type="range" min="0.7" max="1.2" step="0.05"></div>
+        <div class="st-btns">
+          <button class="st-btn main" id="stTest" type="button">Test voice</button>
+          <button class="st-btn" id="stForget" type="button">Remove key</button>
+        </div>
+      </div>
+
+      <div class="st-group">
+        <h3>Narration and music</h3>
+        <div class="st-range"><label for="stVolume">Volume</label><output id="oVolume"></output><input id="stVolume" type="range" min="0" max="1" step="0.05"></div>
+        <label class="st-check" for="stFallback"><input id="stFallback" type="checkbox"><span>Use the browser's built-in voice when no ElevenLabs voice is available</span></label>
+        <label class="st-check" for="stMusic"><input id="stMusic" type="checkbox"><span>Play background music with the sound on</span></label>
+        <label class="st-check" for="stHaptics"><input id="stHaptics" type="checkbox"><span>Vibrate on phones as text appears (haptics)</span></label>
+        <label for="stQuality">Animation quality</label>
+        <select id="stQuality"><option value="auto">Automatic</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low (smoothest on old phones)</option></select>
+        <p class="st-note" id="stQualityNote"></p>
+        <div class="st-range"><label for="stMusicVol">Music volume</label><output id="oMusicVol"></output><input id="stMusicVol" type="range" min="0" max="1" step="0.05"></div>
+        <div class="st-btns">
+          <button class="st-btn" id="stReplay" type="button">Replay narration from the start</button>
+        </div>
+      </div>
+
+      <details class="st-group">
+        <summary>Edit what Pixel Pro says</summary>
+        <div id="stScript" class="st-group" style="border:0;padding:0"></div>
+        <button class="st-btn" id="stScriptReset" type="button">Restore the original script</button>
+      </details>
+
+      <div class="st-group">
+        <h3>Give every visitor this voice</h3>
+        <p class="st-note">Your key only works in this browser. To make visitors hear the ElevenLabs voice too, generate the narration pack once, unzip it next to <code>index.html</code> (it creates an <code>audio</code> folder) and upload the site again. Visitors then play those files, with no key and no extra credits.</p>
+        <div class="st-btns">
+          <button class="st-btn main" id="stPack" type="button">Download narration pack (.zip)</button>
+          <button class="st-btn" id="stClear" type="button">Clear saved audio</button>
+        </div>
+      </div>
+
+      <div class="st-group">
+        <h3>Scroll video</h3>
+        <p class="st-note">The film section draws its animation live. To scrub your own video while scrolling instead, preview it here. To keep it, put the file next to <code>index.html</code> and set <code>scrollVideo</code> at the top of the script, for example <code>'media/film.mp4'</code>.</p>
+        <label for="stVideo">Preview a video file</label>
+        <input id="stVideo" type="file" accept="video/*">
+        <div class="st-btns"><button class="st-btn" id="stVideoReset" type="button">Use the built-in animation</button></div>
+      </div>
+
+      <p class="st-status" id="stStatus" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+</div>
+
+<script src="js/music.js"></script>
+<script src="js/device.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   CONFIG: the only part you normally need to edit
+   ===================================================================== */
+const CONFIG = {
+  // Link for every "Try Pixel Pro" button, e.g. 'https://your-pixelpro.netlify.app'
+  appUrl: 'https://pixelpro7.netlify.app',
+  // Optional real video to scrub while scrolling the film section, e.g. 'media/film.mp4'.
+  // Leave empty to use the built-in pixel animation.
+  scrollVideo: '',
+  // Folder that holds the narration pack made in Voice Studio
+  audioPack: 'audio/',
+  // Optional music file to loop instead of the built-in generated score, e.g. 'media/music.mp3'
+  music: '',
+  // 3D engine for the hero logo (loaded after the page is interactive)
+  threeUrl: 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+  // Default ElevenLabs voice (George) and model
+  defaultVoiceId: 'JBFqnCBsd6RMkjVDRZzb',
+  defaultModel: 'eleven_multilingual_v2',
+  // What Pixel Pro says, and when (see data-voice attributes and the film chapters)
+  lines: {
+    hello:     "Hi, I'm Pixel Pro, created by Neelaksh Naithani. Scroll down, and I'll show you what I can do.",
+    pixels:    "Every answer starts small. A single pixel of curiosity. A question you type, or say out loud.",
+    web:       "When your question needs fresh facts, I search the live web, and I show you the sources I used.",
+    voice:     "You can talk to me, and I'll talk back. Just ask out loud, and listen.",
+    meet:      "Here I am, on your phone. Show me a photo, ask a question, and I'll explain it, with sources you can check.",
+    photos:    "Show me a photo, and I'll tell you what's in it.",
+    free:      "And I'm free. No sign up. No API key. Just ask.",
+    languages: "I speak English, Hindi, and many other languages. Namaste!",
+    creator:   "Pixel Pro was designed and created by Neelaksh Naithani, in India.",
+    finale:    "This is Pixel Pro. Ask anything. Get answers."
+  }
+};
+const LINE_ORDER = ['hello', 'pixels', 'web', 'voice', 'meet', 'photos', 'free', 'languages', 'creator', 'finale'];
+const DEFAULT_VOICES = [
+  ['JBFqnCBsd6RMkjVDRZzb', 'George · warm British narrator'],
+  ['nPczCjzI2devNBz1zQrb', 'Brian · deep American'],
+  ['onwK4e9ZLuTAKqWW03F9', 'Daniel · British presenter'],
+  ['EXAVITQu4vr4xnSDxMaL', 'Sarah · soft American'],
+  ['XB0fDUnXU5powFXDhCwa', 'Charlotte · Swedish-English'],
+  ['Xb7hH8MSUJpSbSDYk0k2', 'Alice · confident British'],
+  ['pFZP5JQG7iQjIQuC4Bku', 'Lily · velvety British'],
+  ['CwhRBWXzGAHq8TQ4Fs17', 'Roger · laid-back American'],
+  ['cgSgspJ2msm6clMCkdW9', 'Jessica · bright American'],
+  ['iP95p4xoKVk53GoZ742B', 'Chris · casual American']
+];
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
+const easeIO = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// true while the page is flying past (fling, or a smooth jump from a nav link); narration waits until it settles
+let fastScroll = false;
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+function hash(str) { // two FNV-1a passes → 16 hex chars
+  let h1 = 0x811c9dc5, h2 = 0x01000193 ^ 0x9e3779b9;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x5bd1e995) >>> 0;
+  }
+  return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+}
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+function toast(msg, ms = 4600) {
+  const t = $('#toast');
+  t.textContent = msg; t.hidden = false;
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(toast.tm);
+  toast.tm = setTimeout(() => { t.classList.remove('show'); setTimeout(() => { t.hidden = true; }, 400); }, ms);
+}
+
+/* ---------- saved settings (this browser only) ---------- */
+const SKEY = 'pixelpro.studio.v1';
+const DEFAULTS = { apiKey: '', voiceId: CONFIG.defaultVoiceId, modelId: CONFIG.defaultModel, stability: 0.5, similarity: 0.8, style: 0.15, speed: 1, volume: 0.9, fallback: true, music: true, musicVolume: 0.55, haptics: true, quality: 'auto', script: {} };
+const S = Object.assign({}, DEFAULTS, store.get(SKEY, {}));
+const save = () => store.set(SKEY, S);
+
+/* ---------- tiny IndexedDB cache so ElevenLabs audio is generated once ---------- */
+const idb = (() => {
+  let dbp = null;
+  function open() {
+    if (!dbp) dbp = new Promise((res, rej) => {
+      try {
+        const r = indexedDB.open('pixelpro-voice', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('clips');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      } catch (e) { rej(e); }
+    });
+    return dbp;
+  }
+  function tx(mode, fn) {
+    return open().then(db => new Promise(res => {
+      try {
+        const t = db.transaction('clips', mode); const st = t.objectStore('clips');
+        const r = fn(st); r.onsuccess = () => res(r.result == null ? null : r.result); r.onerror = () => res(null);
+      } catch (e) { res(null); }
+    })).catch(() => null);
+  }
+  return {
+    get: k => tx('readonly', st => st.get(k)),
+    put: (k, v) => tx('readwrite', st => st.put(v, k)),
+    clear: () => tx('readwrite', st => st.clear())
+  };
+})();
+
+/* =====================================================================
+   ElevenLabs
+   ===================================================================== */
+const Eleven = {
+  async tts(text, s) {
+    if (!s.apiKey) throw new Error('Add your ElevenLabs API key first.');
+    if (!s.voiceId) throw new Error('Pick a voice or paste a voice ID first.');
+    const vs = { stability: +s.stability, similarity_boost: +s.similarity };
+    if (s.modelId === 'eleven_v3') {
+      vs.stability = [0, 0.5, 1].reduce((a, b) => Math.abs(b - s.stability) < Math.abs(a - s.stability) ? b : a);
+    } else {
+      vs.style = +s.style; vs.use_speaker_boost = true;
+      if (+s.speed !== 1) vs.speed = +s.speed;
+    }
+    let r;
+    try {
+      r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(s.voiceId.trim()) + '?output_format=mp3_44100_128', {
+        method: 'POST',
+        headers: { 'xi-api-key': s.apiKey.trim(), 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+        body: JSON.stringify({ text, model_id: s.modelId, voice_settings: vs })
+      });
+    } catch (e) { throw new Error('Could not reach ElevenLabs. Check the internet connection and try again.'); }
+    if (!r.ok) throw new Error(await Eleven.explain(r));
+    const b = await r.blob();
+    if (!b.size) throw new Error('ElevenLabs sent back empty audio. Try another voice or model.');
+    return b;
+  },
+  async voices(key) {
+    let r;
+    try { r = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': key.trim() } }); }
+    catch (e) { throw new Error('Could not reach ElevenLabs. Check the internet connection and try again.'); }
+    if (!r.ok) throw new Error(await Eleven.explain(r));
+    const j = await r.json();
+    return (j.voices || []).map(v => ({ id: v.voice_id, name: v.name, cat: v.category || '' }));
+  },
+  async explain(r) {
+    let d = '';
+    try {
+      const j = await r.json();
+      const det = j && j.detail;
+      d = det ? (typeof det === 'string' ? det : (det.message || det.status || '')) : (j.message || '');
+    } catch (e) {}
+    const extra = d ? ' (' + d + ')' : '';
+    if (r.status === 401) return 'ElevenLabs rejected the API key. Paste it again in Voice Studio.' + extra;
+    if (r.status === 402 || /quota|credit/i.test(d)) return 'This ElevenLabs account has no credits left for this request.' + extra;
+    if (r.status === 404) return 'ElevenLabs could not find that voice. Pick another voice or check the voice ID.' + extra;
+    if (r.status === 429) return 'ElevenLabs is rate-limiting requests. Wait a minute and try again.' + extra;
+    if (r.status === 400 || r.status === 422) return 'ElevenLabs refused the request. Check the model and voice settings.' + extra;
+    return 'ElevenLabs error ' + r.status + '.' + extra;
+  }
+};
+
+/* =====================================================================
+   HAPTICS: the same patterns as the Pixel Pro app. Android uses the
+   vibration API; iPhone (Safari 18+) gets a Taptic tap from a hidden
+   switch control. Nothing buzzes before the first tap, with haptics off
+   in Voice Studio, or for people who ask the OS to reduce motion.
+   ===================================================================== */
+const Haptics = (() => {
+  const P = { tap: 26, light: 18, select: [22, 45, 30], send: 32, start: 28, done: [34, 70, 34], typed: [18, 40, 26], thud: 40, impact: [70, 50, 110], tick: 12 };
+  const IOS_TAPS = { select: 2, done: 2, typed: 2, impact: 3 };
+  const canVibrate = typeof navigator.vibrate === 'function';
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && 'ontouchend' in document);
+  const iosSwitch = (() => { if (!isIOS) return false; try { const c = document.createElement('input'); c.type = 'checkbox'; return 'switch' in c; } catch (e) { return false; } })();
+  let label = null, armed = false, last = 0, n = 0;
+  function iosLabel() {
+    if (label) return label;
+    label = document.createElement('label');
+    label.setAttribute('aria-hidden', 'true');
+    label.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('switch', ''); cb.tabIndex = -1;
+    label.appendChild(cb); document.body.appendChild(label);
+    return label;
+  }
+  const live = () => armed && S.haptics && !RM;
+  function ios(times) { const l = iosLabel(); for (let i = 0; i < times; i++) setTimeout(() => { try { l.click(); } catch (e) {} }, i * 70); }
+  function play(kind) {
+    if (!live()) return;
+    if (canVibrate) { try { navigator.vibrate(P[kind] != null ? P[kind] : P.tap); } catch (e) {} return; }
+    if (iosSwitch) ios(IOS_TAPS[kind] || 1);
+  }
+  // a light texture while text appears: one short tick per word or character, rate-limited
+  function tick() {
+    if (!live()) return;
+    const now = performance.now(); if (now - last < 45) return; last = now;
+    if (canVibrate) { try { navigator.vibrate(P.tick); } catch (e) {} return; }
+    if (iosSwitch && (++n % 2 === 0)) ios(1);
+  }
+  function arm() { armed = true; if (iosSwitch) iosLabel(); if (canVibrate) try { navigator.vibrate(0); } catch (e) {} }
+  return { play, tick, arm, get supported() { return canVibrate || iosSwitch; } };
+})();
+
+/* =====================================================================
+   TILT: the phone's gyroscope steers the 3D logo and the film's pixels
+   ===================================================================== */
+const Tilt = (() => {
+  let active = false, c0 = null, x = 0, y = 0;
+  function onOrient(e) {
+    if (e.beta == null || e.gamma == null) return;
+    const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    let sx = e.gamma, sy = e.beta;                       // portrait: left-right, front-back
+    if (ang === 90) { sx = e.beta; sy = -e.gamma; }
+    else if (ang === -90 || ang === 270) { sx = -e.beta; sy = e.gamma; }
+    else if (ang === 180) { sx = -e.gamma; sy = -e.beta; }
+    if (!c0) c0 = { x: sx, y: sy };
+    c0.x += (sx - c0.x) * 0.004; c0.y += (sy - c0.y) * 0.004;   // slowly re-centre on however the phone is held
+    x = clamp((sx - c0.x) / 38, -0.5, 0.5); y = clamp((sy - c0.y) / 38, -0.5, 0.5);
+    active = true;
+  }
+  // call from a tap: iPhone asks for motion permission here
+  function start() {
+    const D = window.DeviceOrientationEvent;
+    if (!D || !matchMedia('(pointer: coarse)').matches) return;
+    const listen = () => addEventListener('deviceorientation', onOrient, { passive: true });
+    if (typeof D.requestPermission === 'function') D.requestPermission().then(r => { if (r === 'granted') listen(); }).catch(() => {});
+    else listen();
+  }
+  return { start, get active() { return active; }, get x() { return x; }, get y() { return y; } };
+})();
+
+/* =====================================================================
+   PERF: keeps scrolling smooth on every phone. A first guess from the
+   hardware, a real measurement of frame times during the opening titles,
+   and one more step down if scrolling ever struggles. Tiers: high,
+   medium, low (fewer film particles, lower canvas resolution, no blur).
+   ===================================================================== */
+const Perf = (() => {
+  const TIERS = ['low', 'medium', 'high'];
+  const small = Math.min(screen.width || innerWidth, screen.height || innerHeight) < 700;
+  const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4;
+  const guess = (cores <= 2 || mem <= 1) ? 'low' : (small && (cores <= 4 || mem <= 3)) ? 'medium' : 'high';
+  let forced = S.quality && S.quality !== 'auto' ? S.quality : null;
+  let tier = forced || guess, samples = [], measured = !!forced, drops = 0, win = [], lastT = 0, p75 = 0, prevS = 0;
+  const fns = [];
+  document.documentElement.dataset.q = tier;
+  function apply(t) {
+    if (!TIERS.includes(t) || t === tier) return;
+    tier = t; document.documentElement.dataset.q = t;
+    fns.forEach(fn => { try { fn(t); } catch (e) {} });
+  }
+  return {
+    get tier() { return tier; }, get guess() { return guess; }, get measuredMs() { return p75; },
+    on(fn) { fns.push(fn); },
+    // the opening titles are the heaviest drawing on the page: judge the device by them
+    sample(now) {
+      if (measured || document.hidden) { prevS = 0; return; }
+      if (prevS) samples.push(Math.min(now - prevS, 1000));   // very slow frames count too: they are the strongest signal
+      prevS = now;
+    },
+    settle() {
+      if (measured) return; measured = true;
+      if (samples.length < 12) {
+        // a long stretch of the titles but only a handful of frames: a very slow device
+        if (samples.reduce((a, b) => a + b, 0) > 1200) apply('low');
+        return;
+      }
+      // the titles cost the same on every tier, so frames that keep up with the screen (≈16.7 ms at 60 Hz)
+      // mean this device can run everything at full quality
+      const v = samples.slice(3).sort((a, b) => a - b); p75 = v[Math.floor(v.length * 0.75)];
+      apply(p75 > 30 ? 'low' : p75 > 21 ? 'medium' : 'high');
+    },
+    // while scrolling: if frames stay slow for two seconds, step down once
+    frame(now) {
+      const dt = lastT ? now - lastT : 16.7; lastT = now;
+      if (forced || !measured || document.hidden || dt > 250) { win.length = 0; return; }
+      win.push(dt); if (win.length < 120) return;
+      const avg = win.reduce((a, b) => a + b, 0) / win.length; win.length = 0;
+      if (avg > 26 && drops < 1 && tier !== 'low') { drops++; apply(TIERS[TIERS.indexOf(tier) - 1]); }
+    },
+    set(q) { forced = q && q !== 'auto' ? q : null; measured = true; apply(forced || guess); },
+    reelK() { const sm = Math.min(innerWidth, innerHeight) < 700; return { high: sm ? 12 : 17, medium: sm ? 10 : 13, low: sm ? 8 : 10 }[tier]; },
+    dprCap() { return { high: 2, medium: 1.5, low: 1 }[tier]; }
+  };
+})();
+
+/* =====================================================================
+   MUSIC: generated Apple-event-style score (js/music.js), ducked under the voice
+   ===================================================================== */
+const Music = (() => {
+  let on = false, lastI = -1, swelled = false;
+  const pm = () => window.PixelMusic || null;
+  return {
+    start() {
+      const m = pm(); if (!m || !S.music) return;
+      try { m.useFile(CONFIG.music || ''); m.setVolume(S.musicVolume); const ac = m.start(); on = true; return ac; } catch (e) {}
+    },
+    stop() { const m = pm(); on = false; if (m) try { m.stop(); } catch (e) {} },
+    duck(v) { const m = pm(); if (m) try { m.setDuck(v); } catch (e) {} },
+    volume(v) { const m = pm(); if (m) try { m.setVolume(v); } catch (e) {} },
+    intensity(x) { const m = pm(); if (!m || !on || Math.abs(x - lastI) < 0.01) return; lastI = x; try { m.setIntensity(x); } catch (e) {} },
+    swell() {
+      const m = pm(); if (!m || !on || swelled) return; swelled = true;
+      try { const t = m.swell(); if (t > 0) setTimeout(() => Haptics.play('impact'), t * 1000); } catch (e) {}
+    },
+    level() { const m = pm(); try { return m && on ? m.level() || 0 : 0; } catch (e) { return 0; } },
+    get on() { return on; }
+  };
+})();
+
+/* =====================================================================
+   VOICE: narration queue, ElevenLabs → audio pack → browser voice
+   ===================================================================== */
+const Voice = (() => {
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.setAttribute('playsinline', '');
+  const pill = $('#voicePill'), pillText = $('#vpText'), btn = $('#soundBtn'), lbl = $('#soundLbl');
+  const played = new Set(), memo = new Map(), shownErrors = new Set();
+  let unlocked = false, on = false, current = null, pending = null, pack = null, elevenDown = false, nextTimer = 0, activeU = null;
+  let env = null, envStep = 0.03, tts = false, ttsStart = 0, ttsDur = 3, boundaryWord = -1, level = 0, words = [], lit = -1, safety = 0;
+
+  // a short silent clip lets the click "bless" the audio element on iOS
+  const SILENT = (() => {
+    const n = 800, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    w(36, 'data'); v.setUint32(40, n * 2, true);
+    return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  })();
+
+  function unlock() {
+    if (unlocked) return;
+    unlocked = true;
+    try { audio.src = SILENT; const p = audio.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+  }
+
+  let packP = null;
+  function loadPack() {
+    return packP || (packP = (async () => {
+      try {
+        const r = await fetch(CONFIG.audioPack + 'manifest.json', { cache: 'no-cache' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (j && j.lines) { pack = j; Studio.mode(); }
+      } catch (e) {}
+    })());
+  }
+  // fetch and decode the narration pack while the opening plays (never calls ElevenLabs)
+  async function warm() {
+    await loadPack();
+    if (S.apiKey || !pack) return;
+    for (const id of LINE_ORDER) { try { await resolve(id); } catch (e) {} }
+  }
+
+  const scriptText = id => (S.script[id] && S.script[id].trim()) || CONFIG.lines[id] || '';
+  const sig = t => [S.voiceId, S.modelId, S.stability, S.similarity, S.style, S.speed, t].join('|');
+  function source() { return S.apiKey ? 'eleven' : pack ? 'pack' : S.fallback ? 'browser' : 'none'; }
+
+  async function cachedEleven(text) {
+    const k = 'el:' + hash(sig(text));
+    let blob = await idb.get(k);
+    if (!blob) { blob = await Eleven.tts(text, S); idb.put(k, blob); }
+    return blob;
+  }
+
+  async function envelope(blob) {
+    try {
+      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OAC) return null;
+      const ac = new OAC(1, 22050, 22050);
+      const buf = await ac.decodeAudioData(await blob.arrayBuffer());
+      const ch = buf.getChannelData(0), step = Math.max(1, Math.floor(buf.sampleRate * envStep));
+      const out = new Float32Array(Math.ceil(ch.length / step));
+      let max = 0;
+      for (let i = 0; i < out.length; i++) {
+        let s = 0, n = 0;
+        for (let j = i * step, e = Math.min(ch.length, j + step); j < e; j += 3) { s += ch[j] * ch[j]; n++; }
+        out[i] = Math.sqrt(s / (n || 1)); if (out[i] > max) max = out[i];
+      }
+      if (max > 0) for (let i = 0; i < out.length; i++) out[i] = Math.min(1, out[i] / max * 1.15);
+      return out;
+    } catch (e) { return null; }
+  }
+  async function asAudio(blob, text) { return { kind: 'audio', url: URL.createObjectURL(blob), env: await envelope(blob), text }; }
+
+  function report(e) {
+    const msg = (e && e.message) || String(e);
+    Studio.status(msg, 'err');
+    if (!shownErrors.has(msg)) { shownErrors.add(msg); toast('Voice: ' + msg + ' Using the backup voice for now.'); }
+  }
+
+  function resolve(id) {
+    const text = scriptText(id);
+    const key = S.apiKey ? 'api:' + sig(text) : pack && pack.lines[id] ? 'pack:' + id : 'tts:' + text + S.fallback;
+    if (memo.has(key)) return memo.get(key);
+    const pr = (async () => {
+      if (S.apiKey && !elevenDown) {
+        try { return await asAudio(await cachedEleven(text), text); } catch (e) { elevenDown = true; report(e); }
+      }
+      if (pack && pack.lines[id]) {
+        try {
+          const r = await fetch(CONFIG.audioPack + pack.lines[id].file);
+          if (r.ok) return await asAudio(await r.blob(), pack.lines[id].text || text);
+        } catch (e) {}
+      }
+      if (S.fallback && 'speechSynthesis' in window) return { kind: 'tts', text };
+      return null;
+    })();
+    memo.set(key, pr);
+    return pr;
+  }
+
+  function trigger(id) {
+    if (!on || !unlocked || played.has(id) || !CONFIG.lines[id]) return;
+    played.add(id);
+    if (current) { pending = id; return; }
+    play(id);
+  }
+
+  async function play(id) {
+    current = id;
+    const src = await resolve(id);
+    if (!on || current !== id) { if (current === id) current = null; return; }
+    if (!src) { finish(); return; }
+    showPill(src.text);
+    Music.duck(true);
+    if (src.kind === 'audio') {
+      env = src.env;
+      audio.onended = finish; audio.onerror = finish;
+      audio.src = src.url; audio.volume = S.volume;
+      try { await audio.play(); } catch (e) { audio.onended = audio.onerror = null; env = null; speak(src.text); }
+    } else speak(src.text);
+  }
+
+  function pickBrowserVoice() {
+    const vs = speechSynthesis.getVoices();
+    const prefs = [/Google UK English Male/i, /Daniel/i, /(Andrew|Brian|Guy|Ryan).*Natural/i, /Natural/i, /Google US English/i, /Samantha/i, /Rishi|en-IN/i];
+    for (const re of prefs) { const v = vs.find(x => re.test(x.name + ' ' + x.lang) && /^en/i.test(x.lang)); if (v) return v; }
+    return vs.find(x => /^en/i.test(x.lang)) || null;
+  }
+
+  function speak(text) {
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const v = pickBrowserVoice();
+      if (v) { u.voice = v; u.lang = v.lang; }
+      u.volume = S.volume; u.rate = 1; u.pitch = 1;
+      u.onboundary = e => { if (typeof e.charIndex === 'number') boundaryWord = text.slice(0, e.charIndex).split(/\s+/).filter(Boolean).length; };
+      u.onend = u.onerror = () => { if (tts && u === activeU) finish(); };
+      tts = true; ttsStart = performance.now(); ttsDur = Math.max(1.5, text.split(/\s+/).length * 0.42); boundaryWord = -1;
+      clearTimeout(safety);
+      safety = setTimeout(() => { if (tts) finish(); }, ttsDur * 1000 + 6000); // Chrome sometimes never fires onend
+      activeU = u;
+      speechSynthesis.speak(u);
+    } catch (e) { finish(); }
+  }
+
+  function finish() {
+    clearTimeout(safety);
+    env = null; tts = false; current = null; activeU = null;
+    hidePill(); Music.duck(false);
+    if (pending && on) {
+      const p = pending; pending = null; current = p;   // stay busy through the gap so nothing jumps the queue
+      nextTimer = setTimeout(() => { nextTimer = 0; play(p); }, 420);
+    }
+  }
+
+  function showPill(text) {
+    pillText.textContent = '';
+    words = text.split(/\s+/).filter(Boolean).map((w, i, a) => {
+      const s = document.createElement('span'); s.textContent = w + (i < a.length - 1 ? ' ' : ''); pillText.appendChild(s); return s;
+    });
+    lit = -1;
+    pill.classList.add('show');
+  }
+  function hidePill() { pill.classList.remove('show'); }
+
+  function setOn(v) {
+    on = v;
+    if (!v) {
+      pending = null;
+      try { audio.pause(); } catch (e) {}
+      try { speechSynthesis.cancel(); } catch (e) {}
+      clearTimeout(safety); clearTimeout(nextTimer); nextTimer = 0; activeU = null;
+      env = null; tts = false; current = null; hidePill(); Music.duck(false);
+    }
+    btn.setAttribute('aria-pressed', String(v));
+    lbl.textContent = v ? 'Sound on' : 'Sound off';
+  }
+
+  // warm the cache so lines start instantly when their moment arrives
+  async function prefetch() {
+    if (source() === 'browser' || source() === 'none') return;
+    for (const id of LINE_ORDER) { if (!on) return; try { await resolve(id); } catch (e) {} }
+  }
+
+  function tick(now) {
+    let raw = 0, wi = -1;
+    if (env && !audio.paused && audio.duration) {
+      raw = env[Math.floor(audio.currentTime / envStep)] || 0;
+      wi = Math.floor(audio.currentTime / audio.duration * words.length);
+    } else if (current && !audio.paused && audio.duration) {
+      raw = 0.4 + 0.3 * Math.abs(Math.sin(now * 0.013));
+      wi = Math.floor(audio.currentTime / audio.duration * words.length);
+    } else if (tts) {
+      raw = 0.25 + 0.5 * Math.abs(Math.sin(now * 0.011) * Math.sin(now * 0.0047 + 1));
+      wi = boundaryWord >= 0 ? boundaryWord : Math.floor((now - ttsStart) / 1000 / ttsDur * words.length);
+    }
+    level += (raw - level) * 0.35;
+    pill.style.setProperty('--l', level.toFixed(3));
+    if (wi !== lit && words.length) {
+      if (wi > lit && wi >= 0) Haptics.tick();
+      lit = wi;
+      for (let i = 0; i < words.length; i++) words[i].classList.toggle('s', i <= wi);
+    }
+  }
+
+  return {
+    unlock, setOn, trigger, prefetch, tick, loadPack, warm, source, scriptText,
+    get on() { return on; }, get unlocked() { return unlocked; }, get level() { return level; }, get pack() { return pack; },
+    played,
+    reset() { played.clear(); pending = null; memo.clear(); if (current) { setOn(false); setOn(true); } },
+    forget() { memo.clear(); shownErrors.clear(); elevenDown = false; },
+    cachedEleven,
+    async playTest(text) { // studio test: straight to ElevenLabs, ignoring the queue
+      unlock();
+      const blob = await cachedEleven(text);
+      const a = await asAudio(blob, text);
+      setOn(true); pending = null; current = 'test'; played.add('hello');
+      showPill(text); env = a.env; Music.duck(true);
+      audio.onended = finish; audio.onerror = finish; audio.src = a.url; audio.volume = S.volume;
+      await audio.play();
+    }
+  };
+})();
+
+/* =====================================================================
+   REEL: the scroll-driven film (pixel particles drawn on canvas)
+   ===================================================================== */
+const Reel = (() => {
+  const stage = $('#reelStage'), section = $('#reel'), cv = $('#reelCanvas'), ctx = cv.getContext('2d');
+  const video = $('#reelVideo'), tc = $('#tc'), fr = $('#frame'), hint = $('#reelHint'), rail = $('#rail'), railDots = $$('i', rail);
+  const caps = $$('.cap').map(el => ({ el, w: el.dataset.cap.split(',').map(Number) }));
+  const small = Math.min(innerWidth, innerHeight) < 700;
+  let K = 0, N = 0, PITCH = 0;
+  const SC = 0, MK = 1, SP = 2, RG = 3, MK2 = 4;
+  const KEYS = [[0, SC], [0.05, SC], [0.27, MK], [0.40, MK], [0.53, SP], [0.63, SP], [0.76, RG], [0.86, RG], [0.97, MK2], [1, MK2]];
+  const TRIGGERS = [[0.12, 'pixels'], [0.47, 'web'], [0.71, 'voice'], [0.93, 'finale-skip']];
+  const PAL = { blue: [86, 114, 255], deep: [46, 70, 226], spark: [255, 180, 58], ice: [170, 188, 255], white: [236, 240, 255] };
+  const CELLS = [[1, 0, 'deep'], [0, 1, 'blue'], [1, 1, 'spark'], [2, 1, 'blue'], [1, 2, 'deep']];
+  const F = 3.4;
+  let sc, mk, sp, rk, ra, seed, dl, ssz, col;
+  const colOf = s => s === MK2 ? 1 : s;
+  const setC = (arr, i, c, v = 1) => { arr[i * 3] = Math.min(255, c[0] * v); arr[i * 3 + 1] = Math.min(255, c[1] * v); arr[i * 3 + 2] = Math.min(255, c[2] * v); };
+  const pickW = (r, list) => { let a = 0; for (const [p, v] of list) { a += p; if (r < a) return v; } return list[list.length - 1][1]; };
+
+  // build every particle's place in each shape (rebuilt when the quality tier changes)
+  function build(k) {
+  K = k; N = 5 * K * K; PITCH = 0.62 / K;
+  sc = new Float32Array(N * 3); mk = new Float32Array(N * 2); sp = new Float32Array(N * 3);
+  rk = new Uint8Array(N); ra = new Float32Array(N); seed = new Float32Array(N); dl = new Float32Array(N); ssz = new Float32Array(N);
+  col = [new Uint8Array(N * 3), new Uint8Array(N * 3), new Uint8Array(N * 3), new Uint8Array(N * 3)];
+  let i = 0;
+  for (const [cx, cy, name] of CELLS) {
+    for (let a = 0; a < K; a++) for (let b = 0; b < K; b++, i++) {
+      mk[i * 2] = (cx - 1) * 0.68 - 0.31 + (b + 0.5) * PITCH;
+      mk[i * 2 + 1] = (cy - 1) * 0.68 - 0.31 + (a + 0.5) * PITCH;
+      setC(col[MK], i, PAL[name], 0.84 + Math.random() * 0.26);
+    }
+  }
+  const perm = Array.from({ length: N }, (_, j) => j);
+  for (let j = N - 1; j > 0; j--) { const r = Math.floor(Math.random() * (j + 1)); [perm[j], perm[r]] = [perm[r], perm[j]]; }
+  for (let j = 0; j < N; j++) {
+    const id = perm[j], y = 1 - 2 * (j + 0.5) / N, r = Math.sqrt(1 - y * y), th = j * 2.399963;
+    sp[id * 3] = Math.cos(th) * r; sp[id * 3 + 1] = y; sp[id * 3 + 2] = Math.sin(th) * r;
+  }
+  for (let j = 0; j < N; j++) {
+    seed[j] = Math.random();
+    sc[j * 3] = Math.random() * 2 - 1; sc[j * 3 + 1] = Math.random() * 2 - 1; sc[j * 3 + 2] = -0.4 + Math.random() * 3.2;
+    ssz[j] = 0.8 + Math.random() * 1.9;
+    const d = Math.hypot(mk[j * 2], mk[j * 2 + 1]) / 1.4;
+    dl[j] = clamp(d * 0.24 + Math.random() * 0.11, 0, 0.35);
+    setC(col[SC], j, pickW(Math.random(), [[0.55, PAL.ice], [0.25, PAL.blue], [0.12, PAL.white], [1, PAL.spark]]), 0.9);
+    setC(col[SP], j, pickW(Math.random(), [[0.6, PAL.blue], [0.2, PAL.ice], [0.12, PAL.deep], [1, PAL.spark]]));
+    rk[j] = pickW(Math.random(), [[0.22, 0], [0.33, 1], [1, 2]]);
+    ra[j] = Math.random() * Math.PI * 2;
+    setC(col[RG], j, rk[j] === 0 ? (Math.random() < .8 ? PAL.spark : PAL.white) : rk[j] === 1 ? PAL.blue : (Math.random() < .5 ? PAL.deep : PAL.ice));
+  }
+  }
+  build(Perf.reelK());
+
+  const deep = new Image(); deep.decoding = 'async'; deep.src = 'media/deep-field.jpg';
+  let W = 0, H = 0, DPR = 1, S = 1, CX = 0, CY = 0, target = 0, p = 0, visible = false, lastTC = '', fired = new Set(), useVid = false;
+  const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+  const o = { x: 0, y: 0, z: 0, s: 1, a: 1 };
+
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    W = r.width; H = r.height; DPR = Math.min(window.devicePixelRatio || 1, Perf.dprCap());
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const wide = W >= 1000;
+    S = wide ? Math.min(W * 0.2, H * 0.28) : Math.min(W * 0.36, H * 0.28);
+    CX = wide ? W * 0.64 : W / 2; CY = H * (wide ? 0.47 : 0.38);
+  }
+
+  function shape(s, j, t, lvl, pr) {
+    switch (s) {
+      case SC: {
+        const ex = W / 2 / S * 1.15, ey = H / 2 / S * 1.15, sd = seed[j];
+        o.x = sc[j * 3] * ex + Math.sin(t * 0.00018 * (1 + sd) + sd * 40) * 0.06;
+        o.y = sc[j * 3 + 1] * ey + Math.cos(t * 0.00016 * (1 + sd) + sd * 30) * 0.06;
+        o.z = sc[j * 3 + 2]; o.s = ssz[j];
+        o.a = 0.25 + 0.6 * (0.5 + 0.5 * Math.sin(t * 0.0021 * (0.4 + sd) + sd * 60));
+        break;
+      }
+      case MK: case MK2: {
+        const k = s === MK2 ? 0.74 : 1;
+        const ang = s === MK2 ? Math.sin(t * 0.0006) * 0.22 + mouse.x * 0.2 : (clamp((pr - 0.27) / 0.13) - 0.5) * 0.5 + mouse.x * 0.25;
+        const tilt = mouse.y * 0.18 + (s === MK2 ? Math.sin(t * 0.0005) * 0.06 : 0);
+        const x = mk[j * 2] * k, y = mk[j * 2 + 1] * k;
+        o.x = x * Math.cos(ang); o.z = x * Math.sin(ang);
+        o.y = y * Math.cos(tilt) + (s === MK2 ? -0.05 : 0); o.z += y * Math.sin(tilt);
+        o.s = PITCH * S * 0.84 * k; o.a = 0.96;
+        break;
+      }
+      case SP: {
+        const ry = t * 0.00022 + pr * 5, rx = 0.34 + mouse.y * 0.2, R = 1.2;
+        const ux = sp[j * 3], uy = sp[j * 3 + 1], uz = sp[j * 3 + 2];
+        const x1 = ux * Math.cos(ry) + uz * Math.sin(ry), z1 = -ux * Math.sin(ry) + uz * Math.cos(ry);
+        const y2 = uy * Math.cos(rx) - z1 * Math.sin(rx), z2 = uy * Math.sin(rx) + z1 * Math.cos(rx);
+        o.x = x1 * R; o.y = y2 * R; o.z = z2 * R;
+        o.s = small ? 1.9 : 2.3; o.a = 0.16 + 0.84 * (1 - (z2 + 1) / 2);
+        break;
+      }
+      case RG: {
+        const k = rk[j], dir = k === 1 ? -1 : 1;
+        const th = ra[j] + t * 0.00018 * dir * (1 + k * 0.3);
+        const R = [0.42, 0.74, 1.06][k];
+        const wob = 0.035 * Math.sin(th * 5 + t * 0.0015 + k * 1.7) + lvl * (0.1 + 0.07 * k) * Math.sin(th * (6 + k) - t * 0.007 + k) * (0.6 + 0.4 * Math.sin(th * 3 + t * 0.003));
+        const r = R * (1 + wob);
+        o.x = Math.cos(th) * r; o.y = Math.sin(th) * r; o.z = Math.sin(th + t * 0.0004) * 0.12 * k;
+        o.s = small ? 2 : 2.4; o.a = 0.88;
+        break;
+      }
+    }
+  }
+
+  function segment(pr) {
+    for (let k = 0; k < KEYS.length - 1; k++) {
+      if (pr <= KEYS[k + 1][0]) return [KEYS[k][1], KEYS[k + 1][1], (pr - KEYS[k][0]) / ((KEYS[k + 1][0] - KEYS[k][0]) || 1), k];
+    }
+    return [MK2, MK2, 1, KEYS.length - 2];
+  }
+
+  function glow(x, y, r, rgb, a) {
+    if (a <= 0.004 || r <= 0) return;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  function draw(t) {
+    const lvl = Math.max(Voice.level, Music.level() * 0.9, 0.18 + 0.12 * Math.sin(t * 0.0023));
+    const [A, B, segT, kIdx] = segment(p);
+    const morph = A !== B;
+    const dir = kIdx % 4 < 2 ? 1 : -1;
+    const w = [0, 0, 0, 0, 0];
+    if (morph) { const e = easeIO(segT); w[A] += 1 - e; w[B] += e; } else w[A] = 1;
+    const wMark = w[MK] + w[MK2];
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#05070F'; ctx.fillRect(0, 0, W, H);
+    // the real Hubble deep field fades in behind the scattered pixels and the globe
+    const da = 0.16 * w[SC] + 0.42 * w[SP] + 0.1 * w[RG];
+    if (da > 0.01 && deep.complete && deep.naturalWidth) {
+      const z = (Math.max(W / deep.naturalWidth, H / deep.naturalHeight)) * (1.08 + p * 0.25);
+      const dw = deep.naturalWidth * z, dh = deep.naturalHeight * z;
+      ctx.globalAlpha = da; ctx.drawImage(deep, (W - dw) / 2, (H - dh) / 2, dw, dh); ctx.globalAlpha = 1;
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    glow(CX, CY, S * 1.9, '70,96,255', 0.2 * wMark + 0.16 * w[SP] + 0.12 * w[RG] + 0.06 * w[SC]);
+    glow(CX, CY, S * 0.7, '255,180,58', 0.26 * w[MK] + 0.36 * w[MK2]);
+    glow(CX, CY, S * (0.45 + lvl * 0.35), '255,180,58', (0.22 + lvl * 0.4) * w[RG]);
+
+    // shine sweep across the logo
+    let sweep = -9;
+    if (A === MK && B === MK) sweep = -1.7 + 3.4 * segT;
+    if (A === MK2 || B === MK2) sweep = ((t * 0.00042) % 4) - 2;
+
+    const ca = col[colOf(A)], cb = col[colOf(B)];
+    for (let j = 0; j < N; j++) {
+      shape(A, j, t, lvl, p);
+      let ax = o.x, ay = o.y, az = o.z, as = o.s, aa = o.a;
+      let x = ax, y = ay, z = az, sz = as, al = aa, e = 0;
+      if (morph) {
+        shape(B, j, t, lvl, p);
+        e = easeIO(clamp((segT - dl[j]) / 0.65));
+        x = lerp(ax, o.x, e); y = lerp(ay, o.y, e); z = lerp(az, o.z, e);
+        sz = lerp(as, o.s, e); al = lerp(aa, o.a, e);
+        const arc = Math.sin(Math.PI * e), ang = arc * (0.7 + seed[j] * 0.9) * dir;
+        const c = Math.cos(ang), s = Math.sin(ang);
+        const rx = x * c - y * s; y = x * s + y * c; x = rx;
+        z += arc * (seed[j] - 0.45) * 2.2;
+      }
+      if (z < -F + 0.6) z = -F + 0.6;
+      const ps = F / (F + z);
+      const X = CX + x * S * ps, Y = CY + y * S * ps;
+      let size = Math.max(0.6, sz * ps);
+      if (X < -20 || X > W + 20 || Y < -20 || Y > H + 20) continue;
+      let r = lerp(ca[j * 3], cb[j * 3], e), g = lerp(ca[j * 3 + 1], cb[j * 3 + 1], e), b = lerp(ca[j * 3 + 2], cb[j * 3 + 2], e);
+      if (sweep > -8 && wMark > 0.3) {
+        const d = Math.abs(mk[j * 2] + mk[j * 2 + 1] * 0.55 - sweep);
+        if (d < 0.24) { const f = (1 - d / 0.24) ** 2 * wMark; r += (255 - r) * f * 0.9; g += (255 - g) * f * 0.9; b += (255 - b) * f * 0.85; al = Math.min(1, al + f * 0.3); size *= 1 + f * 0.18; }
+      }
+      ctx.globalAlpha = clamp(al);
+      ctx.fillStyle = 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
+      ctx.fillRect(X - size / 2, Y - size / 2, size, size);
+    }
+    ctx.globalAlpha = 1;
+
+    // lens flare on the final logo
+    const fl = w[MK2] * (0.55 + 0.45 * Math.sin(t * 0.002));
+    if (fl > 0.02) {
+      const lg = ctx.createLinearGradient(CX - S * 2, 0, CX + S * 2, 0);
+      lg.addColorStop(0, 'rgba(255,200,120,0)'); lg.addColorStop(0.5, 'rgba(255,220,160,' + (0.75 * fl) + ')'); lg.addColorStop(1, 'rgba(255,200,120,0)');
+      ctx.fillStyle = lg; ctx.fillRect(CX - S * 2, CY - 0.05 * S - 1, S * 4, 2);
+      glow(CX, CY - 0.05 * S, S * 0.22, '255,236,200', 0.5 * fl);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function useVideo(src) {
+    useVid = true;
+    video.src = src; video.load();
+    stage.classList.add('has-video');
+    const prime = () => { const pr = video.play(); if (pr && pr.then) pr.then(() => video.pause()).catch(() => {}); };
+    video.addEventListener('loadedmetadata', prime, { once: true });
+  }
+  function useCanvas() { useVid = false; stage.classList.remove('has-video'); video.removeAttribute('src'); video.load(); }
+
+  function update(t, vh, rect) {
+    const r = rect || section.getBoundingClientRect();
+    visible = r.top < vh && r.bottom > 0;
+    target = clamp(-r.top / Math.max(1, r.height - vh));
+    p = RM ? target : p + (target - p) * 0.1;
+    if (Math.abs(target - p) < 0.0004) p = target;
+    if (visible && Voice.on && Voice.unlocked && !fastScroll && Math.abs(target - p) < 0.03) {
+      for (let k = 0; k < TRIGGERS.length; k++) {
+        const [at, id] = TRIGGERS[k], next = k + 1 < TRIGGERS.length ? TRIGGERS[k + 1][0] : 1.01;
+        if (target >= at && target < next && !fired.has(id)) { fired.add(id); if (id !== 'finale-skip') Voice.trigger(id); }
+      }
+    }
+    if (!visible) return;
+    mouse.x += (mouse.tx - mouse.x) * 0.05; mouse.y += (mouse.ty - mouse.y) * 0.05;
+    for (const c of caps) {
+      const [a0, a1, b0, b1] = c.w;
+      const v = smooth(a0, a1, p) * (1 - smooth(b0, b1, p));
+      if (v > 0.6 && !(c.v > 0.6) && target > p - 0.001) Haptics.play('typed');
+      c.v = v;
+      c.el.style.opacity = v.toFixed(3);
+      c.el.style.transform = 'translate3d(0,' + ((1 - v) * 28).toFixed(1) + 'px,0)';
+      c.el.style.visibility = v < 0.01 ? 'hidden' : 'visible';
+    }
+    hint.style.opacity = (1 - smooth(0.005, 0.04, p)).toFixed(3);
+    rail.style.setProperty('--p', p.toFixed(4));
+    railDots.forEach((d, k) => d.classList.toggle('on', p >= [0.12, 0.47, 0.71, 0.93][k]));
+    const frame = Math.round(p * 720), secs = frame / 24;
+    const label = '00:' + String(Math.floor(secs)).padStart(2, '0') + ':' + String(frame % 24).padStart(2, '0');
+    if (label !== lastTC) { tc.textContent = label; fr.textContent = 'FRAME ' + String(frame).padStart(4, '0'); lastTC = label; }
+    if (useVid) {
+      if (video.duration && !video.seeking) { const tt = p * (video.duration - 0.05); if (Math.abs(video.currentTime - tt) > 0.02) video.currentTime = tt; }
+    } else draw(t);
+  }
+
+  addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { mouse.tx = e.clientX / innerWidth - 0.5; mouse.ty = e.clientY / innerHeight - 0.5; } }, { passive: true });
+  function setTilt(x, y) { mouse.tx = x; mouse.ty = y; }
+  resize();
+  if (CONFIG.scrollVideo) useVideo(CONFIG.scrollVideo);
+  // draw a few frames off screen so the browser has the drawing code hot before anyone scrolls
+  function warm() { if (useVid || !W) return; const keep = p; for (const v of [0.18, 0.5, 0.8]) { p = v; draw(performance.now()); } p = keep; }
+  function setQuality() { const k = Perf.reelK(); if (k !== K) build(k); resize(); }
+  return { resize, update, useVideo, useCanvas, setTilt, warm, setQuality, resetTriggers() { fired = new Set(); }, prime() { if (useVid) { const pr = video.play(); if (pr && pr.then) pr.then(() => video.pause()).catch(() => {}); } } };
+})();
+
+/* =====================================================================
+   VOICE STUDIO (hidden settings panel)
+   ===================================================================== */
+const Studio = (() => {
+  const el = $('#studio'), st = $('#stStatus');
+  const f = id => $('#' + id);
+  let lastFocus = null, built = false, myVoices = [];
+
+  function status(msg, kind) { st.textContent = msg || ''; st.className = 'st-status' + (kind ? ' ' + kind : ''); }
+  function mode() {
+    const m = f('stMode'), src = Voice.source();
+    m.textContent = src === 'eleven' ? 'ElevenLabs on' : src === 'pack' ? 'Narration pack' : src === 'browser' ? 'Browser voice' : 'Voice off';
+    m.classList.toggle('on', src === 'eleven' || src === 'pack');
+  }
+  function fillVoices() {
+    const sel = f('stVoice'); sel.textContent = '';
+    const add = (label, list) => {
+      if (!list.length) return;
+      const g = document.createElement('optgroup'); g.label = label;
+      list.forEach(([id, name]) => { const op = document.createElement('option'); op.value = id; op.textContent = name; g.appendChild(op); });
+      sel.appendChild(g);
+    };
+    add('Your voices', myVoices.map(v => [v.id, v.name + (v.cat ? ' · ' + v.cat : '')]));
+    add('Default voices', DEFAULT_VOICES);
+    const known = myVoices.some(v => v.id === S.voiceId) || DEFAULT_VOICES.some(v => v[0] === S.voiceId);
+    if (!known && S.voiceId) add('Custom', [[S.voiceId, 'Custom voice']]);
+    sel.value = S.voiceId;
+  }
+  function build() {
+    if (built) return; built = true;
+    fillVoices();
+    f('stKey').value = S.apiKey; f('stVoiceId').value = S.voiceId; f('stModel').value = S.modelId; f('stFallback').checked = S.fallback;
+    const ranges = [['stStability', 'stability', 'oStability'], ['stSimilarity', 'similarity', 'oSimilarity'], ['stStyle', 'style', 'oStyle'], ['stSpeed', 'speed', 'oSpeed'], ['stVolume', 'volume', 'oVolume'], ['stMusicVol', 'musicVolume', 'oMusicVol']];
+    for (const [id, key, out] of ranges) {
+      const inp = f(id); inp.value = S[key]; f(out).textContent = (+S[key]).toFixed(2);
+      inp.addEventListener('input', () => { S[key] = +inp.value; f(out).textContent = (+inp.value).toFixed(2); save(); });
+    }
+    const box = f('stScript');
+    LINE_ORDER.forEach(id => {
+      const lab = document.createElement('label'); lab.htmlFor = 'stLine-' + id; lab.textContent = { hello: 'After entering', pixels: 'Film · chapter 1', web: 'Film · chapter 2', voice: 'Film · chapter 3', meet: 'Phone showcase', photos: 'Photos card', free: 'Price card', languages: 'Languages section', creator: 'Creator section', finale: 'Final section' }[id];
+      const ta = document.createElement('textarea'); ta.id = 'stLine-' + id; ta.rows = 2; ta.value = Voice.scriptText(id);
+      ta.addEventListener('input', () => { const v = ta.value.trim(); if (v && v !== CONFIG.lines[id]) S.script[id] = v; else delete S.script[id]; save(); });
+      box.append(lab, ta);
+    });
+    f('stKey').addEventListener('input', e => { S.apiKey = e.target.value.trim(); save(); Voice.forget(); mode(); });
+    f('stKeyShow').addEventListener('click', e => { const k = f('stKey'); const show = k.type === 'password'; k.type = show ? 'text' : 'password'; e.target.textContent = show ? 'Hide' : 'Show'; });
+    f('stVoice').addEventListener('change', e => { S.voiceId = e.target.value; f('stVoiceId').value = S.voiceId; save(); Voice.forget(); });
+    f('stVoiceId').addEventListener('change', e => { S.voiceId = e.target.value.trim(); save(); fillVoices(); Voice.forget(); });
+    f('stModel').addEventListener('change', e => { S.modelId = e.target.value; save(); Voice.forget(); });
+    f('stFallback').addEventListener('change', e => { S.fallback = e.target.checked; save(); Voice.forget(); mode(); });
+    const qNote = () => { f('stQualityNote').textContent = 'This device is using ' + Perf.tier + ' quality' + (S.quality === 'auto' ? ', picked automatically.' : '.'); };
+    f('stQuality').value = S.quality || 'auto'; qNote();
+    f('stQuality').addEventListener('change', e => { S.quality = e.target.value; save(); Perf.set(S.quality); qNote(); });
+    Perf.on(qNote);
+    f('stHaptics').checked = S.haptics;
+    f('stHaptics').addEventListener('change', e => { S.haptics = e.target.checked; save(); if (S.haptics) Haptics.play('select'); });
+    f('stMusic').checked = S.music;
+    f('stMusic').addEventListener('change', e => { S.music = e.target.checked; save(); if (!S.music) Music.stop(); else if (Voice.on) Music.start(); });
+    f('stMusicVol').addEventListener('input', () => Music.volume(S.musicVolume));
+    f('stLoadVoices').addEventListener('click', async e => {
+      if (!S.apiKey) { status('Paste your API key first, then load your voices.', 'err'); return; }
+      e.target.disabled = true; status('Loading your voices…');
+      try { myVoices = await Eleven.voices(S.apiKey); fillVoices(); status('Loaded ' + myVoices.length + ' voices from your account.', 'ok'); }
+      catch (err) { status(err.message, 'err'); }
+      e.target.disabled = false;
+    });
+    f('stTest').addEventListener('click', async e => {
+      if (!S.apiKey) { status('Paste your ElevenLabs API key first.', 'err'); return; }
+      e.target.disabled = true; status('Asking ElevenLabs for a sample…');
+      try { await Voice.playTest("Hi, I'm Pixel Pro. This is how I'll sound on your website."); status('Playing the sample. It is saved, so playing it again costs no credits.', 'ok'); }
+      catch (err) { status(err.message, 'err'); }
+      e.target.disabled = false;
+    });
+    f('stForget').addEventListener('click', () => { S.apiKey = ''; f('stKey').value = ''; save(); Voice.forget(); mode(); status('Key removed from this browser.', 'ok'); });
+    f('stReplay').addEventListener('click', () => { replayStory(); close(); });
+    f('stScriptReset').addEventListener('click', () => { S.script = {}; save(); Voice.forget(); LINE_ORDER.forEach(id => { f('stLine-' + id).value = CONFIG.lines[id]; }); status('Original script restored.', 'ok'); });
+    f('stClear').addEventListener('click', async () => { await idb.clear(); Voice.forget(); status('Saved audio cleared. Lines will be generated again next time.', 'ok'); });
+    f('stPack').addEventListener('click', async e => {
+      if (!S.apiKey) { status('Paste your ElevenLabs API key first. The pack is made with your voice settings.', 'err'); return; }
+      e.target.disabled = true;
+      try {
+        const files = [], manifest = { generated: new Date().toISOString(), voiceId: S.voiceId, modelId: S.modelId, lines: {} };
+        for (let k = 0; k < LINE_ORDER.length; k++) {
+          const id = LINE_ORDER[k], text = Voice.scriptText(id);
+          status('Making line ' + (k + 1) + ' of ' + LINE_ORDER.length + '…');
+          const blob = await Voice.cachedEleven(text);
+          files.push({ name: 'audio/' + id + '.mp3', data: new Uint8Array(await blob.arrayBuffer()) });
+          manifest.lines[id] = { file: id + '.mp3', text };
+        }
+        files.push({ name: 'audio/manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(makeZip(files)); a.download = 'pixelpro-narration.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+        status('Downloaded pixelpro-narration.zip. Unzip it next to index.html so the audio folder sits beside it, then upload the site again.', 'ok');
+      } catch (err) { status(err.message, 'err'); }
+      e.target.disabled = false;
+    });
+    f('stVideo').addEventListener('change', e => {
+      const file = e.target.files && e.target.files[0]; if (!file) return;
+      Reel.useVideo(URL.createObjectURL(file));
+      status('Previewing ' + file.name + '. Scroll through the film to scrub it. This preview lasts until you reload.', 'ok');
+    });
+    f('stVideoReset').addEventListener('click', () => { Reel.useCanvas(); f('stVideo').value = ''; status('Back to the built-in animation.', 'ok'); });
+    $$('[data-close]', el).forEach(b => b.addEventListener('click', close));
+    // buttons that disable themselves while working get focus back afterwards
+    ['stLoadVoices', 'stTest', 'stPack'].map(f).forEach(b => b.addEventListener('click', () => setTimeout(function wait() { if (b.disabled) setTimeout(wait, 150); else if (!el.hidden && el.contains(document.activeElement) === false) b.focus(); }, 150)));
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { close(); return; }
+    if (e.key !== 'Tab') return;
+    const items = $$('button,input,select,textarea,summary', el).filter(x => !x.disabled && x.offsetParent !== null);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+  function open() {
+    build(); mode();
+    if (!el.hidden) return;
+    document.addEventListener('keydown', onKey);
+    lastFocus = document.activeElement;
+    el.hidden = false; document.body.classList.add('studio-open');
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
+    setTimeout(() => f('stKey').focus(), 350);
+  }
+  function close() {
+    if (el.hidden) return;
+    document.removeEventListener('keydown', onKey);
+    el.classList.remove('open'); document.body.classList.remove('studio-open');
+    setTimeout(() => { el.hidden = true; }, 480);
+    if (location.hash === '#studio') history.replaceState(null, '', location.pathname + location.search);
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  return { open, close, status, mode };
+})();
+
+/* ---------- minimal ZIP writer (stored, no compression) ---------- */
+function crc32(buf) {
+  let t = crc32.t;
+  if (!t) { t = crc32.t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = t[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = enc.encode(file.name), crc = crc32(file.data), size = file.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true); lh.setUint32(18, size, true);
+    lh.setUint32(22, size, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, file.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(10, 0, true); ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, size, true); ch.setUint32(24, size, true); ch.setUint16(28, name.length, true);
+    ch.setUint16(30, 0, true); ch.setUint16(32, 0, true); ch.setUint16(34, 0, true); ch.setUint16(36, 0, true);
+    ch.setUint32(38, 0, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + size;
+  }
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+
+/* =====================================================================
+   PAGE: gate, scroll effects, reveals, demo chat, languages
+   ===================================================================== */
+const gate = $('#gate'), nav = $('#nav'), heroInner = $('#heroInner');
+
+// 3D logo: load Three.js and js/hero3d.js after the page is interactive; the CSS logo stays if anything fails
+let entered = false;
+const Hero3D = (() => {
+  const box = $('#heroLogo');
+  let ctl = null, cap = Perf.dprCap();
+  const load = src => new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.async = true; el.onload = res; el.onerror = rej; document.head.appendChild(el); });
+  async function mount() {
+    ctl = window.PixelHero3D ? window.PixelHero3D.mount(box, { reducedMotion: RM, dprCap: cap }) : null;
+    if (!ctl) return false;
+    await ctl.ready;
+    box.classList.add('is-3d');
+    if (entered) ctl.intro();
+    return true;
+  }
+  const ready = (async () => {
+    try {
+      if (!window.THREE) await load(CONFIG.threeUrl);
+      if (!window.PixelHero3D) await load('js/hero3d.js');
+      return await mount();
+    } catch (e) { ctl = null; return false; }
+  })();
+  addEventListener('pointermove', e => { if (ctl && e.pointerType === 'mouse') ctl.setPointer(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5); }, { passive: true });
+  return {
+    get ctl() { return ctl; }, ready,
+    // a new quality tier before entry: remount at the new resolution (invisible, the intro has not played)
+    requality() { const c = Perf.dprCap(); if (c === cap || !ctl || entered) return; cap = c; try { ctl.destroy(); } catch (e) {} ctl = null; mount().catch(() => {}); }
+  };
+})();
+
+/* =====================================================================
+   PRELOAD: everything the scroll story needs is fetched and warmed up
+   while the opening titles play, so nothing loads mid-scroll.
+   ===================================================================== */
+const Preload = (() => {
+  let total = 0, done = 0, finished = false;
+  const all = [];
+  const add = (p, w) => { total += w; all.push(Promise.resolve(p).catch(() => {}).then(() => { done += w; })); };
+  const timeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
+  if (document.fonts && document.fonts.ready) add(timeout(document.fonts.ready, 8000), 2);
+  ['media/rocket.jpg', 'media/espresso.jpg', 'media/cat.jpg', 'media/deep-field.jpg'].forEach(src => {
+    const img = new Image(); img.src = src;
+    add(timeout(img.decode ? img.decode() : new Promise(r => { img.onload = img.onerror = r; }), 8000), 0.5);
+  });
+  add(timeout(Hero3D.ready, 9000), 4);
+  add(timeout(Voice.warm(), 9000), 2);
+  add(new Promise(r => requestAnimationFrame(() => { try { Reel.warm(); } catch (e) {} r(); })), 1);
+  const whenDone = Promise.all(all).then(() => { finished = true; });
+  return { get progress() { return total ? done / total : 1; }, get done() { return finished; }, whenDone };
+})();
+Perf.on(() => { Reel.setQuality(); Hero3D.requality(); });
+
+/* =====================================================================
+   OPENING TITLES: a projector line warms up, collapses into one amber
+   pixel that ignites, and hundreds of pixels spiral in to build the logo.
+   Drawn on a canvas behind the gate; any tap enters with sound.
+   ===================================================================== */
+const Intro = (() => {
+  const cv = $('#gateCanvas'), slot = $('#gateSlot'), load = $('#gateLoad');
+  const ctx = cv && cv.getContext ? cv.getContext('2d') : null;
+  const STAGES = [[2.8, 's1'], [3.35, 's2']];
+  if (!ctx || RM) {
+    gate.classList.add('s1', 's2', 's3', 'no-canvas');
+    if (load) load.textContent = '100';
+    return { leave() {} };
+  }
+  const small = Math.min(innerWidth, innerHeight) < 700;
+  const K = small ? 9 : 12, N = 5 * K * K, PITCH = 0.62 / K;
+  const CELLS = [[1, 1, [255, 180, 58]], [1, 0, [46, 70, 226]], [0, 1, [86, 114, 255]], [2, 1, [86, 114, 255]], [1, 2, [46, 70, 226]]];
+  const tx = new Float32Array(N), ty = new Float32Array(N), rt = new Float32Array(N), at = new Float32Array(N);
+  const r0 = new Float32Array(N), spin = new Float32Array(N), dl = new Float32Array(N), sd = new Float32Array(N);
+  const cr = new Uint8Array(N), cg = new Uint8Array(N), cb = new Uint8Array(N);
+  let i = 0;
+  CELLS.forEach(([cx, cy, rgb], ci) => {
+    for (let a = 0; a < K; a++) for (let b = 0; b < K; b++, i++) {
+      tx[i] = (cx - 1) * 0.68 - 0.31 + (b + 0.5) * PITCH; ty[i] = (cy - 1) * 0.68 - 0.31 + (a + 0.5) * PITCH;
+      rt[i] = Math.hypot(tx[i], ty[i]); at[i] = Math.atan2(ty[i], tx[i]);
+      r0[i] = 2.4 + Math.random() * 1.6; spin[i] = (Math.random() < 0.5 ? -1 : 1) * (1.4 + Math.random() * 1.6);
+      sd[i] = Math.random();
+      // the amber centre grows out of the ignited pixel first, the blue arms follow
+      dl[i] = ci === 0 ? Math.hypot(tx[i], ty[i]) * 0.9 + Math.random() * 0.12 : 0.28 + Math.random() * 0.62;
+      const v = 0.86 + Math.random() * 0.24;
+      cr[i] = Math.min(255, rgb[0] * v); cg[i] = Math.min(255, rgb[1] * v); cb[i] = Math.min(255, rgb[2] * v);
+    }
+  });
+  // drifting dust
+  const D = small ? 70 : 140, dx = new Float32Array(D), dy = new Float32Array(D), dz = new Float32Array(D);
+  for (let k = 0; k < D; k++) { dx[k] = Math.random(); dy[k] = Math.random(); dz[k] = Math.random(); }
+  // soft glow sprites
+  function sprite(rgb) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(' + rgb + ',1)'); gr.addColorStop(0.25, 'rgba(' + rgb + ',.45)'); gr.addColorStop(1, 'rgba(' + rgb + ',0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return c;
+  }
+  const SP = { amber: sprite('255,180,58'), blue: sprite('86,114,255'), white: sprite('255,244,226') };
+  const glow = (spr, x, y, r, a) => { if (a <= 0.003 || r <= 0) return; ctx.globalAlpha = Math.min(1, a); ctx.drawImage(spr, x - r, y - r, r * 2, r * 2); };
+
+  let W = 0, H = 0, DPR = 1, big = { x: 0, y: 0, s: 1 }, fin = { x: 0, y: 0, s: 1 };
+  let t0 = performance.now(), leaving = false, leaveT = 0, stage = 0, raf = 0, lastLoad = '', prevNow = 0;
+  function layout() {
+    W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    big = { x: W / 2, y: H * 0.44, s: Math.min(W * 0.3, H * 0.22) };
+    const r = slot.getBoundingClientRect();
+    fin = { x: r.left + r.width / 2, y: r.top + r.height / 2, s: r.width / 2 / 0.99 };
+  }
+  const eo3 = x => 1 - Math.pow(1 - x, 3);
+
+  function frame(now) {
+    const t = (now - t0) / 1000, L = leaving ? (now - leaveT) / 1000 : -1;
+    if (L > 1.1 || gate.hidden) { cancelAnimationFrame(raf); return; }
+    raf = requestAnimationFrame(frame);
+    if (t > 0.9 && t < 3.6) Perf.sample(now);   // the heavy part of the titles
+    if (t >= 3.6) Perf.settle();
+    for (const [ts, cl] of STAGES) if (t >= ts && !gate.classList.contains(cl)) gate.classList.add(cl);
+    // the button arrives once the story is loaded (or after 10 s on a very slow connection)
+    if (t >= 3.85 && (Preload.done || t > 10) && !gate.classList.contains('s3')) { gate.classList.add('s3'); $('#enterSound').focus({ preventScroll: true }); }
+    const pct = String(Math.min(100, Math.round(Math.min(t / 3.7, Preload.progress) * 100))).padStart(3, '0');
+    if (pct !== lastLoad && load) { load.textContent = pct; lastLoad = pct; }
+
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.fillStyle = '#05070F'; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'lighter';
+
+    // the logo glides from centre stage into its place above the title
+    const mv = easeIO(clamp((t - 2.6) / 0.95));
+    let C = { x: lerp(big.x, fin.x, mv), y: lerp(big.y, fin.y, mv) }, S = lerp(big.s, fin.s, mv);
+    const burst = L >= 0 ? L * 3 + L * L * 28 : 0;
+
+    // dust motes drifting up through the light
+    for (let k = 0; k < D; k++) {
+      const y = ((dy[k] - t * (0.006 + dz[k] * 0.014)) % 1 + 1) % 1, x = dx[k] + Math.sin(t * 0.3 + k) * 0.01;
+      const r = 0.6 + dz[k] * 2.2, a = (0.05 + dz[k] * 0.18) * clamp(t / 1.2) * (L >= 0 ? 1 - clamp(L / 0.6) : 1);
+      glow(SP.white, x * W, y * H, r * 3, a);
+    }
+
+    // 1) projector line warms up, then collapses into a point
+    if (t < 0.85) {
+      const grow = eo3(clamp(t / 0.45)), shrink = easeIO(clamp((t - 0.45) / 0.35));
+      const w = W * 0.82 * grow * (1 - shrink) + 2, a = clamp(t / 0.2) * (1 - shrink * 0.6);
+      const lg = ctx.createLinearGradient(big.x - w / 2, 0, big.x + w / 2, 0);
+      lg.addColorStop(0, 'rgba(120,146,255,0)'); lg.addColorStop(0.5, 'rgba(235,240,255,' + (0.9 * a) + ')'); lg.addColorStop(1, 'rgba(120,146,255,0)');
+      ctx.globalAlpha = 1; ctx.fillStyle = lg; ctx.fillRect(big.x - w / 2, big.y - 1, w, 2);
+      glow(SP.blue, big.x, big.y, 60 + w * 0.15, 0.25 * a);
+    }
+
+    // 2) the amber pixel ignites: flash, anamorphic streak, shockwave
+    const ig = clamp((t - 0.62) / 0.5);
+    if (t > 0.62 && L < 0) {
+      const flash = Math.exp(-((t - 0.7) * (t - 0.7)) / 0.02);
+      glow(SP.amber, C.x, C.y, S * (0.5 + 1.6 * flash), 0.55 * eo3(ig) + 0.6 * flash);
+      glow(SP.white, C.x, C.y, S * 0.5 * flash + 6, flash);
+      const sw = W * (0.25 + 0.9 * flash) * (1 - mv * 0.5), sa = 0.15 + 0.75 * flash;
+      const lg = ctx.createLinearGradient(C.x - sw, 0, C.x + sw, 0);
+      lg.addColorStop(0, 'rgba(86,114,255,0)'); lg.addColorStop(0.42, 'rgba(120,146,255,' + (0.35 * sa) + ')'); lg.addColorStop(0.5, 'rgba(255,236,200,' + sa + ')'); lg.addColorStop(0.58, 'rgba(120,146,255,' + (0.35 * sa) + ')'); lg.addColorStop(1, 'rgba(86,114,255,0)');
+      ctx.globalAlpha = 1; ctx.fillStyle = lg; ctx.fillRect(C.x - sw, C.y - 1.5, sw * 2, 3);
+      const sh = clamp((t - 0.68) / 1.1);
+      if (sh > 0 && sh < 1) {
+        const R = eo3(sh) * Math.max(W, H) * 0.62, la = (1 - sh) * 0.55;
+        ctx.lineWidth = 1.2 + (1 - sh) * 2.5;
+        [['255,120,90', -3], ['255,236,200', 0], ['110,140,255', 3]].forEach(([c, d]) => { ctx.strokeStyle = 'rgba(' + c + ',' + la + ')'; ctx.beginPath(); ctx.arc(C.x, C.y, Math.max(0, R + d), 0, Math.PI * 2); ctx.stroke(); });
+      }
+    }
+
+    // 3) god rays behind the finished logo
+    const ra = clamp((t - 2.2) / 0.8) * (1 - mv * 0.55) * (L >= 0 ? 1 - clamp(L / 0.4) : 1);
+    if (ra > 0) {
+      ctx.save(); ctx.translate(C.x, C.y); ctx.rotate(t * 0.05);
+      const len = Math.max(W, H) * 0.75;
+      for (let k = 0; k < 16; k++) {
+        ctx.rotate(Math.PI * 2 / 16);
+        const g = ctx.createLinearGradient(0, 0, len, 0);
+        g.addColorStop(0, 'rgba(120,146,255,' + (0.09 * ra) + ')'); g.addColorStop(1, 'rgba(120,146,255,0)');
+        ctx.fillStyle = g; ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len, -len * 0.035 * (1 + (k % 3))); ctx.lineTo(len, len * 0.035 * (1 + (k % 3))); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+      glow(SP.blue, C.x, C.y, S * 2.3, 0.3 * ra);
+      glow(SP.amber, C.x, C.y, S * 0.8, 0.32 * ra);
+    }
+
+    // 4) pixels spiral in and lock into the cross, with light trails
+    const sweep = t > 2.25 && t < 3.0 ? -1.7 + 3.4 * ((t - 2.25) / 0.75) : (t > 4.6 ? ((t - 4.6) * 0.42) % 4.2 - 2 : -9);
+    const px = PITCH * S * 0.84;
+    for (let j = 0; j < N; j++) {
+      const e = clamp((t - 0.78 - dl[j]) / 0.95);
+      if (e <= 0) continue;
+      const ease = eo3(e), r = lerp(r0[j], rt[j], ease), ang = at[j] + (1 - ease) * spin[j];
+      let lx = Math.cos(ang) * r, ly = Math.sin(ang) * r;
+      if (L >= 0) { lx *= 1 + burst * (0.6 + sd[j]); ly *= 1 + burst * (0.6 + sd[j]); }
+      const X = C.x + lx * S, Y = C.y + ly * S;
+      let size = lerp(1.3, px, Math.pow(ease, 3)) * (L >= 0 ? 1 + L * 3 : 1);
+      const hot = 1 - clamp(ease * 1.35);
+      let R = cr[j] + (255 - cr[j]) * hot, G = cg[j] + (248 - cg[j]) * hot, B = cb[j] + (235 - cb[j]) * hot;
+      let al = clamp(e / 0.12) * (L >= 0 ? 1 - clamp(L / 0.75) : 1);
+      if (ease < 0.999 && L < 0) {   // trail along the spiral
+        const e2 = eo3(Math.max(0, e - 0.07)), r2 = lerp(r0[j], rt[j], e2), a2 = at[j] + (1 - e2) * spin[j];
+        ctx.globalAlpha = al * 0.45; ctx.strokeStyle = 'rgb(' + (R | 0) + ',' + (G | 0) + ',' + (B | 0) + ')'; ctx.lineWidth = Math.max(0.6, size * 0.55);
+        ctx.beginPath(); ctx.moveTo(C.x + Math.cos(a2) * r2 * S, C.y + Math.sin(a2) * r2 * S); ctx.lineTo(X, Y); ctx.stroke();
+      } else if (sweep > -8) {      // a light sweep across the settled logo
+        const d = Math.abs(tx[j] + ty[j] * 0.55 - sweep);
+        if (d < 0.24) { const f = (1 - d / 0.24) ** 2; R += (255 - R) * f * 0.9; G += (255 - G) * f * 0.9; B += (255 - B) * f * 0.85; size *= 1 + f * 0.15; }
+      }
+      if (ease >= 0.999 && L < 0) al *= 0.88 + 0.12 * Math.sin(t * 2.4 + sd[j] * 40);
+      ctx.globalAlpha = al; ctx.fillStyle = 'rgb(' + (R | 0) + ',' + (G | 0) + ',' + (B | 0) + ')';
+      ctx.fillRect(X - size / 2, Y - size / 2, size, size);
+    }
+
+    // entering: a white flash as the logo bursts toward the camera
+    if (L >= 0) { glow(SP.white, C.x, C.y, S * (2.5 + L * 16), Math.exp(-L * 5)); glow(SP.amber, C.x, C.y, S * (1.5 + L * 9), 0.8 * Math.exp(-L * 4)); }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+  layout();
+  addEventListener('resize', layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);   // the slot moves once fonts settle
+  raf = requestAnimationFrame(frame);
+  return { leave() { if (!leaving) { leaving = true; leaveT = performance.now(); layout(); } } };
+})();
+
+/* the moment of entry: a soft sub drop, an airy whoosh and three bright pings in D */
+function enterSound(ac) {
+  if (!ac || !ac.createOscillator) return;
+  try {
+    const t = ac.currentTime + 0.02, out = ac.createGain(); out.gain.value = 0.55; out.connect(ac.destination);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(92, t); o.frequency.exponentialRampToValueAtTime(36, t + 0.9);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.75, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + 1.5);
+    const len = Math.floor(ac.sampleRate * 1.2), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let k = 0; k < len; k++) d[k] = (Math.random() * 2 - 1) * (1 - k / len);
+    const n = ac.createBufferSource(), bp = ac.createBiquadFilter(), ng = ac.createGain();
+    n.buffer = buf; bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(6500, t); bp.frequency.exponentialRampToValueAtTime(380, t + 1.0);
+    ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(0.32, t + 0.08); ng.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    n.connect(bp); bp.connect(ng); ng.connect(out); n.start(t); n.stop(t + 1.2);
+    [1318.5, 1760, 2349.3].forEach((f, k) => {
+      const s = ac.createOscillator(), sg = ac.createGain(), st = t + 0.06 + k * 0.07;
+      s.type = 'sine'; s.frequency.value = f;
+      sg.gain.setValueAtTime(0.0001, st); sg.gain.exponentialRampToValueAtTime(0.05, st + 0.02); sg.gain.exponentialRampToValueAtTime(0.0001, st + 1.7);
+      s.connect(sg); sg.connect(out); s.start(st); s.stop(st + 1.8);
+    });
+  } catch (e) {}
+}
+
+function enter(withSound) {
+  if (entered) return;
+  Perf.settle();
+  entered = true;
+  Haptics.arm(); Haptics.play('select'); Tilt.start();
+  if (!RM) {   // the five cubes lock in, then the amber centre ignites (timed to js/hero3d.js intro)
+    [620, 720, 820, 920].forEach(ms => setTimeout(() => { if (Hero3D.ctl) Haptics.play('light'); }, ms));
+    setTimeout(() => { if (Hero3D.ctl) Haptics.play('done'); }, 1480);
+  }
+  if (scrollY > 0) { const root = document.documentElement, sb = root.style.scrollBehavior; root.style.scrollBehavior = 'auto'; scrollTo(0, 0); root.style.scrollBehavior = sb; }
+  if (Hero3D.ctl) Hero3D.ctl.intro();
+  if (withSound) { Voice.unlock(); Voice.setOn(true); enterSound(Music.start()); }
+  Reel.prime();
+  Intro.leave();
+  gate.classList.add('leaving');
+  document.body.classList.add('entered');
+  setTimeout(() => { gate.hidden = true; }, 1100);
+  if (withSound) { setTimeout(() => Voice.trigger('hello'), 900); Voice.prefetch(); }
+}
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.btn,.st-btn,.sound-btn,.st-close')) Haptics.play('tap'); }, true);
+$('#enterSilent').addEventListener('click', e => { e.stopPropagation(); enter(false); });
+gate.addEventListener('click', () => enter(true));
+if (RM) setTimeout(() => { if (!gate.hidden && !gate.classList.contains('leaving')) $('#enterSound').focus({ preventScroll: true }); }, 300);
+
+$('#soundBtn').addEventListener('click', () => {
+  if (Voice.on) { Voice.setOn(false); Music.stop(); return; }
+  Voice.unlock(); Voice.setOn(true); Music.start(); Voice.prefetch();
+  if (!Voice.played.has('hello') && scrollY < innerHeight) Voice.trigger('hello');
+});
+
+function replayStory() {
+  const top = $('#reel').getBoundingClientRect().top + scrollY + 2;
+  const root = document.documentElement, sb = root.style.scrollBehavior;
+  root.style.scrollBehavior = 'auto'; scrollTo(0, top); root.style.scrollBehavior = sb;
+  voiceInView.clear(); Voice.reset(); Reel.resetTriggers();
+}
+$('#replayStory').addEventListener('click', replayStory);
+
+// app links
+$$('[data-app]').forEach(a => {
+  if (CONFIG.appUrl) { a.href = CONFIG.appUrl; a.target = '_blank'; a.rel = 'noopener'; }
+  else a.addEventListener('click', e => { e.preventDefault(); toast('Pixel Pro is opening soon. Check back shortly.'); console.warn('Pixel Pro: set CONFIG.appUrl in index.html to link the Try Pixel Pro buttons.'); });
+});
+
+// hero sparkles
+(() => {
+  const box = $('#sparks'); const cols = ['var(--blue)', 'var(--deep)', 'var(--spark)', 'var(--ink)'];
+  const n = innerWidth < 700 ? 22 : 44;
+  for (let k = 0; k < n; k++) {
+    const s = document.createElement('i');
+    s.style.cssText = 'left:' + (Math.random() * 100) + '%;top:' + (Math.random() * 100) + '%;--z:' + (2 + Math.random() * 4).toFixed(1) + 'px;--c:' + cols[k % 4] + ';--d:' + (3 + Math.random() * 5).toFixed(1) + 's;--dl:' + (-Math.random() * 8).toFixed(1) + 's';
+    box.appendChild(s);
+  }
+})();
+
+
+// statement: split into words
+const stWords = (() => {
+  const el = $('#statementText'), out = [], nodes = Array.from(el.childNodes);
+  el.textContent = '';
+  nodes.forEach(n => {
+    if (n.nodeType === 3) {
+      n.textContent.split(/(\s+)/).forEach(part => {
+        if (!part) return;
+        if (/^\s+$/.test(part)) el.appendChild(document.createTextNode(part));
+        else { const s = document.createElement('span'); s.className = 'w'; s.textContent = part; el.appendChild(s); out.push(s); }
+      });
+    } else { n.classList.add('w'); el.appendChild(n); out.push(n); }
+  });
+  return out;
+})();
+
+// card spotlight follows the pointer
+$('#bento').addEventListener('pointermove', e => {
+  const c = e.target.closest('.card'); if (!c) return;
+  const r = c.getBoundingClientRect();
+  c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px');
+});
+
+// reveals: only for elements that start below the fold, so the first screen is complete at rest
+if ('IntersectionObserver' in window && !RM) {
+  const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); if (en.target.classList.contains('card')) Haptics.play('light'); } }), { threshold: 0.15, rootMargin: '0px 0px -6% 0px' });
+  $$('.reveal').forEach(el => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('reveal-ready'); io.observe(el); } else el.classList.add('in'); });
+} else $$('.reveal').forEach(el => el.classList.add('in'));
+
+// narration triggers for sections (fired from the frame loop when scrolling is calm)
+const voiceInView = new Set();
+if ('IntersectionObserver' in window) {
+  const vo = new IntersectionObserver(es => es.forEach(en => { const id = en.target.dataset.voice; if (en.isIntersecting) voiceInView.add(id); else voiceInView.delete(id); }), { threshold: 0.55 });
+  $$('[data-voice]').forEach(el => vo.observe(el));
+}
+
+// creator signature writes itself when it scrolls into view
+(() => {
+  const sig = $('#signature');
+  if (RM || !('IntersectionObserver' in window) || sig.getBoundingClientRect().top < innerHeight) return;
+  sig.classList.add('ready');
+  const io = new IntersectionObserver(es => {
+    if (!es[0].isIntersecting) return;
+    sig.classList.add('writing'); io.disconnect();
+    const pen = setInterval(() => Haptics.tick(), 110);
+    setTimeout(() => { clearInterval(pen); Haptics.play('done'); }, 2600);
+  }, { threshold: 0.6 });
+  io.observe(sig);
+})();
+
+// demo chat: plays when it comes into view
+const Demo = (() => {
+  const body = $('#chatBody'), original = body.innerHTML;
+  let running = 0, seen = false;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  async function run() {
+    const id = ++running;
+    const tpl = document.createElement('div'); tpl.innerHTML = original;
+    const me = tpl.querySelector('.me'), bot = tpl.querySelector('.bot');
+    const parts = Array.from(bot.children);
+    body.textContent = '';
+    if (RM) { body.innerHTML = original; return; }
+    await wait(400); if (id !== running) return;
+    me.classList.add('pop'); body.appendChild(me); Haptics.play('send');
+    await wait(700); if (id !== running) return;
+    const thinkTpl = $('#demoThinking');
+    let dots;
+    if (thinkTpl && thinkTpl.content && thinkTpl.content.firstElementChild) dots = thinkTpl.content.firstElementChild.cloneNode(true);
+    else { dots = document.createElement('div'); dots.className = 'dots'; dots.innerHTML = '<i></i><i></i><i></i>'; }
+    body.appendChild(dots);
+    await wait(1300); if (id !== running) return;
+    dots.remove();
+    const b = document.createElement('div'); b.className = bot.className; body.appendChild(b);
+    let first = true;
+    for (const part of parts) {
+      if (id !== running) return;
+      if (part.tagName === 'P') {
+        const html = part.innerHTML, p = document.createElement('p'); b.appendChild(p);
+        const tokens = html.split(/(<[^>]+>|\s+)/).filter(Boolean);
+        let acc = '';
+        for (const tk of tokens) {
+          acc += tk;
+          if (!tk.startsWith('<')) {
+            p.innerHTML = acc;
+            if (/\S/.test(tk)) { if (first) { first = false; Haptics.play('start'); } else Haptics.tick(); }
+            await wait(28); if (id !== running) return;
+          }
+        }
+        p.innerHTML = html;
+        await wait(160);
+      } else { part.classList.add('pop'); b.appendChild(part); await wait(120); }
+    }
+    Haptics.play('done');
+  }
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => { if (es[0].isIntersecting && !seen) { seen = true; run(); } }, { threshold: 0.45 }) : null;
+  if (io) io.observe(body);
+  $('#demoReplay').addEventListener('click', () => { seen = true; run(); });
+})();
+
+// languages: rotate the greeting while visible
+(() => {
+  const g = $$('#greet span'), pills = $$('#langPills span');
+  let k = 0, vis = false;
+  if ('IntersectionObserver' in window) new IntersectionObserver(es => { vis = es[0].isIntersecting; }).observe($('#greet'));
+  setInterval(() => {
+    if (!vis || RM) return;
+    k = (k + 1) % g.length;
+    g.forEach((s, j) => s.classList.toggle('on', j === k)); pills.forEach((s, j) => s.classList.toggle('on', j === Math.min(k, 2)));
+    Haptics.play('light');
+  }, 1900);
+})();
+
+// prompt track: vertical scroll drives a sideways slide
+const trackSec = $('#prompts'), track = $('#track'), trackBar = $('#trackBar');
+const zoomSec = $('#zoom'), zoomTitle = $('#zoomTitle'), zoomSub = $('#zoomSub');
+// phone showcase (js/device.js): driven from the same frame loop
+const meetSec = $('#meet');
+const Device = window.PixelDevice ? window.PixelDevice.init(meetSec) : null;
+if (Device && Device.onBeat) Device.onBeat(kind => {
+  if (kind === 'char' || kind === 'word') Haptics.tick();
+  else Haptics.play({ tap: 'light', attach: 'select', send: 'send', start: 'start', done: 'done' }[kind] || 'light');
+});
+function sizeTrack() {
+  const extra = Math.max(0, track.scrollWidth - innerWidth);
+  trackSec.style.height = (innerHeight * 1.25 + extra) + 'px';      // fallback for browsers without lvh
+  trackSec.style.height = 'calc(125lvh + ' + extra + 'px)';
+  Geo.mark();
+}
+
+/* ---------- section positions: measured when the layout changes, not every frame ---------- */
+const Geo = (() => {
+  const IDS = ['top', 'reel', 'statement', 'zoom', 'meet', 'features', 'prompts', 'demo', 'languages', 'creator', 'start'];
+  const m = {};
+  let dirty = true, trackExtra = 0;
+  function measure() {
+    const y = scrollY;
+    for (const id of IDS) { const el = document.getElementById(id); if (el) { const r = el.getBoundingClientRect(); m[id] = { top: r.top + y, h: r.height }; } }
+    trackExtra = Math.max(0, track.scrollWidth - innerWidth);
+    dirty = false;
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(() => { dirty = true; }).observe(document.body);
+  return {
+    measure, mark() { dirty = true; }, get dirty() { return dirty; }, get trackExtra() { return trackExtra; },
+    rect(id, y) { const g = m[id]; return g ? { top: g.top - y, bottom: g.top - y + g.h, height: g.h } : null; }
+  };
+})();
+
+/* ---------- one animation loop for everything scroll-driven ---------- */
+let vh = innerHeight, lastY = scrollY, stLit = 0, zoomDone = false;
+function frame(t) {
+  requestAnimationFrame(frame);
+  // reads first (cached geometry, so no forced layout), writes after
+  if (Geo.dirty) Geo.measure();
+  const y = scrollY;
+  fastScroll = Math.abs(y - lastY) > 28; lastY = y;
+  if (entered) Perf.frame(t);
+  nav.classList.toggle('scrolled', y > 40);
+  if (y < vh * 1.2) {
+    const k = clamp(y / Math.max(vh, 700));
+    heroInner.style.transform = 'translate3d(0,' + (y * 0.32).toFixed(1) + 'px,0) scale(' + (1 - k * 0.08).toFixed(4) + ')';
+    heroInner.style.opacity = (1 - smooth(0.05, 0.75, k)).toFixed(3);
+    if (Hero3D.ctl) Hero3D.ctl.setProgress(k);
+  }
+  if (Music.on) Music.intensity(sceneIntensity(vh, y));
+  if (Tilt.active) { if (Hero3D.ctl) Hero3D.ctl.setPointer(Tilt.x, Tilt.y); Reel.setTilt(Tilt.x, Tilt.y); }
+  Reel.update(t, vh, Geo.rect('reel', y));
+  const sr = Geo.rect('statement', y);
+  if (sr && sr.top < vh && sr.bottom > 0) {
+    const sp = clamp((-sr.top + vh * 0.3) / (sr.height - vh * 0.7));
+    const n = Math.floor(sp * stWords.length * 1.05);
+    if (n > stLit && n <= stWords.length) Haptics.tick();
+    stLit = n;
+    for (let k = 0; k < stWords.length; k++) stWords[k].classList.toggle('lit', k < n);
+  }
+  const zr = Geo.rect('zoom', y);
+  if (zr && zr.top < vh && zr.bottom > 0) {
+    const zp = clamp(-zr.top / Math.max(1, zr.height - vh));
+    const e = 1 - Math.pow(1 - clamp(zp / 0.62), 3);
+    zoomTitle.style.transform = 'scale(' + lerp(9, 1, e).toFixed(3) + ')';
+    if (zp > 0.62 && !zoomDone) { zoomDone = true; Haptics.play('done'); } else if (zp < 0.4) zoomDone = false;
+    zoomTitle.style.opacity = (smooth(0, 0.08, zp) * (1 - smooth(0.9, 1, zp) * 0.6)).toFixed(3);
+    const so = smooth(0.58, 0.78, zp);
+    zoomSub.style.opacity = so.toFixed(3);
+    zoomSub.style.transform = 'translateY(' + ((1 - so) * 24).toFixed(1) + 'px)';
+  }
+  const tr = Geo.rect('prompts', y);
+  if (tr && tr.top < vh && tr.bottom > 0) {
+    const tp = clamp(-tr.top / Math.max(1, tr.height - vh));
+    const extra = Geo.trackExtra;
+    track.style.transform = 'translate3d(' + (-tp * extra).toFixed(1) + 'px,0,0)';
+    trackBar.style.setProperty('--p', tp.toFixed(4));
+  }
+  if (Device) Device.update(vh, Geo.rect('meet', y));
+  if (Voice.on && !fastScroll) {
+    for (const id of voiceInView) Voice.trigger(id);
+    if (Device && (Device.stage === 'typing' || Device.stage === 'thinking' || Device.stage === 'answer')) {
+      const mr = Geo.rect('meet', y);
+      if (mr && mr.top < vh / 2 && mr.bottom > vh / 2) Voice.trigger('meet');
+    }
+  }
+  Voice.tick(t);
+}
+// how full the score should be for whatever is on screen
+const SCENES = [['top', 0.15], ['reel', -1], ['statement', 0.55], ['zoom', 0.8], ['meet', 0.85], ['features', 0.68], ['prompts', 0.72], ['demo', 0.6], ['languages', 0.5], ['creator', 0.38], ['start', 1]];
+function sceneIntensity(vh, y) {
+  const mid = vh / 2;
+  for (const [id, val] of SCENES) {
+    const r = Geo.rect(id, y); if (!r) continue;
+    if (r.top <= mid && r.bottom > mid) {
+      if (id === 'reel') return 0.22 + 0.62 * clamp(-r.top / Math.max(1, r.height - vh));
+      if (id === 'start') Music.swell();
+      return val;
+    }
+  }
+  return 0.3;
+}
+let lastW = innerWidth;
+function onResize() { vh = innerHeight; Reel.resize(); if (innerWidth !== lastW) { lastW = innerWidth; sizeTrack(); } if (Device) Device.resize(); Geo.mark(); }
+addEventListener('resize', onResize);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeTrack);
+sizeTrack();
+requestAnimationFrame(frame);
+
+/* ---------- secret ways into Voice Studio ---------- */
+let typed = '';
+addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input,textarea,select')) return;
+  if (!e.key || e.key.length !== 1) return;
+  typed = (typed + e.key.toLowerCase()).slice(-6);
+  if (typed === 'studio') { typed = ''; Studio.open(); }
+});
+let taps = 0, tapTimer = 0;
+$('#secretMark').addEventListener('click', () => {
+  taps++; clearTimeout(tapTimer); tapTimer = setTimeout(() => { taps = 0; }, 1600);
+  if (taps >= 5) { taps = 0; Studio.open(); }
+});
+const checkHash = () => { if (location.hash === '#studio') Studio.open(); };
+addEventListener('hashchange', checkHash);
+checkHash();
+
+Voice.loadPack();
+// keep the site on the device for instant, offline-capable repeat visits (see sw.js)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  addEventListener('load', () => { try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {} });
+}
+if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch (e) {} }
+})();
+</script>
+</body>
+</html>
