@@ -12,7 +12,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect x='10.5' y='0' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3Crect x='0' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='10.5' width='9' height='9' rx='2' fill='%23FFB43A'/%3E%3Crect x='21' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='21' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700;800&family=Noto+Sans+JP:wght@700&family=Mrs+Saint+Delafield&family=Figtree:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700;800&family=Noto+Sans+JP:wght@700&family=Mrs+Saint+Delafield&family=Inter:wght@400;500;600;700;800&family=Instrument+Serif&display=swap">
 <script>document.documentElement.classList.add('js')</script>
 <style>
 /* Layout: a cinematic launch reel. Full-bleed pinned chapters, type set huge on a left-anchored grid,
@@ -279,25 +279,8 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .demo-grid{display:grid;gap:clamp(36px,6vw,72px);align-items:center}
 @media (min-width:980px){.demo-grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}}
 .demo-grid .sec-head{margin-bottom:0}
-.chat{border-radius:28px;background:linear-gradient(180deg,rgba(18,26,56,.9),rgba(8,12,28,.95));box-shadow:0 0 0 1px var(--line-2) inset,0 40px 120px -40px rgba(46,70,226,.7);overflow:hidden;min-width:0}
-.chat-top{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line);font:700 1rem/1 var(--f-display)}
-.chat-top .mark{--s:20px}
-.chat-tag{margin-left:auto;font:500 .62rem/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--mist);padding:5px 8px;border-radius:6px;box-shadow:0 0 0 1px var(--line-2) inset}
-.chat-body{display:flex;flex-direction:column;gap:16px;padding:22px 20px;min-height:430px}
-.msg{max-width:88%;font-size:.975rem;line-height:1.55}
-.msg.me{align-self:flex-end;padding:12px 16px;border-radius:18px 18px 4px 18px;background:var(--deep);color:var(--ink)}
-.msg.bot{align-self:flex-start;color:var(--ink-2);display:grid;gap:8px}
-.msg.bot b{color:var(--ink)}
 .msg.pop,#chatBody .pop{animation:chip .5s var(--ease) backwards}
-.dots{display:inline-flex;gap:5px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.06);align-self:flex-start}
-.dots i{width:7px;height:7px;border-radius:50%;background:var(--mist);animation:dot 1.2s ease-in-out infinite}
-.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
 @keyframes dot{0%,60%,100%{transform:none;opacity:.4}30%{transform:translateY(-5px);opacity:1}}
-.chat-input{display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:8px 8px 8px 18px;border-radius:999px;background:rgba(5,7,15,.7);box-shadow:0 0 0 1px var(--line-2) inset;color:var(--mist);font-size:.9375rem}
-.chat-input span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chat-input i{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.06);flex:none}
-.chat-input i:last-child{background:var(--ink);color:var(--void)}
-.chat-input svg{width:17px;height:17px}
 
 /* ---------- languages ---------- */
 .langs{text-align:center;overflow:clip}
@@ -571,8 +554,7 @@ details.st-group[open] summary{margin-bottom:6px}
 
               <!-- ======= the real Pixel Pro app, dark theme ======= -->
               <div class="pp-ui pp-app">
-                <div class="pp-chrome">
-                  <div class="pp-statusbar">
+                <div class="pp-statusbar">
                     <span class="pp-clock">9:41</span>
                     <span class="pp-sys">
                       <svg viewBox="0 0 18 12" width="18" height="12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
@@ -580,88 +562,59 @@ details.st-group[open] summary{margin-bottom:6px}
                       <svg viewBox="0 0 27 13" width="27" height="13" fill="currentColor"><rect x=".5" y=".5" width="23" height="12" rx="3.6" fill="none" stroke="currentColor" opacity=".45"/><rect x="2.2" y="2.2" width="17.4" height="8.6" rx="2"/><path d="M25.2 4.6v3.8a2 2 0 0 0 0-3.8Z" opacity=".5"/></svg>
                     </span>
                   </div>
-                  <div class="pp-top">
-                    <div class="pp-brand">
-                      <span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-                      <b class="pp-name">Pixel Pro</b>
-                      <span class="pp-status"><i></i>Live</span>
-                    </div>
-                    <div class="pp-controls">
-                      <span class="pp-langs"><span class="pp-on">EN</span><span lang="hi">हिं</span></span>
-                      <span class="pp-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span>
-                      <span class="pp-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="pp-ticker">
-                  <span class="pp-live"><i></i>LIVE</span>
-                  <div class="pp-tk-view">
-                    <div class="pp-tk-track">
-                      <span class="pp-tk"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
-                      <span class="pp-tk"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
-                      <span class="pp-tk" lang="hi"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
-                      <span class="pp-tk" lang="hi"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
-                      <span class="pp-tk"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
-                      <span class="pp-tk"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
-                      <span class="pp-tk" lang="hi"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
-                      <span class="pp-tk" lang="hi"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
-                    </div>
-                  </div>
-                </div>
+                <header class="pp-top">
+                  <span class="pp-ib pp-ib--menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
+                  <span class="pp-top-r"><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4M9 6v12M14 3v18M19 8v8"/></svg></span><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span></span>
+                </header>
 
                 <div class="pp-main">
-                  <div class="pp-hero">
-                    <span class="pp-mark pp-mark--hero"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-                    <p class="pp-hero-h">Ask anything. <em>Get answers.</em></p>
-                    <p class="pp-hero-p">Your free AI assistant with live web answers &amp; news, in English, <span lang="hi">हिंदी</span> and many more languages. No sign-up.</p>
-                    <div class="pp-chips">
-                      <span class="pp-chip">📰 Today’s top headlines</span>
-                      <span class="pp-chip" lang="hi">🇮🇳 आज की ताज़ा ख़बरें</span>
-                      <span class="pp-chip">✉️ Write an email</span>
-                      <span class="pp-chip">🍲 Quick paneer dinner</span>
-                    </div>
-                  </div>
-
+                  <div class="pp-hero"><p class="pp-hero-h">What can I<br>help with?</p></div>
                   <div class="pp-thread">
                     <div class="pp-msg pp-msg--user pp-q">
-                      <div class="pp-bubble pp-bubble--photo">
-                        <img src="media/rocket.jpg" width="640" height="427" alt="A white rocket standing on its launch pad at twilight, with four tall lattice towers around it" decoding="async">
-                        <span class="pp-cap-text">What rocket is this?</span>
-                      </div>
+                      <div class="pp-bubble"><img class="pp-sent-img" src="media/rocket.jpg" width="640" height="427" alt="A white rocket standing on its launch pad at twilight, with four tall lattice towers around it" decoding="async">What rocket is this?</div>
                     </div>
                     <div class="pp-msg pp-msg--bot pp-thinking-row">
-                      <span class="pp-avatar"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
-                      <div class="pp-bubble"><span class="pp-think"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="pp-think-lbl">Thinking…</span></span></div>
+                      <span class="pp-think2"><span class="pp-think2-dot"></span><span class="pp-think2-label pp-think-lbl">Searching the web</span></span>
                     </div>
                     <div class="pp-msg pp-msg--bot pp-answer">
-                      <span class="pp-avatar"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
-                      <div class="pp-bubble">
-                        <p class="pp-answer-text">That's a <strong>SpaceX Falcon 9</strong> standing on its launch pad at Cape Canaveral, Florida. The tall towers around it are lightning masts that protect the rocket before launch.</p>
-                        <div class="pp-sources">
-                          <span class="pp-src-lbl">LIVE WEB SOURCES</span>
-                          <span class="pp-src-a"><b>1</b>spacex.com <span class="pp-src">· Falcon 9</span></span>
-                          <span class="pp-src-a"><b>2</b>en.wikipedia.org <span class="pp-src">· Falcon 9</span></span>
-                        </div>
+                      <p class="pp-answer-text">That's a <strong>SpaceX Falcon 9</strong> standing on its launch pad at Cape Canaveral, Florida. The tall towers around it are lightning masts that protect the rocket before launch.</p>
+                      <span class="pp-web-chip"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">s</span><span class="pp-fav">e</span></span><span>2 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span>
+                      <div class="pp-sources">
+                        <span class="pp-src-a"><b>1</b><span class="pp-fav">s</span><span class="pp-dom">spacex.com</span><span class="pp-ttl">Falcon 9 | SpaceX</span></span>
+                        <span class="pp-src-a"><b>2</b><span class="pp-fav">e</span><span class="pp-dom">en.wikipedia.org</span><span class="pp-ttl">Falcon 9 - Wikipedia</span></span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div class="pp-composer-wrap">
+                  <div class="pp-attachment"><div class="pp-attachment-in"><img class="pp-thumb" src="media/rocket.jpg" width="640" height="427" alt="" decoding="async"><span class="pp-nm">rocket.jpg</span><span class="pp-rm">&times;</span></div></div>
                   <div class="pp-composer">
-                    <div class="pp-attachment"><div class="pp-attachment-in">
-                      <span class="pp-thumb"><img src="media/rocket.jpg" width="640" height="427" alt="" decoding="async"><i>×</i></span>
-                      <span class="pp-file"><b>rocket.jpg</b><span>Photo</span></span>
-                    </div></div>
-                    <div class="pp-crow">
-                      <span class="pp-attach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="m21 15-5-5L5 21"/></svg></span>
-                      <span class="pp-input"><span class="pp-typed"></span><i class="pp-caret"></i><span class="pp-ph">Ask anything…</span></span>
-                      <span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span>
-                      <span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span>
+                    <div class="pp-plus-menu">
+                      <span class="pp-plus-item pp-mi-photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Add photo</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Create an image</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/><path d="M11 8v6"/><path d="M8 11h6"/></svg><span>Deep search</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg><span>Search the web</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Email me this</span></span>
+                      <span class="pp-plus-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>Your location</span></span>
+                      <i class="pp-plus-sep"></i>
+                      <span class="pp-plus-label">MODEL</span>
+                      <span class="pp-tier">Moderate<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                    </div>
+                    <div class="pp-pill">
+                      <span class="pp-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+                      <span class="pp-input"><span class="pp-typed"></span><i class="pp-caret"></i><span class="pp-ph">Ask anything</span></span>
+                      <span class="pp-think-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8A3 3 0 0 0 16 16v-2.2A3 3 0 0 0 15 8a3 3 0 0 0-3-3z"/><path d="M12 5v14"/></svg></span>
+                      <span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span>
+                      <span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span>
                     </div>
                   </div>
-                  <p class="pp-fine">Pixel Pro can make mistakes. Check important info.</p>
+                  <div class="pp-suggests">
+                    <span class="pp-suggest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Create an image</span>
+                    <span class="pp-suggest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Write or edit</span>
+                    <span class="pp-suggest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>Search the web</span>
+                  </div>
+                  <p class="pp-fine">Pixel Pro can make mistakes — verify important info.</p>
                 </div>
                 <i class="pp-homebar"></i>
               </div>
@@ -686,14 +639,14 @@ details.st-group[open] summary{margin-bottom:6px}
     <ul class="pp-callouts">
       <li class="pp-callout" data-target="photo"><b>Photos, understood.</b><span>Add a picture and ask what's in it.</span></li>
       <li class="pp-callout" data-target="sources"><b>Answers with sources you can open.</b><span>Fresh facts from the web, with links to check them.</span></li>
-      <li class="pp-callout" data-target="ticker"><b>Live headlines in English and <span lang="hi">हिंदी</span>.</b><span>Top stories in a ticker. Tap one to ask about it.</span></li>
+      <li class="pp-callout" data-target="think"><b>Think longer for harder questions.</b><span>Tap Think for a more thorough answer.</span></li>
     </ul>
 
     <!-- one caption that changes with the story (beside the phone, or under it on small screens) -->
     <div class="pp-caption" aria-hidden="true">
       <p class="pp-cap"><span class="pp-cap-k">01</span><b>Photos, understood.</b><span>Add a picture and ask what's in it.</span></p>
       <p class="pp-cap"><span class="pp-cap-k">02</span><b>Answers with sources you can open.</b><span>Fresh facts from the web, with links to check them.</span></p>
-      <p class="pp-cap"><span class="pp-cap-k">03</span><b>Live headlines in English and <span lang="hi">हिंदी</span>.</b><span>Top stories in a ticker. Tap one to ask about it.</span></p>
+      <p class="pp-cap"><span class="pp-cap-k">03</span><b>Think longer for harder questions.</b><span>Tap Think for a more thorough answer.</span></p>
     </div>
   </div>
 </section>
@@ -712,20 +665,10 @@ details.st-group[open] summary{margin-bottom:6px}
         <h3>Ask about today, not last year.</h3>
         <p>Pixel Pro searches the web when your question needs fresh facts, then shows the sources under its answer.</p>
         <div class="viz">
-          <div class="pp-ui pp-shot pp-shot--web">
-  <div class="pp-msg pp-msg--user pp-rise"><div class="pp-bubble">How tall is the Statue of Unity?</div></div>
-  <div class="pp-msg pp-msg--bot pp-rise">
-    <span class="pp-avatar" aria-hidden="true"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
-    <div class="pp-bubble">
-      <p>The Statue of Unity in Gujarat is <strong>182 metres</strong> tall, about twice the height of the Statue of Liberty.</p>
-      <div class="pp-sources">
-        <span class="pp-src-lbl">LIVE WEB SOURCES</span>
-        <span class="pp-src-a"><b>1</b>wikipedia.org <span class="pp-src">· Statue of Unity</span></span>
-        <span class="pp-src-a"><b>2</b>gujarattourism.com <span class="pp-src">· Statue of Unity</span></span>
-      </div>
-    </div>
-  </div>
-</div>
+          <div class="pp-ui pp-shot pp-shot--web" aria-hidden="true">
+            <div class="pp-msg pp-msg--user"><div class="pp-bubble">How tall is the Statue of Unity?</div></div>
+            <div class="pp-msg pp-msg--bot"><p>The Statue of Unity in Gujarat is <strong>182 metres</strong> tall, about twice the height of the Statue of Liberty.</p><span class="pp-web-chip pp-open"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">w</span><span class="pp-fav">g</span></span><span>2 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span><div class="pp-sources"><span class="pp-src-a"><b>1</b><span class="pp-fav">w</span><span class="pp-dom">wikipedia.org</span><span class="pp-ttl">Statue of Unity - Wikipedia</span></span><span class="pp-src-a"><b>2</b><span class="pp-fav">g</span><span class="pp-dom">gujarattourism.com</span><span class="pp-ttl">Statue of Unity, Kevadia</span></span></div></div>
+          </div>
         </div>
       </article>
       <article class="card c-voice reveal" style="--dl:.1s">
@@ -733,22 +676,13 @@ details.st-group[open] summary{margin-bottom:6px}
         <h3>Say it. Hear it.</h3>
         <p>Speak your question and Pixel Pro reads the answer aloud.</p>
         <div class="viz">
-          <div class="pp-ui pp-shot pp-shot--voice">
-  <div class="pp-vtop">
-    <span class="pp-vtitle"><span class="pp-mark pp-mark--sm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Voice</span>
-    <span class="pp-vstate"><span class="pp-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Speaking</span>
-  </div>
-  <div class="pp-orb-wrap" aria-hidden="true"><span class="pp-ring"></span><span class="pp-ring"></span><span class="pp-ring"></span><span class="pp-orb"></span></div>
-  <div class="pp-vlines">
-    <p class="pp-vline pp-vline--you"><span class="pp-who">You said</span><span class="pp-said">“Say good morning in Hindi”</span></p>
-    <p class="pp-vline pp-vline--bot"><span class="pp-who">Pixel Pro</span><span class="pp-said"><span lang="hi">सुप्रभात</span> <span class="pp-roman">(Suprabhat)</span></span></p>
-  </div>
-  <div class="pp-vctl" aria-hidden="true">
-    <span class="pp-vbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span>
-    <span class="pp-vmic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span>
-    <span class="pp-vbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
-  </div>
-</div>
+          <div class="pp-ui pp-shot pp-shot--live" aria-hidden="true">
+            <div class="pp-live-top"><span class="pp-live-tag">Pixel Live</span><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span></div>
+            <p class="pp-live-you">“Say good morning in Hindi”</p>
+            <p class="pp-live-cap"><span lang="hi">सुप्रभात</span> (Suprabhat)</p>
+            <div class="pp-orb"><i></i></div>
+            <p class="pp-live-state">Listening…</p>
+          </div>
         </div>
       </article>
       <article class="card c-photo reveal" data-voice="photos">
@@ -757,17 +691,9 @@ details.st-group[open] summary{margin-bottom:6px}
         <p>Add a picture and ask what's in it.</p>
         <div class="viz">
           <div class="pp-ui pp-shot pp-shot--photo">
-  <div class="pp-msg pp-msg--user pp-rise">
-    <div class="pp-bubble pp-bubble--photo">
-      <img src="media/espresso.jpg" width="600" height="400" alt="An espresso with golden crema in a red cup on a red saucer with a spoon, on a wooden table" loading="lazy" decoding="async">
-      <span class="pp-cap-text">What drink is this?</span>
-    </div>
-  </div>
-  <div class="pp-msg pp-msg--bot pp-rise">
-    <span class="pp-avatar" aria-hidden="true"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
-    <div class="pp-bubble"><p>That's an espresso with a golden crema, served in a red cup on a saucer with a spoon.</p></div>
-  </div>
-</div>
+            <div class="pp-msg pp-msg--user"><div class="pp-bubble"><img class="pp-sent-img" src="media/espresso.jpg" width="600" height="400" alt="An espresso with golden crema in a red cup on a red saucer with a spoon, on a wooden table" loading="lazy" decoding="async">What drink is this?</div></div>
+            <div class="pp-msg pp-msg--bot"><p>That's an <strong>espresso</strong> with a golden crema, served in a red cup on a saucer with a spoon.</p></div>
+          </div>
         </div>
       </article>
       <article class="card c-news reveal" style="--dl:.1s">
@@ -775,38 +701,12 @@ details.st-group[open] summary{margin-bottom:6px}
         <h3>Today's news, in your language.</h3>
         <p>Ask for today's news in English or <span lang="hi">हिंदी</span>. Pixel Pro searches the live web and links every source.</p>
         <div class="viz">
-          <div class="pp-ui pp-shot pp-shot--news">
-  <div class="pp-top">
-    <div class="pp-brand">
-      <span class="pp-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-      <b class="pp-name">Pixel Pro</b>
-      <span class="pp-status"><i></i>Live</span>
-    </div>
-    <span class="pp-langs" aria-label="News language: English or Hindi"><span class="pp-on">EN</span><span lang="hi">हिं</span></span>
-  </div>
-  <div class="pp-ticker">
-    <span class="pp-live"><i></i>LIVE</span>
-    <div class="pp-tk-view">
-      <div class="pp-tk-track pp-tk-en">
-        <span class="pp-tk"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
-        <span class="pp-tk"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
-        <span class="pp-tk" aria-hidden="true"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
-        <span class="pp-tk" aria-hidden="true"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
-      </div>
-      <div class="pp-tk-track pp-tk-hi" lang="hi">
-        <span class="pp-tk"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
-        <span class="pp-tk"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
-        <span class="pp-tk" aria-hidden="true"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
-        <span class="pp-tk" aria-hidden="true"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
-      </div>
-    </div>
-  </div>
-  <div class="pp-npeek" aria-hidden="true">
-    <span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-    <p>Ask anything. <em>Get answers.</em></p>
-    <div class="pp-chips"><span class="pp-chip">📰 Today’s top headlines</span><span class="pp-chip" lang="hi">🇮🇳 आज की ताज़ा ख़बरें</span></div>
-  </div>
-</div>
+          <div class="pp-ui pp-shot pp-shot--news" aria-hidden="true">
+            <div class="pp-msg pp-msg--user"><div class="pp-bubble">What's in the news today?</div></div>
+            <div class="pp-msg pp-msg--bot"><span class="pp-think2"><span class="pp-think2-dot"></span><span class="pp-think2-label">Searching the web</span></span></div>
+            <div class="pp-msg pp-msg--bot pp-news-ans"><p>Here are today's top stories from India and around the world, each with a link to its source.</p><span class="pp-web-chip"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">a</span><span class="pp-fav">b</span><span class="pp-fav">c</span></span><span>4 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span></div>
+            <div class="pp-pill"><span class="pp-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="pp-input"><span class="pp-ph">Ask anything</span></span><span class="pp-think-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8A3 3 0 0 0 16 16v-2.2A3 3 0 0 0 15 8a3 3 0 0 0-3-3z"/><path d="M12 5v14"/></svg></span><span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span><span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></div>
+          </div>
         </div>
       </article>
       <article class="card c-free reveal" data-voice="free">
@@ -820,29 +720,25 @@ details.st-group[open] summary{margin-bottom:6px}
         <h3>Pick up where you left off.</h3>
         <p>Recent chats stay in the sidebar. Light mode or dark, your choice.</p>
         <div class="viz">
-          <div class="pp-ui pp-shot pp-shot--chats">
-  <div class="pp-side">
-    <div class="pp-side-top">
-      <span class="pp-mark pp-mark--sm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-      <b class="pp-name">Pixel Pro</b>
-      <span class="pp-icon-btn" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M15 10l-2 2 2 2"/></svg></span>
-    </div>
-    <span class="pp-newchat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New chat</span>
-    <span class="pp-side-lbl">Recent</span>
-    <span class="pp-item pp-item--on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>Jaipur trip on a budget</span></span>
-    <span class="pp-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>Photosynthesis in simple Hindi</span></span>
-    <span class="pp-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>Leave email to my manager</span></span>
-    <span class="pp-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>What rocket is this?</span></span>
-    <div class="pp-side-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Dark mode<span class="pp-switch" aria-hidden="true"></span></div>
-  </div>
-  <div class="pp-side-peek" aria-hidden="true">
-    <div class="pp-msg pp-msg--user"><div class="pp-bubble">Plan a 3-day Jaipur trip on a student budget.</div></div>
-    <div class="pp-msg pp-msg--bot">
-      <span class="pp-avatar"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
-      <div class="pp-bubble"><p>Here's a simple plan that keeps costs low:</p><p><strong>Day 1:</strong> Amber Fort in the morning, then sunset at Nahargarh Fort.</p><p><strong>Day 2:</strong> City Palace, Jantar Mantar and Hawa Mahal, then street food for dinner.</p><p><strong>Day 3:</strong> Albert Hall Museum, then shopping at Johari and Bapu Bazaar.</p></div>
-    </div>
-  </div>
-</div>
+          <div class="pp-ui pp-shot pp-shot--side" aria-hidden="true">
+            <div class="pp-sb">
+              <div class="pp-sb-head"><b>Pixel Pro</b><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></span></div>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>New Chat</span>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search</span>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Library</span>
+              <span class="pp-sb-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1.4"/><path d="M8.5 13v2M15.5 13v2"/></svg>Agents</span>
+              <span class="pp-sb-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>Chats</span>
+              <span class="pp-sb-item pp-on">Jaipur trip on a budget</span>
+              <span class="pp-sb-item">Photosynthesis in simple Hindi</span>
+              <span class="pp-sb-item">Leave email to my manager</span>
+              <span class="pp-sb-item">What rocket is this?</span>
+              <div class="pp-sb-acct"><span class="pp-sb-av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span class="pp-sb-meta"><b>Guest</b><small>Free</small></span><span class="pp-sb-up">Sign in</span></div>
+            </div>
+            <div class="pp-sb-peek">
+              <div class="pp-msg pp-msg--user"><div class="pp-bubble">Plan a 3-day Jaipur trip on a student budget.</div></div>
+              <div class="pp-msg pp-msg--bot"><p>Here's a simple plan that keeps costs low:</p><p><strong>Day 1:</strong> Amber Fort in the morning, then sunset at Nahargarh Fort.</p></div>
+            </div>
+          </div>
         </div>
       </article>
     </div>
@@ -879,26 +775,21 @@ details.st-group[open] summary{margin-bottom:6px}
       <p>Pixel Pro writes in plain language, keeps the steps in order and shows where its facts came from.</p>
       <div><button class="btn btn-ghost btn-sm" id="demoReplay" type="button">Replay the chat</button></div>
     </div>
-    <div class="chat reveal" style="--dl:.12s">
-      <div class="chat-top"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Pixel Pro<span class="chat-tag">Example chat</span></div>
-      <div class="chat-body" id="chatBody">
-        <div class="msg me">Plan a 3-day Jaipur trip on a student budget.</div>
-        <div class="msg bot">
+    <div class="chat reveal pp-ui pp-demo" style="--dl:.12s" aria-label="Example chat">
+      <div class="pp-demo-top"><span class="pp-ib pp-ib--menu" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span><span class="pp-demo-tag">Example chat</span><span class="pp-demo-r" aria-hidden="true"><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4M9 6v12M14 3v18M19 8v8"/></svg></span><span class="pp-ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span></span></div>
+      <div class="pp-demo-body" id="chatBody">
+        <div class="pp-msg pp-msg--user me"><div class="pp-bubble">Plan a 3-day Jaipur trip on a student budget.</div></div>
+        <div class="pp-msg pp-msg--bot bot">
           <p>Here's a simple plan that keeps costs low:</p>
-          <p><b>Day 1:</b> Amber Fort in the morning, then Panna Meena ka Kund and sunset at Nahargarh Fort.</p>
-          <p><b>Day 2:</b> City Palace, Jantar Mantar and Hawa Mahal, then street food for dinner.</p>
-          <p><b>Day 3:</b> Albert Hall Museum, then shopping at Johari and Bapu Bazaar.</p>
-          <p><b>Tip:</b> a composite ticket covers several monuments, and students with ID pay less.</p>
-          <span class="src-label">LIVE WEB SOURCES</span>
-          <div class="chips"><span><b>1</b>tourism.rajasthan.gov.in</span><span><b>2</b>wikipedia.org</span></div>
+          <p><strong>Day 1:</strong> Amber Fort in the morning, then Panna Meena ka Kund and sunset at Nahargarh Fort.</p>
+          <p><strong>Day 2:</strong> City Palace, Jantar Mantar and Hawa Mahal, then street food for dinner.</p>
+          <p><strong>Day 3:</strong> Albert Hall Museum, then shopping at Johari and Bapu Bazaar.</p>
+          <p><strong>Tip:</strong> a composite ticket covers several monuments, and students with ID pay less.</p>
+          <span class="pp-web-chip"><span class="pp-globe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></svg></span><span class="pp-favs"><span class="pp-fav">t</span><span class="pp-fav">w</span></span><span>2 sources</span><span class="pp-chip-caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span>
         </div>
       </div>
-      <div class="chat-input" aria-hidden="true">
-        <span>Ask anything…</span>
-        <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></i>
-        <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i>
-        <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></i>
-      </div>
+      <template id="demoThinking"><div class="pp-msg pp-msg--bot"><span class="pp-think2"><span class="pp-think2-dot"></span><span class="pp-think2-label">Searching the web</span></span></div></template>
+      <div class="pp-demo-composer" aria-hidden="true"><div class="pp-pill"><span class="pp-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="pp-input"><span class="pp-ph">Ask anything</span></span><span class="pp-think-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8A3 3 0 0 0 16 16v-2.2A3 3 0 0 0 15 8a3 3 0 0 0-3-3z"/><path d="M12 5v14"/></svg></span><span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span><span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span></div><p class="pp-fine">Pixel Pro can make mistakes — verify important info.</p></div>
     </div>
   </div>
 </section>

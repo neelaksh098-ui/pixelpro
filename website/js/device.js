@@ -9,6 +9,8 @@
    PixelDevice.update(vh)        per-frame; cheap, only writes changed values
    PixelDevice.resize()          recompute layout (also auto-detected in update)
    PixelDevice.onStage(fn)       fn(stage) on change: home|typing|thinking|answer|callouts
+   PixelDevice.onBeat(fn)        fn(kind) as the story plays forward (for haptics):
+                                 tap|attach|char|send|start|word|done
    ========================================================================== */
 (function () {
   'use strict';
@@ -18,9 +20,12 @@
   var DEG = Math.PI / 180;
   var QUESTION = 'What rocket is this?';
   var STAGES = [['home', 0], ['typing', 0.16], ['thinking', 0.36], ['answer', 0.46], ['callouts', 0.74]];
-  var CALLOUT_ORDER = ['photo', 'sources', 'ticker'];
+  var CALLOUT_ORDER = ['photo', 'sources', 'think'];
+  // one-off beats on the forward story, at these progress values
+  var BEATS = [[0.163, 'tap'], [0.18, 'tap'], [0.2, 'attach'], [0.347, 'send'], [0.668, 'done'], [0.695, 'tap']];
 
-  var sec = null, els = {}, words = [], listeners = [];
+  var sec = null, els = {}, words = [], listeners = [], beatFns = [];
+  var lastV = -1, lastChars = 0, lastWords = 0;
   var RM = false, ready = false;
   var p = 0, target = 0, lastT = 0, wasVisible = false, idle = null;
   var stage = '';
@@ -90,23 +95,26 @@
     els.glass = q('.pp-glass');
     els.slices = qa('.pp-slice');
     els.hero = q('.pp-hero');
-    els.ticker = q('.pp-ticker');
-    els.liveDot = q('.pp-live i');
     els.userMsg = q('.pp-q');
     els.userImg = q('.pp-q img');
     els.thinkRow = q('.pp-thinking-row');
     els.thinkLbl = q('.pp-think-lbl');
     els.answer = q('.pp-answer');
     els.answerText = q('.pp-answer-text');
+    els.chip = q('.pp-answer .pp-web-chip');
     els.sources = q('.pp-answer .pp-sources');
-    els.srcLbl = q('.pp-answer .pp-src-lbl');
     els.srcItems = qa('.pp-answer .pp-src-a');
-    els.composer = q('.pp-composer');
+    els.composer = q('.pp-pill');
+    els.plus = q('.pp-plus');
+    els.menu = q('.pp-plus-menu');
+    els.menuPhoto = q('.pp-mi-photo');
+    els.thinkBtn = q('.pp-think-btn');
     els.attachment = q('.pp-attachment');
     els.attachIn = q('.pp-attachment-in');
     els.thumb = q('.pp-thumb');
     els.typed = q('.pp-typed');
     els.send = q('.pp-send');
+    els.suggests = q('.pp-app .pp-suggests');
     els.leaders = qa('.pp-ld');
     els.callouts = qa('.pp-callout');
     els.caption = q('.pp-caption');
@@ -246,7 +254,7 @@
       });
     }
     anchors = null;                  // re-measure lazily
-    els.__inH = 0;
+    els.__inH = 0; els.__srcH = 0; els.__sgH = 0;
   }
 
   // measure where the callout targets sit inside the (unscaled) phone face
@@ -258,9 +266,9 @@
       return { x: SX + x + w * fx - W / 2, y: SY + y + h * fy - H / 2 };
     }
     var a = {};
-    a.ticker = els.liveDot ? pos(els.liveDot, 0.5, 0.5) : null;
+    a.think = els.thinkBtn ? pos(els.thinkBtn, 0.5, 0.5) : null;
     a.photo = els.userImg ? pos(els.userImg, 0.3, 0.45) : null;
-    a.sources = els.srcLbl ? pos(els.srcLbl, 0, 0.5) : null;
+    a.sources = els.chip ? pos(els.chip, 0, 0.5) : null;
     if (a.sources) a.sources.x -= 6;
     return a;
   }
@@ -389,43 +397,71 @@
       else if (st === 'callouts') capIdx = L.useCallouts ? -1 : 2;
     }
     for (var c = 0; c < els.caps.length; c++) cls(els.caps[c], 'pp-on', c === capIdx);
-    cls(els.ticker, 'pp-hl', !L.useCallouts && st === 'callouts' && v > 0.8);
+    cls(els.thinkBtn, 'pp-hl', !L.useCallouts && st === 'callouts' && v > 0.8);
 
     renderCallouts(v, P);
   }
 
+  function beat(kind) { for (var i = 0; i < beatFns.length; i++) { try { beatFns[i](kind); } catch (e) { /* ignore */ } } }
+
   function renderScreen(v) {
-    // composer: attach a photo, type the question, send
-    var att = (v >= 0.16 && v < 0.36) ? easeOutQuad(ramp(0.165, 0.205, v)) : 0;
-    var inH = els.attachIn ? (els.attachIn.offsetHeight || 72) : 72;
+    // only a real forward scrub plays beats (no buzzing on reload, resize or scrolling back)
+    var fwd = lastV >= 0 && v > lastV && v - lastV < 0.06;
+    if (fwd) for (var bi = 0; bi < BEATS.length; bi++) if (lastV < BEATS[bi][0] && v >= BEATS[bi][0]) beat(BEATS[bi][1]);
+
+    // "+" pressed, the menu opens with Add photo highlighted, then closes
+    cls(els.plus, 'pp-on', v >= 0.162 && v < 0.198);
+    cls(els.plus, 'pp-press', v >= 0.162 && v < 0.168);
+    var m = (v >= 0.166 && v < 0.2) ? Math.min(easeOutQuad(ramp(0.166, 0.177, v)), 1 - ramp(0.19, 0.198, v)) : 0;
+    css(els.menu, 'opacity', String(r2(m)));
+    css(els.menu, 'transform', m < 1 ? 'translate3d(0,' + r1(10 * (1 - m)) + 'px,0) scale(' + r2(0.96 + 0.04 * m) + ')' : 'none');
+    css(els.menu, 'visibility', m > 0.001 ? 'visible' : 'hidden');
+    cls(els.menuPhoto, 'pp-hl', v >= 0.178 && v < 0.2);
+
+    // the photo arrives as a chip above the composer, then the question types
+    var att = (v >= 0.196 && v < 0.362) ? easeOutQuad(ramp(0.197, 0.213, v)) : 0;
+    var inH = els.attachIn ? (els.attachIn.offsetHeight || 56) + 8 : 64;
     if (!els.__inH) els.__inH = inH;
     css(els.attachment, 'height', Math.round(els.__inH * att) + 'px');
     css(els.thumb, 'transform', 'scale(' + r2(0.6 + 0.4 * att) + ')');
     css(els.thumb, 'opacity', String(r2(att)));
-    var n = (v >= 0.16 && v < 0.36) ? Math.round(ramp(0.215, 0.335, v) * QUESTION.length) : 0;
+    var n = (v >= 0.2 && v < 0.362) ? Math.round(ramp(0.218, 0.335, v) * QUESTION.length) : 0;
     txt(els.typed, QUESTION.slice(0, n));
+    if (fwd && n > lastChars && n > 0) beat('char');
+    lastChars = n;
     cls(els.composer, 'pp-has-text', n > 0);
-    cls(els.composer, 'pp-focus', v >= 0.165 && v < 0.355);
-    cls(els.send, 'pp-press', v >= 0.348 && v < 0.362);
+    cls(els.composer, 'pp-focus', v >= 0.2 && v < 0.355);
+    cls(els.send, 'pp-press', v >= 0.346 && v < 0.36);
     cls(els.send, 'pp-busy', v >= 0.362 && v < 0.705);
 
-    // home hero slides away, the question bubble arrives
+    // the suggestion chips fold away once the chat starts (as in the app)
+    if (!els.__sgH && els.suggests) {   // measure at full size, whatever state the last frame left it in
+      var sgs = els.suggests.style, sgc = els.suggests.__ppS || {};
+      sgs.height = ''; sgs.marginTop = ''; sgc.height = ''; sgc.marginTop = '';
+      els.__sgH = els.suggests.offsetHeight || 89;
+    }
+    var sg = 1 - smooth(0.356, 0.376, v);
+    css(els.suggests, 'height', sg < 1 ? Math.round(els.__sgH * sg) + 'px' : '');
+    css(els.suggests, 'marginTop', sg < 1 ? r1(14 * sg) + 'px' : '');
+    css(els.suggests, 'opacity', String(r2(sg)));
+
+    // home heading leaves, the question bubble arrives
     var h = smooth(0.352, 0.372, v);
     css(els.hero, 'opacity', String(r2(1 - h)));
-    css(els.hero, 'transform', h > 0 ? 'translate3d(0,' + r1(-70 * h) + 'px,0) scale(' + r2(1 - 0.06 * h) + ')' : 'none');
+    css(els.hero, 'transform', h > 0 ? 'translate3d(0,' + r1(-50 * h) + 'px,0) scale(' + r2(1 - 0.05 * h) + ')' : 'none');
     css(els.hero, 'visibility', h >= 0.999 ? 'hidden' : 'visible');
     var u = easeOutQuad(ramp(0.368, 0.394, v));
     css(els.userMsg, 'opacity', String(r2(u)));
     css(els.userMsg, 'transform', u < 1 ? 'translate3d(0,' + r1(22 * (1 - u)) + 'px,0) scale(' + r2(0.94 + 0.06 * u) + ')' : 'none');
 
-    // thinking (pixel wave), then the streamed answer
+    // thinking, then the streamed answer
     var showThink = v >= 0.392 && v < 0.46;
     css(els.thinkRow, 'display', showThink ? 'flex' : 'none');
     if (showThink) {
       var t = easeOutQuad(ramp(0.392, 0.41, v));
       css(els.thinkRow, 'opacity', String(r2(t)));
       css(els.thinkRow, 'transform', 'translate3d(0,' + r1(10 * (1 - t)) + 'px,0)');
-      txt(els.thinkLbl, v < 0.418 ? 'Thinking…' : 'Thinking & searching the web…');
+      txt(els.thinkLbl, v < 0.414 ? 'Thinking' : 'Searching the web');
     }
     var showAns = v >= 0.46;
     css(els.answer, 'display', showAns ? 'flex' : 'none');
@@ -434,14 +470,28 @@
       for (var i = 0; i < words.length; i++) cls(words[i], 'pp-on', i < nw);
       els.__nw = nw;
     }
-    var sv = ramp(0.664, 0.7, v);
-    css(els.sources, 'display', showAns && sv > 0 ? 'flex' : 'none');
+    if (fwd && nw > lastWords) beat(lastWords === 0 ? 'start' : 'word');
+    lastWords = nw;
+
+    // the "2 sources" chip appears, then opens its list
+    var cv = showAns ? easeOutQuad(ramp(0.664, 0.68, v)) : 0;
+    css(els.chip, 'display', cv > 0 ? 'inline-flex' : 'none');
+    css(els.chip, 'opacity', String(r2(cv)));
+    css(els.chip, 'transform', cv < 1 ? 'translate3d(0,' + r1(6 * (1 - cv)) + 'px,0)' : 'none');
+    var op = showAns ? easeInOutCubic(ramp(0.692, 0.716, v)) : 0;
+    cls(els.chip, 'pp-open', op > 0.5);
+    css(els.sources, 'display', op > 0 ? 'flex' : 'none');
+    if (op > 0) {
+      if (!els.__srcH) els.__srcH = els.sources.scrollHeight || 64;
+      css(els.sources, 'height', op < 1 ? Math.round(els.__srcH * op) + 'px' : 'auto');
+      css(els.sources, 'opacity', String(r2(op)));
+    }
     for (var k = 0; k < els.srcItems.length; k++) {
-      var si = easeOutQuad(ramp(0.674 + k * 0.012, 0.69 + k * 0.012, v));
+      var si = easeOutQuad(ramp(0.7 + k * 0.01, 0.716 + k * 0.01, v));
       css(els.srcItems[k], 'opacity', String(r2(si)));
       css(els.srcItems[k], 'transform', si < 1 ? 'translate3d(0,' + r1(6 * (1 - si)) + 'px,0)' : 'none');
     }
-    if (els.sources) css(els.sources, 'opacity', String(r2(easeOutQuad(sv))));
+    lastV = v;
   }
 
   function renderCallouts(v, P) {
@@ -523,12 +573,14 @@
   }
 
   function onStage(fn) { if (typeof fn === 'function') listeners.push(fn); return api; }
+  function onBeat(fn) { if (typeof fn === 'function') beatFns.push(fn); return api; }
 
   var api = {
     init: init,
     update: update,
     resize: function () { if (ready) { resize(); render(p, true); } },
-    onStage: onStage
+    onStage: onStage,
+    onBeat: onBeat
   };
   try {
     Object.defineProperty(api, 'progress', { get: function () { return p; } });
