@@ -6,7 +6,9 @@
    the page calls PixelDevice.update(innerHeight) once per frame.
 
    PixelDevice.init(sectionEl)   wire up a <section class="pp-device-section">
-   PixelDevice.update(vh)        per-frame; cheap, only writes changed values
+   PixelDevice.update(vh, rect)  per-frame; cheap, only writes changed values. Pass the
+                                 section's {top,bottom,height} (from cached geometry) to
+                                 avoid a layout read; without it the section is measured
    PixelDevice.resize()          recompute layout (also auto-detected in update)
    PixelDevice.onStage(fn)       fn(stage) on change: home|typing|thinking|answer|callouts
    PixelDevice.onBeat(fn)        fn(kind) as the story plays forward (for haptics):
@@ -274,21 +276,21 @@
   }
 
   /* ---------------- progress ---------------- */
-  function progressNow() {
-    var r = sec.getBoundingClientRect();
+  function progressNow(rect) {
+    var r = rect || sec.getBoundingClientRect();
     var dist = r.height - (L ? L.sh : window.innerHeight);
     return { p: clamp(-r.top / Math.max(1, dist)), top: r.top, bottom: r.bottom };
   }
 
-  function update(vh) {
+  function update(vh, rect) {
     if (!ready || !sec) return;
     vh = vh || window.innerHeight;
     var vw = window.innerWidth;
-    if (!els.stage.clientHeight) return;      // section hidden (display:none)
-    if (L && (vw !== L.lastVW || els.stage.clientHeight !== L.sh)) { resize(); }
+    // size changes arrive through resize() from the page; only a width change is caught here
+    if (L && vw !== L.lastVW) { resize(); }
     if (L) L.lastVW = vw;
 
-    var pr = progressNow();
+    var pr = progressNow(rect);
     var visible = pr.bottom > -40 && pr.top < vh + 40;
     if (idle !== !visible) { idle = !visible; cls(sec, 'pp-idle', idle); }
     target = pr.p;

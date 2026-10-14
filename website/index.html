@@ -410,6 +410,22 @@ details.st-group[open] summary{margin-bottom:6px}
 .st-mode::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--mist)}
 .st-mode.on::before{background:var(--good);box-shadow:0 0 8px var(--good)}
 
+/* ---------- quality tiers (set on <html data-q> by the page) ---------- */
+/* medium: drop the full-screen grain layer and the heaviest blurs */
+:root[data-q="medium"] body::after,:root[data-q="low"] body::after{display:none}
+:root[data-q="medium"] .reveal-ready,:root[data-q="low"] .reveal-ready{filter:none}
+:root[data-q="medium"].js body:not(.entered) .hero-inner>*,:root[data-q="low"].js body:not(.entered) .hero-inner>*{filter:none}
+/* low: no backdrop blur, no animated giant glows, no drop-shadow filters on moving text */
+:root[data-q="low"] .aurora{animation:none;filter:blur(40px)}
+:root[data-q="low"] .floor,:root[data-q="low"] .sparks i{animation:none}
+:root[data-q="low"] .sparks i{opacity:.45}
+:root[data-q="low"] .nav.scrolled{background:rgba(5,7,15,.94);backdrop-filter:none;-webkit-backdrop-filter:none}
+:root[data-q="low"] .vpill,:root[data-q="low"] .btn-ghost,:root[data-q="low"] .studio-scrim{backdrop-filter:none;-webkit-backdrop-filter:none}
+:root[data-q="low"] .vpill{background:rgba(10,14,32,.96)}
+:root[data-q="low"] .zoom-title{filter:saturate(1.15)}
+:root[data-q="low"] .sig-ink{filter:none}
+:root[data-q="low"] .cta::before{animation:none}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;transition-delay:0s!important}
   html{scroll-behavior:auto}
@@ -937,6 +953,9 @@ details.st-group[open] summary{margin-bottom:6px}
         <label class="st-check" for="stFallback"><input id="stFallback" type="checkbox"><span>Use the browser's built-in voice when no ElevenLabs voice is available</span></label>
         <label class="st-check" for="stMusic"><input id="stMusic" type="checkbox"><span>Play background music with the sound on</span></label>
         <label class="st-check" for="stHaptics"><input id="stHaptics" type="checkbox"><span>Vibrate on phones as text appears (haptics)</span></label>
+        <label for="stQuality">Animation quality</label>
+        <select id="stQuality"><option value="auto">Automatic</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low (smoothest on old phones)</option></select>
+        <p class="st-note" id="stQualityNote"></p>
         <div class="st-range"><label for="stMusicVol">Music volume</label><output id="oMusicVol"></output><input id="stMusicVol" type="range" min="0" max="1" step="0.05"></div>
         <div class="st-btns">
           <button class="st-btn" id="stReplay" type="button">Replay narration from the start</button>
@@ -1057,7 +1076,7 @@ function toast(msg, ms = 4600) {
 
 /* ---------- saved settings (this browser only) ---------- */
 const SKEY = 'pixelpro.studio.v1';
-const DEFAULTS = { apiKey: '', voiceId: CONFIG.defaultVoiceId, modelId: CONFIG.defaultModel, stability: 0.5, similarity: 0.8, style: 0.15, speed: 1, volume: 0.9, fallback: true, music: true, musicVolume: 0.55, haptics: true, script: {} };
+const DEFAULTS = { apiKey: '', voiceId: CONFIG.defaultVoiceId, modelId: CONFIG.defaultModel, stability: 0.5, similarity: 0.8, style: 0.15, speed: 1, volume: 0.9, fallback: true, music: true, musicVolume: 0.55, haptics: true, quality: 'auto', script: {} };
 const S = Object.assign({}, DEFAULTS, store.get(SKEY, {}));
 const save = () => store.set(SKEY, S);
 
@@ -1211,6 +1230,61 @@ const Tilt = (() => {
 })();
 
 /* =====================================================================
+   PERF: keeps scrolling smooth on every phone. A first guess from the
+   hardware, a real measurement of frame times during the opening titles,
+   and one more step down if scrolling ever struggles. Tiers: high,
+   medium, low (fewer film particles, lower canvas resolution, no blur).
+   ===================================================================== */
+const Perf = (() => {
+  const TIERS = ['low', 'medium', 'high'];
+  const small = Math.min(screen.width || innerWidth, screen.height || innerHeight) < 700;
+  const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4;
+  const guess = (cores <= 2 || mem <= 1) ? 'low' : (small && (cores <= 4 || mem <= 3)) ? 'medium' : 'high';
+  let forced = S.quality && S.quality !== 'auto' ? S.quality : null;
+  let tier = forced || guess, samples = [], measured = !!forced, drops = 0, win = [], lastT = 0, p75 = 0, prevS = 0;
+  const fns = [];
+  document.documentElement.dataset.q = tier;
+  function apply(t) {
+    if (!TIERS.includes(t) || t === tier) return;
+    tier = t; document.documentElement.dataset.q = t;
+    fns.forEach(fn => { try { fn(t); } catch (e) {} });
+  }
+  return {
+    get tier() { return tier; }, get guess() { return guess; }, get measuredMs() { return p75; },
+    on(fn) { fns.push(fn); },
+    // the opening titles are the heaviest drawing on the page: judge the device by them
+    sample(now) {
+      if (measured || document.hidden) { prevS = 0; return; }
+      if (prevS) samples.push(Math.min(now - prevS, 1000));   // very slow frames count too: they are the strongest signal
+      prevS = now;
+    },
+    settle() {
+      if (measured) return; measured = true;
+      if (samples.length < 12) {
+        // a long stretch of the titles but only a handful of frames: a very slow device
+        if (samples.reduce((a, b) => a + b, 0) > 1200) apply('low');
+        return;
+      }
+      // the titles cost the same on every tier, so frames that keep up with the screen (≈16.7 ms at 60 Hz)
+      // mean this device can run everything at full quality
+      const v = samples.slice(3).sort((a, b) => a - b); p75 = v[Math.floor(v.length * 0.75)];
+      apply(p75 > 30 ? 'low' : p75 > 21 ? 'medium' : 'high');
+    },
+    // while scrolling: if frames stay slow for two seconds, step down once
+    frame(now) {
+      const dt = lastT ? now - lastT : 16.7; lastT = now;
+      if (forced || !measured || document.hidden || dt > 250) { win.length = 0; return; }
+      win.push(dt); if (win.length < 120) return;
+      const avg = win.reduce((a, b) => a + b, 0) / win.length; win.length = 0;
+      if (avg > 26 && drops < 1 && tier !== 'low') { drops++; apply(TIERS[TIERS.indexOf(tier) - 1]); }
+    },
+    set(q) { forced = q && q !== 'auto' ? q : null; measured = true; apply(forced || guess); },
+    reelK() { const sm = Math.min(innerWidth, innerHeight) < 700; return { high: sm ? 12 : 17, medium: sm ? 10 : 13, low: sm ? 8 : 10 }[tier]; },
+    dprCap() { return { high: 2, medium: 1.5, low: 1 }[tier]; }
+  };
+})();
+
+/* =====================================================================
    MUSIC: generated Apple-event-style score (js/music.js), ducked under the voice
    ===================================================================== */
 const Music = (() => {
@@ -1264,13 +1338,22 @@ const Voice = (() => {
     try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
   }
 
-  async function loadPack() {
-    try {
-      const r = await fetch(CONFIG.audioPack + 'manifest.json', { cache: 'no-cache' });
-      if (!r.ok) return;
-      const j = await r.json();
-      if (j && j.lines) { pack = j; Studio.mode(); }
-    } catch (e) {}
+  let packP = null;
+  function loadPack() {
+    return packP || (packP = (async () => {
+      try {
+        const r = await fetch(CONFIG.audioPack + 'manifest.json', { cache: 'no-cache' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (j && j.lines) { pack = j; Studio.mode(); }
+      } catch (e) {}
+    })());
+  }
+  // fetch and decode the narration pack while the opening plays (never calls ElevenLabs)
+  async function warm() {
+    await loadPack();
+    if (S.apiKey || !pack) return;
+    for (const id of LINE_ORDER) { try { await resolve(id); } catch (e) {} }
   }
 
   const scriptText = id => (S.script[id] && S.script[id].trim()) || CONFIG.lines[id] || '';
@@ -1438,7 +1521,7 @@ const Voice = (() => {
   }
 
   return {
-    unlock, setOn, trigger, prefetch, tick, loadPack, source, scriptText,
+    unlock, setOn, trigger, prefetch, tick, loadPack, warm, source, scriptText,
     get on() { return on; }, get unlocked() { return unlocked; }, get level() { return level; }, get pack() { return pack; },
     played,
     reset() { played.clear(); pending = null; memo.clear(); if (current) { setOn(false); setOn(true); } },
@@ -1464,22 +1547,24 @@ const Reel = (() => {
   const video = $('#reelVideo'), tc = $('#tc'), fr = $('#frame'), hint = $('#reelHint'), rail = $('#rail'), railDots = $$('i', rail);
   const caps = $$('.cap').map(el => ({ el, w: el.dataset.cap.split(',').map(Number) }));
   const small = Math.min(innerWidth, innerHeight) < 700;
-  const K = small ? 12 : 17, N = 5 * K * K;
+  let K = 0, N = 0, PITCH = 0;
   const SC = 0, MK = 1, SP = 2, RG = 3, MK2 = 4;
   const KEYS = [[0, SC], [0.05, SC], [0.27, MK], [0.40, MK], [0.53, SP], [0.63, SP], [0.76, RG], [0.86, RG], [0.97, MK2], [1, MK2]];
   const TRIGGERS = [[0.12, 'pixels'], [0.47, 'web'], [0.71, 'voice'], [0.93, 'finale-skip']];
   const PAL = { blue: [86, 114, 255], deep: [46, 70, 226], spark: [255, 180, 58], ice: [170, 188, 255], white: [236, 240, 255] };
   const CELLS = [[1, 0, 'deep'], [0, 1, 'blue'], [1, 1, 'spark'], [2, 1, 'blue'], [1, 2, 'deep']];
-  const PITCH = 0.62 / K, F = 3.4;
-
-  const sc = new Float32Array(N * 3), mk = new Float32Array(N * 2), sp = new Float32Array(N * 3);
-  const rk = new Uint8Array(N), ra = new Float32Array(N), seed = new Float32Array(N), dl = new Float32Array(N), ssz = new Float32Array(N);
-  const col = [new Uint8Array(N * 3), new Uint8Array(N * 3), new Uint8Array(N * 3), new Uint8Array(N * 3)];
+  const F = 3.4;
+  let sc, mk, sp, rk, ra, seed, dl, ssz, col;
   const colOf = s => s === MK2 ? 1 : s;
   const setC = (arr, i, c, v = 1) => { arr[i * 3] = Math.min(255, c[0] * v); arr[i * 3 + 1] = Math.min(255, c[1] * v); arr[i * 3 + 2] = Math.min(255, c[2] * v); };
   const pickW = (r, list) => { let a = 0; for (const [p, v] of list) { a += p; if (r < a) return v; } return list[list.length - 1][1]; };
 
-  // build every particle's place in each shape
+  // build every particle's place in each shape (rebuilt when the quality tier changes)
+  function build(k) {
+  K = k; N = 5 * K * K; PITCH = 0.62 / K;
+  sc = new Float32Array(N * 3); mk = new Float32Array(N * 2); sp = new Float32Array(N * 3);
+  rk = new Uint8Array(N); ra = new Float32Array(N); seed = new Float32Array(N); dl = new Float32Array(N); ssz = new Float32Array(N);
+  col = [new Uint8Array(N * 3), new Uint8Array(N * 3), new Uint8Array(N * 3), new Uint8Array(N * 3)];
   let i = 0;
   for (const [cx, cy, name] of CELLS) {
     for (let a = 0; a < K; a++) for (let b = 0; b < K; b++, i++) {
@@ -1506,6 +1591,8 @@ const Reel = (() => {
     ra[j] = Math.random() * Math.PI * 2;
     setC(col[RG], j, rk[j] === 0 ? (Math.random() < .8 ? PAL.spark : PAL.white) : rk[j] === 1 ? PAL.blue : (Math.random() < .5 ? PAL.deep : PAL.ice));
   }
+  }
+  build(Perf.reelK());
 
   const deep = new Image(); deep.decoding = 'async'; deep.src = 'media/deep-field.jpg';
   let W = 0, H = 0, DPR = 1, S = 1, CX = 0, CY = 0, target = 0, p = 0, visible = false, lastTC = '', fired = new Set(), useVid = false;
@@ -1514,7 +1601,7 @@ const Reel = (() => {
 
   function resize() {
     const r = stage.getBoundingClientRect();
-    W = r.width; H = r.height; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height; DPR = Math.min(window.devicePixelRatio || 1, Perf.dprCap());
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     const wide = W >= 1000;
@@ -1657,8 +1744,8 @@ const Reel = (() => {
   }
   function useCanvas() { useVid = false; stage.classList.remove('has-video'); video.removeAttribute('src'); video.load(); }
 
-  function update(t, vh) {
-    const r = section.getBoundingClientRect();
+  function update(t, vh, rect) {
+    const r = rect || section.getBoundingClientRect();
     visible = r.top < vh && r.bottom > 0;
     target = clamp(-r.top / Math.max(1, r.height - vh));
     p = RM ? target : p + (target - p) * 0.1;
@@ -1695,7 +1782,10 @@ const Reel = (() => {
   function setTilt(x, y) { mouse.tx = x; mouse.ty = y; }
   resize();
   if (CONFIG.scrollVideo) useVideo(CONFIG.scrollVideo);
-  return { resize, update, useVideo, useCanvas, setTilt, resetTriggers() { fired = new Set(); }, prime() { if (useVid) { const pr = video.play(); if (pr && pr.then) pr.then(() => video.pause()).catch(() => {}); } } };
+  // draw a few frames off screen so the browser has the drawing code hot before anyone scrolls
+  function warm() { if (useVid || !W) return; const keep = p; for (const v of [0.18, 0.5, 0.8]) { p = v; draw(performance.now()); } p = keep; }
+  function setQuality() { const k = Perf.reelK(); if (k !== K) build(k); resize(); }
+  return { resize, update, useVideo, useCanvas, setTilt, warm, setQuality, resetTriggers() { fired = new Set(); }, prime() { if (useVid) { const pr = video.play(); if (pr && pr.then) pr.then(() => video.pause()).catch(() => {}); } } };
 })();
 
 /* =====================================================================
@@ -1748,6 +1838,10 @@ const Studio = (() => {
     f('stVoiceId').addEventListener('change', e => { S.voiceId = e.target.value.trim(); save(); fillVoices(); Voice.forget(); });
     f('stModel').addEventListener('change', e => { S.modelId = e.target.value; save(); Voice.forget(); });
     f('stFallback').addEventListener('change', e => { S.fallback = e.target.checked; save(); Voice.forget(); mode(); });
+    const qNote = () => { f('stQualityNote').textContent = 'This device is using ' + Perf.tier + ' quality' + (S.quality === 'auto' ? ', picked automatically.' : '.'); };
+    f('stQuality').value = S.quality || 'auto'; qNote();
+    f('stQuality').addEventListener('change', e => { S.quality = e.target.value; save(); Perf.set(S.quality); qNote(); });
+    Perf.on(qNote);
     f('stHaptics').checked = S.haptics;
     f('stHaptics').addEventListener('change', e => { S.haptics = e.target.checked; save(); if (S.haptics) Haptics.play('select'); });
     f('stMusic').checked = S.music;
@@ -1875,22 +1969,52 @@ const gate = $('#gate'), nav = $('#nav'), heroInner = $('#heroInner');
 let entered = false;
 const Hero3D = (() => {
   const box = $('#heroLogo');
-  let ctl = null;
+  let ctl = null, cap = Perf.dprCap();
   const load = src => new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.async = true; el.onload = res; el.onerror = rej; document.head.appendChild(el); });
-  (async () => {
+  async function mount() {
+    ctl = window.PixelHero3D ? window.PixelHero3D.mount(box, { reducedMotion: RM, dprCap: cap }) : null;
+    if (!ctl) return false;
+    await ctl.ready;
+    box.classList.add('is-3d');
+    if (entered) ctl.intro();
+    return true;
+  }
+  const ready = (async () => {
     try {
       if (!window.THREE) await load(CONFIG.threeUrl);
       if (!window.PixelHero3D) await load('js/hero3d.js');
-      ctl = window.PixelHero3D ? window.PixelHero3D.mount(box, { reducedMotion: RM, dprCap: 2 }) : null;
-      if (!ctl) return;
-      await ctl.ready;
-      box.classList.add('is-3d');
-      if (entered) ctl.intro();
-    } catch (e) { ctl = null; }
+      return await mount();
+    } catch (e) { ctl = null; return false; }
   })();
   addEventListener('pointermove', e => { if (ctl && e.pointerType === 'mouse') ctl.setPointer(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5); }, { passive: true });
-  return { get ctl() { return ctl; } };
+  return {
+    get ctl() { return ctl; }, ready,
+    // a new quality tier before entry: remount at the new resolution (invisible, the intro has not played)
+    requality() { const c = Perf.dprCap(); if (c === cap || !ctl || entered) return; cap = c; try { ctl.destroy(); } catch (e) {} ctl = null; mount().catch(() => {}); }
+  };
 })();
+
+/* =====================================================================
+   PRELOAD: everything the scroll story needs is fetched and warmed up
+   while the opening titles play, so nothing loads mid-scroll.
+   ===================================================================== */
+const Preload = (() => {
+  let total = 0, done = 0, finished = false;
+  const all = [];
+  const add = (p, w) => { total += w; all.push(Promise.resolve(p).catch(() => {}).then(() => { done += w; })); };
+  const timeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
+  if (document.fonts && document.fonts.ready) add(timeout(document.fonts.ready, 8000), 2);
+  ['media/rocket.jpg', 'media/espresso.jpg', 'media/cat.jpg', 'media/deep-field.jpg'].forEach(src => {
+    const img = new Image(); img.src = src;
+    add(timeout(img.decode ? img.decode() : new Promise(r => { img.onload = img.onerror = r; }), 8000), 0.5);
+  });
+  add(timeout(Hero3D.ready, 9000), 4);
+  add(timeout(Voice.warm(), 9000), 2);
+  add(new Promise(r => requestAnimationFrame(() => { try { Reel.warm(); } catch (e) {} r(); })), 1);
+  const whenDone = Promise.all(all).then(() => { finished = true; });
+  return { get progress() { return total ? done / total : 1; }, get done() { return finished; }, whenDone };
+})();
+Perf.on(() => { Reel.setQuality(); Hero3D.requality(); });
 
 /* =====================================================================
    OPENING TITLES: a projector line warms up, collapses into one amber
@@ -1900,7 +2024,7 @@ const Hero3D = (() => {
 const Intro = (() => {
   const cv = $('#gateCanvas'), slot = $('#gateSlot'), load = $('#gateLoad');
   const ctx = cv && cv.getContext ? cv.getContext('2d') : null;
-  const STAGES = [[2.8, 's1'], [3.35, 's2'], [3.85, 's3']];
+  const STAGES = [[2.8, 's1'], [3.35, 's2']];
   if (!ctx || RM) {
     gate.classList.add('s1', 's2', 's3', 'no-canvas');
     if (load) load.textContent = '100';
@@ -1939,7 +2063,7 @@ const Intro = (() => {
   const glow = (spr, x, y, r, a) => { if (a <= 0.003 || r <= 0) return; ctx.globalAlpha = Math.min(1, a); ctx.drawImage(spr, x - r, y - r, r * 2, r * 2); };
 
   let W = 0, H = 0, DPR = 1, big = { x: 0, y: 0, s: 1 }, fin = { x: 0, y: 0, s: 1 };
-  let t0 = performance.now(), leaving = false, leaveT = 0, stage = 0, raf = 0, lastLoad = '';
+  let t0 = performance.now(), leaving = false, leaveT = 0, stage = 0, raf = 0, lastLoad = '', prevNow = 0;
   function layout() {
     W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
@@ -1954,8 +2078,12 @@ const Intro = (() => {
     const t = (now - t0) / 1000, L = leaving ? (now - leaveT) / 1000 : -1;
     if (L > 1.1 || gate.hidden) { cancelAnimationFrame(raf); return; }
     raf = requestAnimationFrame(frame);
+    if (t > 0.9 && t < 3.6) Perf.sample(now);   // the heavy part of the titles
+    if (t >= 3.6) Perf.settle();
     for (const [ts, cl] of STAGES) if (t >= ts && !gate.classList.contains(cl)) gate.classList.add(cl);
-    const pct = String(Math.min(100, Math.round(t / 3.7 * 100))).padStart(3, '0');
+    // the button arrives once the story is loaded (or after 10 s on a very slow connection)
+    if (t >= 3.85 && (Preload.done || t > 10) && !gate.classList.contains('s3')) { gate.classList.add('s3'); $('#enterSound').focus({ preventScroll: true }); }
+    const pct = String(Math.min(100, Math.round(Math.min(t / 3.7, Preload.progress) * 100))).padStart(3, '0');
     if (pct !== lastLoad && load) { load.textContent = pct; lastLoad = pct; }
 
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
@@ -2084,6 +2212,7 @@ function enterSound(ac) {
 
 function enter(withSound) {
   if (entered) return;
+  Perf.settle();
   entered = true;
   Haptics.arm(); Haptics.play('select'); Tilt.start();
   if (!RM) {   // the five cubes lock in, then the amber centre ignites (timed to js/hero3d.js intro)
@@ -2103,7 +2232,7 @@ function enter(withSound) {
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.btn,.st-btn,.sound-btn,.st-close')) Haptics.play('tap'); }, true);
 $('#enterSilent').addEventListener('click', e => { e.stopPropagation(); enter(false); });
 gate.addEventListener('click', () => enter(true));
-setTimeout(() => { if (!gate.hidden && !gate.classList.contains('leaving')) $('#enterSound').focus({ preventScroll: true }); }, RM ? 300 : 3900);
+if (RM) setTimeout(() => { if (!gate.hidden && !gate.classList.contains('leaving')) $('#enterSound').focus({ preventScroll: true }); }, 300);
 
 $('#soundBtn').addEventListener('click', () => {
   if (Voice.on) { Voice.setOn(false); Music.stop(); return; }
@@ -2263,13 +2392,36 @@ function sizeTrack() {
   const extra = Math.max(0, track.scrollWidth - innerWidth);
   trackSec.style.height = (innerHeight * 1.25 + extra) + 'px';      // fallback for browsers without lvh
   trackSec.style.height = 'calc(125lvh + ' + extra + 'px)';
+  Geo.mark();
 }
+
+/* ---------- section positions: measured when the layout changes, not every frame ---------- */
+const Geo = (() => {
+  const IDS = ['top', 'reel', 'statement', 'zoom', 'meet', 'features', 'prompts', 'demo', 'languages', 'creator', 'start'];
+  const m = {};
+  let dirty = true, trackExtra = 0;
+  function measure() {
+    const y = scrollY;
+    for (const id of IDS) { const el = document.getElementById(id); if (el) { const r = el.getBoundingClientRect(); m[id] = { top: r.top + y, h: r.height }; } }
+    trackExtra = Math.max(0, track.scrollWidth - innerWidth);
+    dirty = false;
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(() => { dirty = true; }).observe(document.body);
+  return {
+    measure, mark() { dirty = true; }, get dirty() { return dirty; }, get trackExtra() { return trackExtra; },
+    rect(id, y) { const g = m[id]; return g ? { top: g.top - y, bottom: g.top - y + g.h, height: g.h } : null; }
+  };
+})();
 
 /* ---------- one animation loop for everything scroll-driven ---------- */
 let vh = innerHeight, lastY = scrollY, stLit = 0, zoomDone = false;
 function frame(t) {
+  requestAnimationFrame(frame);
+  // reads first (cached geometry, so no forced layout), writes after
+  if (Geo.dirty) Geo.measure();
   const y = scrollY;
   fastScroll = Math.abs(y - lastY) > 28; lastY = y;
+  if (entered) Perf.frame(t);
   nav.classList.toggle('scrolled', y > 40);
   if (y < vh * 1.2) {
     const k = clamp(y / Math.max(vh, 700));
@@ -2277,19 +2429,19 @@ function frame(t) {
     heroInner.style.opacity = (1 - smooth(0.05, 0.75, k)).toFixed(3);
     if (Hero3D.ctl) Hero3D.ctl.setProgress(k);
   }
-  if (Music.on) Music.intensity(sceneIntensity(vh));
+  if (Music.on) Music.intensity(sceneIntensity(vh, y));
   if (Tilt.active) { if (Hero3D.ctl) Hero3D.ctl.setPointer(Tilt.x, Tilt.y); Reel.setTilt(Tilt.x, Tilt.y); }
-  Reel.update(t, vh);
-  const sr = $('#statement').getBoundingClientRect();
-  if (sr.top < vh && sr.bottom > 0) {
+  Reel.update(t, vh, Geo.rect('reel', y));
+  const sr = Geo.rect('statement', y);
+  if (sr && sr.top < vh && sr.bottom > 0) {
     const sp = clamp((-sr.top + vh * 0.3) / (sr.height - vh * 0.7));
     const n = Math.floor(sp * stWords.length * 1.05);
     if (n > stLit && n <= stWords.length) Haptics.tick();
     stLit = n;
     for (let k = 0; k < stWords.length; k++) stWords[k].classList.toggle('lit', k < n);
   }
-  const zr = zoomSec.getBoundingClientRect();
-  if (zr.top < vh && zr.bottom > 0) {
+  const zr = Geo.rect('zoom', y);
+  if (zr && zr.top < vh && zr.bottom > 0) {
     const zp = clamp(-zr.top / Math.max(1, zr.height - vh));
     const e = 1 - Math.pow(1 - clamp(zp / 0.62), 3);
     zoomTitle.style.transform = 'scale(' + lerp(9, 1, e).toFixed(3) + ')';
@@ -2299,31 +2451,29 @@ function frame(t) {
     zoomSub.style.opacity = so.toFixed(3);
     zoomSub.style.transform = 'translateY(' + ((1 - so) * 24).toFixed(1) + 'px)';
   }
-  const tr = trackSec.getBoundingClientRect();
-  if (tr.top < vh && tr.bottom > 0) {
+  const tr = Geo.rect('prompts', y);
+  if (tr && tr.top < vh && tr.bottom > 0) {
     const tp = clamp(-tr.top / Math.max(1, tr.height - vh));
-    const extra = Math.max(0, track.scrollWidth - innerWidth);
+    const extra = Geo.trackExtra;
     track.style.transform = 'translate3d(' + (-tp * extra).toFixed(1) + 'px,0,0)';
     trackBar.style.setProperty('--p', tp.toFixed(4));
   }
-  if (Device) Device.update(vh);
+  if (Device) Device.update(vh, Geo.rect('meet', y));
   if (Voice.on && !fastScroll) {
     for (const id of voiceInView) Voice.trigger(id);
     if (Device && (Device.stage === 'typing' || Device.stage === 'thinking' || Device.stage === 'answer')) {
-      const mr = meetSec.getBoundingClientRect();
-      if (mr.top < vh / 2 && mr.bottom > vh / 2) Voice.trigger('meet');
+      const mr = Geo.rect('meet', y);
+      if (mr && mr.top < vh / 2 && mr.bottom > vh / 2) Voice.trigger('meet');
     }
   }
   Voice.tick(t);
-  requestAnimationFrame(frame);
 }
 // how full the score should be for whatever is on screen
 const SCENES = [['top', 0.15], ['reel', -1], ['statement', 0.55], ['zoom', 0.8], ['meet', 0.85], ['features', 0.68], ['prompts', 0.72], ['demo', 0.6], ['languages', 0.5], ['creator', 0.38], ['start', 1]];
-function sceneIntensity(vh) {
+function sceneIntensity(vh, y) {
   const mid = vh / 2;
   for (const [id, val] of SCENES) {
-    const el = document.getElementById(id); if (!el) continue;
-    const r = el.getBoundingClientRect();
+    const r = Geo.rect(id, y); if (!r) continue;
     if (r.top <= mid && r.bottom > mid) {
       if (id === 'reel') return 0.22 + 0.62 * clamp(-r.top / Math.max(1, r.height - vh));
       if (id === 'start') Music.swell();
@@ -2333,7 +2483,7 @@ function sceneIntensity(vh) {
   return 0.3;
 }
 let lastW = innerWidth;
-function onResize() { vh = innerHeight; Reel.resize(); if (innerWidth !== lastW) { lastW = innerWidth; sizeTrack(); } if (Device) Device.resize(); }
+function onResize() { vh = innerHeight; Reel.resize(); if (innerWidth !== lastW) { lastW = innerWidth; sizeTrack(); } if (Device) Device.resize(); Geo.mark(); }
 addEventListener('resize', onResize);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeTrack);
 sizeTrack();
@@ -2357,6 +2507,10 @@ addEventListener('hashchange', checkHash);
 checkHash();
 
 Voice.loadPack();
+// keep the site on the device for instant, offline-capable repeat visits (see sw.js)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  addEventListener('load', () => { try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {} });
+}
 if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch (e) {} }
 })();
 </script>
