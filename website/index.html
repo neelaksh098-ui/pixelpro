@@ -90,6 +90,9 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .js .gate{position:fixed;inset:0;z-index:150;display:grid;place-items:center;background:radial-gradient(120% 80% at 50% 110%,rgba(46,70,226,.35),transparent 60%),var(--void);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:max(24px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-bottom,0px));transition:opacity .9s var(--ease),visibility 0s .9s}
 .gate::before{content:"";position:absolute;left:50%;top:-20%;width:min(70vmin,620px);height:95%;transform:translateX(-50%);background:radial-gradient(ellipse 50% 60% at 50% 0%,rgba(120,146,255,.42),transparent 70%);filter:blur(24px);pointer-events:none;animation:beam 7s ease-in-out infinite alternate}
 @keyframes beam{to{opacity:.55;transform:translateX(-50%) scaleX(.82)}}
+.js .gate[hidden]{display:none}
+.js .gate{overflow-y:auto;overscroll-behavior:contain;place-items:safe center}
+@media (max-height:520px){.gate .mark{--s:44px;margin-bottom:0}.gate-inner{gap:10px}.gate h1{font-size:clamp(2.2rem,12vh,3.4rem)}.gate-copy,.gate-meta{display:none}}
 .gate-inner{position:relative;display:grid;justify-items:center;text-align:center;gap:20px;max-width:640px}
 .gate .mark{--s:84px;margin-bottom:10px}
 .gate .mark i{animation:pop .7s cubic-bezier(.2,.8,.3,1.3) backwards}
@@ -107,13 +110,14 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .nav{position:fixed;top:0;left:0;right:0;z-index:80;padding-top:env(safe-area-inset-top,0px);border-bottom:1px solid transparent;transition:background .5s,border-color .5s}
 .nav.scrolled{background:rgba(5,7,15,.6);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border-bottom-color:var(--line)}
 .nav-inner{display:flex;align-items:center;gap:20px;height:64px}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font:700 1.125rem/1 var(--f-display);letter-spacing:-.025em}
+.brand{white-space:nowrap;flex:none;display:flex;align-items:center;gap:10px;text-decoration:none;font:700 1.125rem/1 var(--f-display);letter-spacing:-.025em}
 .brand small{font:500 .65rem/1 var(--f-mono);letter-spacing:.14em;color:var(--spark);padding:4px 6px;border:1px solid rgba(255,180,58,.4);border-radius:6px}
+@media (max-width:380px){.nav-inner{gap:10px}.brand small{display:none}}
 .nav-links{display:none;gap:28px;margin-left:auto;font-size:.875rem;color:var(--mist)}
 .nav-links a{text-decoration:none;transition:color .2s}.nav-links a:hover{color:var(--ink)}
 .nav-actions{display:flex;align-items:center;gap:10px;margin-left:auto}
 @media (min-width:900px){.nav-links{display:flex}.nav-actions{margin-left:12px}}
-.sound-btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:999px;border:0;background:rgba(255,255,255,.05);box-shadow:0 0 0 1px var(--line-2) inset;font:500 .72rem/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mist)}
+.sound-btn{min-width:128px;justify-content:center;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:999px;border:0;background:rgba(255,255,255,.05);box-shadow:0 0 0 1px var(--line-2) inset;font:500 .72rem/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mist)}
 .sound-btn svg{width:16px;height:16px}
 .sound-btn[aria-pressed="true"]{color:var(--ink);box-shadow:0 0 0 1px rgba(255,180,58,.5) inset}
 .sound-btn .eq{display:none;gap:2px;align-items:flex-end;height:12px}
@@ -122,11 +126,11 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .sound-btn .eq i{width:2px;background:var(--spark);border-radius:1px;animation:eq 1s ease-in-out infinite}
 .sound-btn .eq i:nth-child(2){animation-delay:-.4s}.sound-btn .eq i:nth-child(3){animation-delay:-.7s}
 @keyframes eq{0%,100%{height:3px}50%{height:12px}}
-@media (max-width:520px){.sound-btn .lbl{display:none}.nav .btn-sm{padding:0 14px}}
+@media (max-width:520px){.sound-btn{min-width:0}.sound-btn .lbl{display:none}.nav .btn-sm{padding:0 14px}}
 
 /* ---------- hero ---------- */
 .hero{position:relative;min-height:100vh;min-height:100svh;display:grid;place-items:center;overflow:clip;isolation:isolate;padding-block:84px 76px}
-.hero-bg{position:absolute;inset:0;z-index:-1;pointer-events:none}
+.hero-bg{position:absolute;inset:0;z-index:-1;pointer-events:none;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
 .aurora{position:absolute;width:70vmax;height:70vmax;border-radius:50%;filter:blur(70px);opacity:.6;animation:drift 20s ease-in-out infinite alternate}
 .aurora.a1{background:radial-gradient(circle,rgba(46,70,226,.9),transparent 62%);top:-32vmax;left:-22vmax}
 .aurora.a2{background:radial-gradient(circle,rgba(255,180,58,.38),transparent 60%);bottom:-40vmax;right:-20vmax;animation-duration:26s}
@@ -144,12 +148,13 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .hero-fallback{--s:clamp(96px,14vh,140px);transition:opacity .8s var(--ease),transform .8s var(--ease);filter:drop-shadow(0 0 40px rgba(86,114,255,.45))}
 .hero-logo.is-3d .hero-fallback{opacity:0;transform:scale(.8)}
 .hero-title{font-size:clamp(3.3rem,11.5vw,9rem);font-weight:800;letter-spacing:-.06em;line-height:.9;padding-bottom:.08em;display:flex;flex-wrap:wrap;justify-content:center;column-gap:.22em}
-.metal{display:inline-block;padding-bottom:.06em;background-image:linear-gradient(100deg,transparent 0 40%,rgba(255,240,214,.95) 48%,rgba(255,190,90,.9) 50%,transparent 60%),linear-gradient(180deg,#FFFFFF 0%,#E6EBFB 36%,#B3BDE2 70%,#7E8AB8 100%);background-size:320% 100%,100% 100%;background-position:160% 0,0 0;background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:glint 8s var(--ease) infinite 3s}
+.metal{display:inline-block;padding:0 .05em .06em;background-image:linear-gradient(100deg,transparent 0 40%,rgba(255,240,214,.95) 48%,rgba(255,190,90,.9) 50%,transparent 60%),linear-gradient(180deg,#FFFFFF 0%,#E6EBFB 36%,#B3BDE2 70%,#7E8AB8 100%);background-size:320% 100%,100% 100%;background-position:160% 0,0 0;background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:glint 8s var(--ease) infinite 3s}
 .metal.ai{background-image:linear-gradient(100deg,transparent 0 40%,rgba(255,255,255,.95) 50%,transparent 60%),linear-gradient(180deg,#FFF1D2 0%,#FFC867 45%,#E8921E 80%,#B8680C 100%)}
 @keyframes glint{0%{background-position:160% 0,0 0}38%,100%{background-position:-60% 0,0 0}}
 .hero-by{font:500 .72rem/1.3 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mist)}
 .hero-by b{color:var(--ink);font-weight:500}
-@media (max-height:760px) and (min-width:700px){.hero-copy{display:none}}
+@media (max-height:880px) and (min-width:700px){.hero-copy{display:none}}
+@media (max-height:500px) and (orientation:landscape){.hero{padding-block:72px 16px}.hero-inner{gap:8px}.hero-logo{height:28vh;margin:0}.hero-inner>.eyebrow,.hero-copy{display:none}.hero-title{font-size:clamp(2.4rem,13vh,3.6rem)}}
 .hero-sub{font:650 clamp(1.45rem,3.4vw,2.5rem)/1.1 var(--f-display);letter-spacing:-.035em;color:var(--mist)}
 .hero-sub b{color:var(--ink);font-weight:inherit}
 .hero-copy{max-width:44ch;color:var(--mist)}
@@ -231,6 +236,8 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .card>p:not(.eyebrow){color:var(--mist);max-width:42ch}
 .card .eyebrow{color:var(--spark)}
 .viz{margin-top:auto;padding-top:18px}
+.c-web .viz{margin-block:auto}
+.c-free{justify-content:center}
 @media (min-width:900px){
   .c-web{grid-column:span 4}.c-voice{grid-column:span 2}
   .c-photo{grid-column:span 2}.c-news{grid-column:span 4}
@@ -251,7 +258,9 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 
 /* ---------- prompt track (horizontal while pinned) ---------- */
 .track-sec{position:relative}
-.track-sticky{position:sticky;top:0;height:100vh;height:100svh;display:flex;flex-direction:column;justify-content:center;gap:clamp(28px,5vh,56px);overflow:hidden}
+.track-sticky{position:sticky;top:0;height:100vh;height:100svh;box-sizing:border-box;padding-top:64px;display:flex;flex-direction:column;justify-content:center;gap:clamp(28px,5vh,56px);overflow:hidden}
+@media (max-height:800px){.track-sticky{gap:clamp(14px,3vh,28px)}}
+@media (max-height:500px){.track-sticky{justify-content:flex-start;padding-top:calc(72px + env(safe-area-inset-top,0px));gap:12px}.track-sticky .sec-head h2{font-size:1.5rem}.pcard{min-height:0;padding:16px 18px;gap:10px}.pc-img{height:22vh;aspect-ratio:auto}.track{align-items:flex-start}}
 .track-sticky .sec-head{margin-bottom:0}
 .track{display:flex;gap:18px;width:max-content;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));will-change:transform}
 @media (min-width:768px){.track{padding-left:max(40px,calc((100vw - var(--maxw))/2 + 40px));padding-right:max(40px,env(safe-area-inset-right,0px))}}
@@ -294,7 +303,7 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .langs{text-align:center;overflow:clip}
 .langs-inner{display:grid;justify-items:center;gap:26px}
 .greet{display:grid;font:800 clamp(4.2rem,17vw,13rem)/1.05 var(--f-display);letter-spacing:-.05em}
-.greet span{grid-area:1/1;opacity:0;transform:translateY(40px) scale(.96);filter:blur(16px);transition:opacity .9s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
+.greet span{grid-area:1/1;padding-top:.3em;margin-top:-.3em;opacity:0;transform:translateY(40px) scale(.96);filter:blur(16px);transition:opacity .9s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
 .greet span.on{opacity:1;transform:none;filter:none}
 .greet span[lang="hi"]{font-family:"Noto Sans Devanagari",var(--f-display);letter-spacing:-.02em}
 .greet span[lang="ja"]{font-family:"Noto Sans JP",var(--f-display);letter-spacing:0}
@@ -308,10 +317,10 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .sign-inner{display:grid;justify-items:center;gap:18px}
 .sign-line{font:650 clamp(1.5rem,3.6vw,2.6rem)/1.1 var(--f-display);letter-spacing:-.035em;color:var(--mist)}
 .signature{position:relative;margin:4px 0 2px;font:400 clamp(2.7rem,11.5vw,10rem)/1.2 "Mrs Saint Delafield","Brush Script MT",cursive;letter-spacing:0;padding:0 .2em;white-space:nowrap;max-width:100%}
-.sig-ink{display:inline-block;background:linear-gradient(100deg,#FFFFFF 0%,#FFE3AE 40%,#FFB43A 62%,#FFFFFF 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 22px rgba(255,180,58,.28))}
+.sig-ink{display:inline-block;padding:0 .3em 0 .15em;margin:0 -.3em 0 -.15em;background:linear-gradient(100deg,#FFFFFF 0%,#FFE3AE 40%,#FFB43A 62%,#FFFFFF 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 22px rgba(255,180,58,.28))}
 .sig-pen{position:absolute;top:50%;left:var(--pen,100%);width:10px;height:10px;border-radius:50%;background:#FFF3DA;box-shadow:0 0 16px 6px rgba(255,180,58,.75),0 0 60px 20px rgba(255,180,58,.25);transform:translate(-50%,-50%);opacity:0;pointer-events:none}
-.js .signature.ready .sig-ink{clip-path:inset(-20% 100% -20% 0)}
-.js .signature.writing .sig-ink{clip-path:inset(-20% 0 -20% 0);transition:clip-path 2.6s cubic-bezier(.45,.05,.3,1)}
+.js .signature.ready .sig-ink{clip-path:inset(-20% 100% -20% -6%)}
+.js .signature.writing .sig-ink{clip-path:inset(-20% -12% -20% -6%);transition:clip-path 2.6s cubic-bezier(.45,.05,.3,1)}
 .js .signature.writing .sig-pen{animation:pen 2.6s cubic-bezier(.45,.05,.3,1) forwards}
 @keyframes pen{0%{left:6%;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:96%;opacity:0}}
 .sign-in{color:var(--ink)}
@@ -325,7 +334,7 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .cta-inner{display:grid;justify-items:center;gap:24px}
 .cta .mark{--s:72px;animation:float 6s ease-in-out infinite}
 @keyframes float{50%{transform:translateY(-12px) rotate(4deg)}}
-.cta h2{font-size:clamp(3.4rem,12vw,9.5rem);font-weight:800;letter-spacing:-.055em;line-height:.9;padding-bottom:.05em}
+.cta h2{padding-inline:.06em;font-size:clamp(3.4rem,12vw,9.5rem);font-weight:800;letter-spacing:-.055em;line-height:.9;padding-bottom:.05em}
 .cta-sub{font:650 var(--t-m)/1.15 var(--f-display);letter-spacing:-.03em;color:var(--mist)}
 
 /* ---------- footer ---------- */
@@ -342,6 +351,8 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .vp-bars i{width:3px;border-radius:2px;background:var(--spark);height:calc(4px + var(--l,0) * var(--k,1) * 20px);transition:height .08s linear}
 .vp-text{font-size:.9375rem;line-height:1.4;color:var(--mist);min-width:0}
 .vp-text .s{color:var(--ink)}
+@media (min-width:1100px){.vpill{left:auto;right:max(24px,env(safe-area-inset-right,0px));transform:translateY(24px);max-width:min(440px,34vw)}.vpill.show{transform:none}}
+@media (max-width:1099px){.vpill{top:calc(74px + env(safe-area-inset-top,0px));bottom:auto;transform:translate(-50%,-16px);padding:8px 14px 8px 10px;max-width:calc(100% - 24px)}.vpill.show{transform:translate(-50%,0)}.vp-text{font-size:.875rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
 
 /* ---------- toast ---------- */
 .toast{position:fixed;left:50%;top:calc(76px + env(safe-area-inset-top,0px));z-index:210;max-width:min(520px,calc(100% - 32px));padding:12px 18px;border-radius:14px;background:var(--panel);box-shadow:0 0 0 1px var(--line-2) inset,0 20px 50px -20px #000;font-size:.9rem;color:var(--ink-2);transform:translate(-50%,-12px);opacity:0;transition:.35s var(--ease)}
@@ -429,7 +440,7 @@ details.st-group[open] summary{margin-bottom:6px}
       <a href="#languages">Languages</a>
     </nav>
     <div class="nav-actions">
-      <button class="sound-btn" id="soundBtn" type="button" aria-pressed="false" aria-label="Narration">
+      <button class="sound-btn" id="soundBtn" type="button" aria-pressed="false">
         <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
         <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="lbl" id="soundLbl">Sound off</span>
@@ -454,7 +465,7 @@ details.st-group[open] summary{margin-bottom:6px}
     <p class="eyebrow">Introducing</p>
     <h1 class="hero-title"><span class="metal">Pixel Pro</span><span class="metal ai">AI</span></h1>
     <p class="hero-sub">Ask anything. <b>Get answers.</b></p>
-    <p class="hero-copy">A free AI assistant that searches the live web, listens when you speak, looks at your photos and answers in English, हिंदी and many more languages.</p>
+    <p class="hero-copy">A free AI assistant that searches the live web, listens when you speak, looks at your photos and answers in English, <span lang="hi">हिंदी</span> and many more languages.</p>
     <div class="ctas">
       <a class="btn btn-primary" data-app href="#start">Try Pixel Pro
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -500,7 +511,7 @@ details.st-group[open] summary{margin-bottom:6px}
           <div class="cap" data-cap="0.90,0.95,2,3">
             <p class="eyebrow">Chapter 4 · Pixel Pro</p>
             <h2>This is Pixel Pro.</h2>
-            <p>Created by Neelaksh Naithani. Free to use, with no sign-up.</p>
+            <p>Created by Neelaksh Naithani. Free to use, with no sign&#8209;up.</p>
           </div>
         </div>
       </div>
@@ -512,7 +523,7 @@ details.st-group[open] summary{margin-bottom:6px}
 <section class="statement" id="statement">
   <div class="statement-sticky">
     <div class="wrap">
-      <p class="statement-text" id="statementText">Pixel Pro reads the live web, listens when you speak, looks at your photos and answers in English, <span class="acc">हिंदी</span> and almost any language you ask in. Free for everyone, with nothing to sign up for.</p>
+      <p class="statement-text" id="statementText">Pixel Pro reads the live web, listens when you speak, looks at your photos and answers in English, <span class="acc" lang="hi">हिंदी</span> and almost any language you ask in. Free for everyone, with nothing to sign up for.</p>
     </div>
   </div>
 </section>
@@ -762,7 +773,7 @@ details.st-group[open] summary{margin-bottom:6px}
       <article class="card c-news reveal" style="--dl:.1s">
         <p class="eyebrow">Headlines <span class="live">LIVE</span></p>
         <h3>Today's news, in your language.</h3>
-        <p>A live ticker of top stories in English or हिंदी. Tap a headline to ask about it.</p>
+        <p>A live ticker of top stories in English or <span lang="hi">हिंदी</span>. Tap a headline to ask about it.</p>
         <div class="viz">
           <div class="pp-ui pp-shot pp-shot--news">
   <div class="pp-top">
@@ -851,7 +862,7 @@ details.st-group[open] summary{margin-bottom:6px}
       <article class="pcard"><p class="eyebrow">Homework</p><q>Explain photosynthesis in simple Hindi.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
       <article class="pcard hot"><p class="eyebrow">Travel</p><q>When should I visit Darjeeling, and what should I pack?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
       <article class="pcard"><p class="eyebrow">Work</p><q>Write a polite email asking for two days of leave.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
-      <article class="pcard"><p class="eyebrow">News</p><q>आज की बड़ी ख़बरें क्या हैं?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard"><p class="eyebrow">News</p><q lang="hi">आज की बड़ी ख़बरें क्या हैं?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
       <article class="pcard hot"><p class="eyebrow">Kitchen</p><q>A 20-minute dinner with paneer and spinach.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
       <article class="pcard pcard-photo"><p class="eyebrow">Photos</p><img class="pc-img" src="media/cat.jpg" width="451" height="300" alt="A striped tabby cat with green eyes looking at the camera" loading="lazy"><q>What kind of cat is this?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
     </div>
@@ -906,12 +917,12 @@ details.st-group[open] summary{margin-bottom:6px}
       <span class="shine" lang="de" aria-hidden="true">Hallo</span>
     </div>
     <div class="lang-pills" id="langPills" aria-hidden="true"><span class="on">English</span><span lang="hi">हिंदी</span><span>Many more</span></div>
-    <p class="langs-copy">Ask in English, हिंदी or almost any other language, and Pixel Pro replies in the same language. Live headlines come in English and हिंदी.</p>
+    <p class="langs-copy">Ask in English, <span lang="hi">हिंदी</span> or almost any other language, and Pixel Pro replies in the same language. Live headlines come in English and <span lang="hi">हिंदी</span>.</p>
   </div>
 </section>
 
 <!-- ============ CREATOR ============ -->
-<section class="section sign" id="creator" data-voice="creator" aria-labelledby="signTitle">
+<section class="section sign" id="creator" data-voice="creator" aria-labelledby="signTitle signature">
   <div class="wrap sign-inner">
     <p class="eyebrow">The creator</p>
     <h2 class="sign-line" id="signTitle">Designed and created by</h2>
@@ -940,7 +951,7 @@ details.st-group[open] summary{margin-bottom:6px}
 <footer class="foot">
   <div class="wrap">
     <div class="foot-brand">
-      <button class="mark-btn" id="secretMark" type="button" aria-label="Pixel Pro">
+      <button class="mark-btn" id="secretMark" type="button" tabindex="-1" aria-hidden="true">
         <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
       </button>
       <span><b>Pixel Pro AI</b> · Created by Neelaksh Naithani · NeelOutLoud Website Builders</span>
@@ -961,7 +972,7 @@ details.st-group[open] summary{margin-bottom:6px}
      or adding #studio to the end of the address. -->
 <div class="studio" id="studio" hidden>
   <div class="studio-scrim" data-close></div>
-  <section class="studio-panel" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+  <section class="studio-panel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="stTitle">
     <header class="st-head">
       <div>
         <p class="eyebrow">Hidden panel · <span class="st-mode" id="stMode">Browser voice</span></p>
@@ -1101,6 +1112,9 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 const easeIO = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// true while the page is flying past (fling, or a smooth jump from a nav link); narration waits until it settles
+let fastScroll = false;
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 function hash(str) { // two FNV-1a passes → 16 hex chars
   let h1 = 0x811c9dc5, h2 = 0x01000193 ^ 0x9e3779b9;
   for (let i = 0; i < str.length; i++) {
@@ -1239,7 +1253,7 @@ const Voice = (() => {
   audio.setAttribute('playsinline', '');
   const pill = $('#voicePill'), pillText = $('#vpText'), btn = $('#soundBtn'), lbl = $('#soundLbl');
   const played = new Set(), memo = new Map(), shownErrors = new Set();
-  let unlocked = false, on = false, current = null, pending = null, pack = null, elevenDown = false;
+  let unlocked = false, on = false, current = null, pending = null, pack = null, elevenDown = false, nextTimer = 0, activeU = null;
   let env = null, envStep = 0.03, tts = false, ttsStart = 0, ttsDur = 3, boundaryWord = -1, level = 0, words = [], lit = -1, safety = 0;
 
   // a short silent clip lets the click "bless" the audio element on iOS
@@ -1364,19 +1378,23 @@ const Voice = (() => {
       if (v) { u.voice = v; u.lang = v.lang; }
       u.volume = S.volume; u.rate = 1; u.pitch = 1;
       u.onboundary = e => { if (typeof e.charIndex === 'number') boundaryWord = text.slice(0, e.charIndex).split(/\s+/).filter(Boolean).length; };
-      u.onend = u.onerror = () => { if (tts) finish(); };
+      u.onend = u.onerror = () => { if (tts && u === activeU) finish(); };
       tts = true; ttsStart = performance.now(); ttsDur = Math.max(1.5, text.split(/\s+/).length * 0.42); boundaryWord = -1;
       clearTimeout(safety);
       safety = setTimeout(() => { if (tts) finish(); }, ttsDur * 1000 + 6000); // Chrome sometimes never fires onend
+      activeU = u;
       speechSynthesis.speak(u);
     } catch (e) { finish(); }
   }
 
   function finish() {
     clearTimeout(safety);
-    env = null; tts = false; current = null;
+    env = null; tts = false; current = null; activeU = null;
     hidePill(); Music.duck(false);
-    if (pending && on) { const p = pending; pending = null; setTimeout(() => play(p), 420); }
+    if (pending && on) {
+      const p = pending; pending = null; current = p;   // stay busy through the gap so nothing jumps the queue
+      nextTimer = setTimeout(() => { nextTimer = 0; play(p); }, 420);
+    }
   }
 
   function showPill(text) {
@@ -1395,7 +1413,8 @@ const Voice = (() => {
       pending = null;
       try { audio.pause(); } catch (e) {}
       try { speechSynthesis.cancel(); } catch (e) {}
-      clearTimeout(safety); env = null; tts = false; current = null; hidePill(); Music.duck(false);
+      clearTimeout(safety); clearTimeout(nextTimer); nextTimer = 0; activeU = null;
+      env = null; tts = false; current = null; hidePill(); Music.duck(false);
     }
     btn.setAttribute('aria-pressed', String(v));
     lbl.textContent = v ? 'Sound on' : 'Sound off';
@@ -1653,7 +1672,12 @@ const Reel = (() => {
     target = clamp(-r.top / Math.max(1, r.height - vh));
     p = RM ? target : p + (target - p) * 0.1;
     if (Math.abs(target - p) < 0.0004) p = target;
-    for (const [at, id] of TRIGGERS) if (target >= at && !fired.has(id)) { fired.add(id); if (id !== 'finale-skip') Voice.trigger(id); }
+    if (visible && Voice.on && Voice.unlocked && !fastScroll && Math.abs(target - p) < 0.03) {
+      for (let k = 0; k < TRIGGERS.length; k++) {
+        const [at, id] = TRIGGERS[k], next = k + 1 < TRIGGERS.length ? TRIGGERS[k + 1][0] : 1.01;
+        if (target >= at && target < next && !fired.has(id)) { fired.add(id); if (id !== 'finale-skip') Voice.trigger(id); }
+      }
+    }
     if (!visible) return;
     mouse.x += (mouse.tx - mouse.x) * 0.05; mouse.y += (mouse.ty - mouse.y) * 0.05;
     for (const c of caps) {
@@ -1779,19 +1803,23 @@ const Studio = (() => {
     });
     f('stVideoReset').addEventListener('click', () => { Reel.useCanvas(); f('stVideo').value = ''; status('Back to the built-in animation.', 'ok'); });
     $$('[data-close]', el).forEach(b => b.addEventListener('click', close));
-    el.addEventListener('keydown', e => {
-      if (e.key === 'Escape') close();
-      if (e.key === 'Tab') { // keep focus inside the panel
-        const items = $$('button,input,select,textarea,summary', el).filter(x => !x.disabled && x.offsetParent !== null);
-        const first = items[0], last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    });
+    // buttons that disable themselves while working get focus back afterwards
+    ['stLoadVoices', 'stTest', 'stPack'].map(f).forEach(b => b.addEventListener('click', () => setTimeout(function wait() { if (b.disabled) setTimeout(wait, 150); else if (!el.hidden && el.contains(document.activeElement) === false) b.focus(); }, 150)));
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { close(); return; }
+    if (e.key !== 'Tab') return;
+    const items = $$('button,input,select,textarea,summary', el).filter(x => !x.disabled && x.offsetParent !== null);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
   function open() {
     build(); mode();
     if (!el.hidden) return;
+    document.addEventListener('keydown', onKey);
     lastFocus = document.activeElement;
     el.hidden = false; document.body.classList.add('studio-open');
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
@@ -1799,6 +1827,7 @@ const Studio = (() => {
   }
   function close() {
     if (el.hidden) return;
+    document.removeEventListener('keydown', onKey);
     el.classList.remove('open'); document.body.classList.remove('studio-open');
     setTimeout(() => { el.hidden = true; }, 480);
     if (location.hash === '#studio') history.replaceState(null, '', location.pathname + location.search);
@@ -1869,6 +1898,7 @@ const Hero3D = (() => {
 
 function enter(withSound) {
   entered = true;
+  if (scrollY > 0) { const root = document.documentElement, sb = root.style.scrollBehavior; root.style.scrollBehavior = 'auto'; scrollTo(0, 0); root.style.scrollBehavior = sb; }
   if (Hero3D.ctl) Hero3D.ctl.intro();
   if (withSound) { Voice.unlock(); Voice.setOn(true); Music.start(); }
   Reel.prime();
@@ -1884,22 +1914,21 @@ setTimeout(() => { if (!gate.hidden && !gate.classList.contains('leaving')) $('#
 $('#soundBtn').addEventListener('click', () => {
   if (Voice.on) { Voice.setOn(false); Music.stop(); return; }
   Voice.unlock(); Voice.setOn(true); Music.start(); Voice.prefetch();
-  if (!Voice.played.has('hello')) Voice.trigger('hello');
+  if (!Voice.played.has('hello') && scrollY < innerHeight) Voice.trigger('hello');
 });
 
 function replayStory() {
-  Voice.reset(); Reel.resetTriggers();
-  const r = $('#reel'); scrollTo({ top: r.offsetTop + 2, behavior: RM ? 'auto' : 'smooth' });
+  const top = $('#reel').getBoundingClientRect().top + scrollY + 2;
+  const root = document.documentElement, sb = root.style.scrollBehavior;
+  root.style.scrollBehavior = 'auto'; scrollTo(0, top); root.style.scrollBehavior = sb;
+  voiceInView.clear(); Voice.reset(); Reel.resetTriggers();
 }
-$('#replayStory').addEventListener('click', () => {
-  if (!Voice.on) { Voice.unlock(); Voice.setOn(true); Music.start(); }
-  replayStory();
-});
+$('#replayStory').addEventListener('click', replayStory);
 
 // app links
 $$('[data-app]').forEach(a => {
   if (CONFIG.appUrl) { a.href = CONFIG.appUrl; a.target = '_blank'; a.rel = 'noopener'; }
-  else a.addEventListener('click', e => { e.preventDefault(); toast('Set appUrl at the top of the script in index.html to link this button to Pixel Pro.'); });
+  else a.addEventListener('click', e => { e.preventDefault(); toast('Pixel Pro is opening soon. Check back shortly.'); console.warn('Pixel Pro: set CONFIG.appUrl in index.html to link the Try Pixel Pro buttons.'); });
 });
 
 // hero sparkles
@@ -1943,9 +1972,10 @@ if ('IntersectionObserver' in window && !RM) {
   $$('.reveal').forEach(el => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('reveal-ready'); io.observe(el); } else el.classList.add('in'); });
 } else $$('.reveal').forEach(el => el.classList.add('in'));
 
-// narration triggers for sections
+// narration triggers for sections (fired from the frame loop when scrolling is calm)
+const voiceInView = new Set();
 if ('IntersectionObserver' in window) {
-  const vo = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) Voice.trigger(en.target.dataset.voice); }), { threshold: 0.55 });
+  const vo = new IntersectionObserver(es => es.forEach(en => { const id = en.target.dataset.voice; if (en.isIntersecting) voiceInView.add(id); else voiceInView.delete(id); }), { threshold: 0.55 });
   $$('[data-voice]').forEach(el => vo.observe(el));
 }
 
@@ -2010,20 +2040,22 @@ const Demo = (() => {
 const trackSec = $('#prompts'), track = $('#track'), trackBar = $('#trackBar');
 const zoomSec = $('#zoom'), zoomTitle = $('#zoomTitle'), zoomSub = $('#zoomSub');
 // phone showcase (js/device.js): driven from the same frame loop
-const Device = window.PixelDevice ? window.PixelDevice.init($('#meet')) : null;
-if (Device) Device.onStage(st => { if (st === 'typing') Voice.trigger('meet'); });
+const meetSec = $('#meet');
+const Device = window.PixelDevice ? window.PixelDevice.init(meetSec) : null;
 function sizeTrack() {
   const extra = Math.max(0, track.scrollWidth - innerWidth);
-  trackSec.style.height = (innerHeight + extra + innerHeight * 0.25) + 'px';
+  trackSec.style.height = (innerHeight * 1.25 + extra) + 'px';      // fallback for browsers without lvh
+  trackSec.style.height = 'calc(125lvh + ' + extra + 'px)';
 }
 
 /* ---------- one animation loop for everything scroll-driven ---------- */
-let vh = innerHeight;
+let vh = innerHeight, lastY = scrollY;
 function frame(t) {
   const y = scrollY;
+  fastScroll = Math.abs(y - lastY) > 28; lastY = y;
   nav.classList.toggle('scrolled', y > 40);
   if (y < vh * 1.2) {
-    const k = clamp(y / vh);
+    const k = clamp(y / Math.max(vh, 700));
     heroInner.style.transform = 'translate3d(0,' + (y * 0.32).toFixed(1) + 'px,0) scale(' + (1 - k * 0.08).toFixed(4) + ')';
     heroInner.style.opacity = (1 - smooth(0.05, 0.75, k)).toFixed(3);
     if (Hero3D.ctl) Hero3D.ctl.setProgress(k);
@@ -2054,6 +2086,13 @@ function frame(t) {
     trackBar.style.setProperty('--p', tp.toFixed(4));
   }
   if (Device) Device.update(vh);
+  if (Voice.on && !fastScroll) {
+    for (const id of voiceInView) Voice.trigger(id);
+    if (Device && (Device.stage === 'typing' || Device.stage === 'thinking' || Device.stage === 'answer')) {
+      const mr = meetSec.getBoundingClientRect();
+      if (mr.top < vh / 2 && mr.bottom > vh / 2) Voice.trigger('meet');
+    }
+  }
   Voice.tick(t);
   requestAnimationFrame(frame);
 }
@@ -2072,7 +2111,8 @@ function sceneIntensity(vh) {
   }
   return 0.3;
 }
-function onResize() { vh = innerHeight; Reel.resize(); sizeTrack(); if (Device) Device.resize(); }
+let lastW = innerWidth;
+function onResize() { vh = innerHeight; Reel.resize(); if (innerWidth !== lastW) { lastW = innerWidth; sizeTrack(); } if (Device) Device.resize(); }
 addEventListener('resize', onResize);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeTrack);
 sizeTrack();

@@ -163,16 +163,27 @@
     if (!sec) return;
     var vw = els.stage.clientWidth || window.innerWidth || 1024;
     var sh = els.stage.clientHeight || window.innerHeight || 768;
-    var narrow = vw < 760;
+    var land = vw > sh && sh < 520;           // phone held sideways: fit below the nav, caption beside
+    var narrow = vw < 760 && !land;
     var s, cy, riseY, finalX = 0, finalRY, finalRX, finalS, capMode, capX, capY, capW;
+    var NAV = 72;
 
     if (narrow) {
-      var capSpace = Math.max(118, Math.min(150, sh * 0.16));
-      s = Math.min((sh - 72 - capSpace - 8) / H, (vw * 0.74) / W);
-      cy = (72 + (sh - capSpace)) / 2 - sh / 2;
+      // reserve room under the phone for the tallest caption at this width
+      capW = Math.min(520, vw - 32);
+      cls(els.caption, 'pp-below', true);
+      css(els.caption, '--pp-cap-w', Math.round(capW) + 'px');
+      var capH = els.caption.offsetHeight || 0;
+      var capSpace = Math.max(118, Math.min(sh * 0.3, capH + 18 + 14));
+      s = Math.min((sh - NAV - capSpace - 8) / H, (vw * 0.74) / W);
+      cy = (NAV + (sh - capSpace)) / 2 - sh / 2;
       finalRY = -12; finalRX = 3; finalS = 0.98;
+    } else if (land) {
+      s = Math.min((sh - NAV - 12) / H, (vw * 0.34) / W);
+      cy = NAV / 2 - 6 / 2;
+      finalRY = -12; finalRX = 3; finalS = 1;
     } else {
-      s = Math.min((sh * 0.78) / H, (vw * 0.4) / W, 1.35);
+      s = Math.min((sh * 0.78) / H, (sh - NAV - 16) / H, (vw * 0.4) / W, 1.35);
       cy = Math.min(14, sh * 0.02);
       finalRY = -16; finalRX = 3; finalS = 0.97;
     }
@@ -180,16 +191,23 @@
     riseY = sh * 0.62;
 
     var pw = W * s, ph = H * s;
+    // never let the top of the phone slide under the fixed nav
+    if (!narrow) cy = Math.max(cy, NAV + 8 - sh / 2 + ph / 2);
     var phoneLeftCentered = vw / 2 - pw / 2;
     var useCallouts = false;
-    if (!narrow) {
+    if (!narrow && !land) {
       // move the phone right for the callouts if there is room on the left
       var shift = RM ? 0 : Math.max(0, Math.min(vw * 0.17, pw * 0.62 + 40, vw / 2 - 36 - pw / 2));
       var leftRoom = (vw / 2 + shift) - pw * 0.5 - 60 - 24;
       if (leftRoom >= 210) { useCallouts = true; finalX = shift; }
     }
     // caption beside the phone if there is room, else under it
-    if (!narrow && phoneLeftCentered - 64 - 32 >= 230) {
+    if (land && phoneLeftCentered - 40 >= 160) {
+      capMode = 'side';
+      capW = Math.min(320, phoneLeftCentered - 40);
+      capX = phoneLeftCentered - 24 - capW;
+      capY = sh / 2 + cy;
+    } else if (!narrow && !land && phoneLeftCentered - 64 - 32 >= 230) {
       capMode = 'side';
       capW = Math.min(380, phoneLeftCentered - 64 - Math.max(32, vw * 0.05));
       capX = phoneLeftCentered - 64 - capW;
