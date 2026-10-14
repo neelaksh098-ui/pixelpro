@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Pixel Pro AI</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Introducing Pixel Pro AI: a free AI assistant with live web answers, voice, photos and three languages. Built in India by NeelOutLoud.">
+<meta name="description" content="Introducing Pixel Pro AI, a free AI assistant created by Neelaksh Naithani. Live web answers, voice, photos, and English, Hindi and many more languages.">
 <meta name="theme-color" content="#05070F">
 <meta property="og:title" content="Pixel Pro AI">
-<meta property="og:description" content="Ask anything. Get answers. A free AI assistant with live web answers, voice and three languages.">
+<meta property="og:description" content="Ask anything. Get answers. A free AI assistant created by Neelaksh Naithani.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect x='10.5' y='0' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3Crect x='0' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='10.5' width='9' height='9' rx='2' fill='%23FFB43A'/%3E%3Crect x='21' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='21' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Noto+Sans+Bengali:wght@500;700&family=Noto+Sans+Devanagari:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700;800&family=Noto+Sans+JP:wght@700&family=Mrs+Saint+Delafield&display=swap">
 <script>document.documentElement.classList.add('js')</script>
 <style>
 /* Layout: a cinematic launch reel. Full-bleed pinned chapters, type set huge on a left-anchored grid,
@@ -31,8 +31,8 @@
   --line:rgba(160,178,255,.13);
   --line-2:rgba(160,178,255,.24);
   --glass:rgba(10,14,32,.66);
-  --f-display:"Bricolage Grotesque","Noto Sans Devanagari","Noto Sans Bengali",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --f-body:"Geist","Noto Sans Devanagari","Noto Sans Bengali",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-display:"Bricolage Grotesque","Noto Sans Devanagari",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-body:"Geist","Noto Sans Devanagari",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --t-hero:clamp(3.5rem,14.5vw,11.5rem);
   --t-xl:clamp(2.5rem,6.4vw,5.4rem);
@@ -88,7 +88,9 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 /* ---------- intro gate ---------- */
 .gate{display:none}
 .js .gate{position:fixed;inset:0;z-index:150;display:grid;place-items:center;background:radial-gradient(120% 80% at 50% 110%,rgba(46,70,226,.35),transparent 60%),var(--void);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:max(24px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-bottom,0px));transition:opacity .9s var(--ease),visibility 0s .9s}
-.gate-inner{display:grid;justify-items:center;text-align:center;gap:20px;max-width:640px}
+.gate::before{content:"";position:absolute;left:50%;top:-20%;width:min(70vmin,620px);height:95%;transform:translateX(-50%);background:radial-gradient(ellipse 50% 60% at 50% 0%,rgba(120,146,255,.42),transparent 70%);filter:blur(24px);pointer-events:none;animation:beam 7s ease-in-out infinite alternate}
+@keyframes beam{to{opacity:.55;transform:translateX(-50%) scaleX(.82)}}
+.gate-inner{position:relative;display:grid;justify-items:center;text-align:center;gap:20px;max-width:640px}
 .gate .mark{--s:84px;margin-bottom:10px}
 .gate .mark i{animation:pop .7s cubic-bezier(.2,.8,.3,1.3) backwards}
 .gate .mark i:nth-child(2){animation-delay:.15s}.gate .mark i:nth-child(4){animation-delay:.3s}.gate .mark i:nth-child(6){animation-delay:.45s}.gate .mark i:nth-child(8){animation-delay:.6s}.gate .mark i:nth-child(5){animation-delay:.85s}
@@ -123,7 +125,7 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 @media (max-width:520px){.sound-btn .lbl{display:none}.nav .btn-sm{padding:0 14px}}
 
 /* ---------- hero ---------- */
-.hero{position:relative;min-height:100vh;min-height:100svh;display:grid;place-items:center;overflow:clip;isolation:isolate;padding-block:120px 96px}
+.hero{position:relative;min-height:100vh;min-height:100svh;display:grid;place-items:center;overflow:clip;isolation:isolate;padding-block:84px 76px}
 .hero-bg{position:absolute;inset:0;z-index:-1;pointer-events:none}
 .aurora{position:absolute;width:70vmax;height:70vmax;border-radius:50%;filter:blur(70px);opacity:.6;animation:drift 20s ease-in-out infinite alternate}
 .aurora.a1{background:radial-gradient(circle,rgba(46,70,226,.9),transparent 62%);top:-32vmax;left:-22vmax}
@@ -135,9 +137,19 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .sparks{position:absolute;inset:0}
 .sparks i{position:absolute;width:var(--z,4px);height:var(--z,4px);border-radius:1px;background:var(--c,var(--blue));opacity:0;animation:twinkle var(--d,5s) ease-in-out infinite var(--dl,0s);box-shadow:0 0 10px var(--c,var(--blue))}
 @keyframes twinkle{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:.9;transform:scale(1)}}
-.hero-inner{display:grid;justify-items:center;text-align:center;gap:24px;will-change:transform,opacity}
-.hero-title{font-size:var(--t-hero);font-weight:800;letter-spacing:-.06em;line-height:.86;padding-bottom:.06em}
-.hero-title .ai{display:inline-block}
+.hero-inner{display:grid;justify-items:center;text-align:center;gap:18px;will-change:transform,opacity}
+.hero-logo{position:relative;width:min(620px,100%);height:clamp(190px,30vh,330px);display:grid;place-items:center;margin-bottom:-6px}
+.hero-logo canvas{opacity:0;transition:opacity 1.2s var(--ease)}
+.hero-logo.is-3d canvas{opacity:1}
+.hero-fallback{--s:clamp(96px,14vh,140px);transition:opacity .8s var(--ease),transform .8s var(--ease);filter:drop-shadow(0 0 40px rgba(86,114,255,.45))}
+.hero-logo.is-3d .hero-fallback{opacity:0;transform:scale(.8)}
+.hero-title{font-size:clamp(3.3rem,11.5vw,9rem);font-weight:800;letter-spacing:-.06em;line-height:.9;padding-bottom:.08em;display:flex;flex-wrap:wrap;justify-content:center;column-gap:.22em}
+.metal{display:inline-block;padding-bottom:.06em;background-image:linear-gradient(100deg,transparent 0 40%,rgba(255,240,214,.95) 48%,rgba(255,190,90,.9) 50%,transparent 60%),linear-gradient(180deg,#FFFFFF 0%,#E6EBFB 36%,#B3BDE2 70%,#7E8AB8 100%);background-size:320% 100%,100% 100%;background-position:160% 0,0 0;background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:glint 8s var(--ease) infinite 3s}
+.metal.ai{background-image:linear-gradient(100deg,transparent 0 40%,rgba(255,255,255,.95) 50%,transparent 60%),linear-gradient(180deg,#FFF1D2 0%,#FFC867 45%,#E8921E 80%,#B8680C 100%)}
+@keyframes glint{0%{background-position:160% 0,0 0}38%,100%{background-position:-60% 0,0 0}}
+.hero-by{font:500 .72rem/1.3 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mist)}
+.hero-by b{color:var(--ink);font-weight:500}
+@media (max-height:760px) and (min-width:700px){.hero-copy{display:none}}
 .hero-sub{font:650 clamp(1.45rem,3.4vw,2.5rem)/1.1 var(--f-display);letter-spacing:-.035em;color:var(--mist)}
 .hero-sub b{color:var(--ink);font-weight:inherit}
 .hero-copy{max-width:44ch;color:var(--mist)}
@@ -148,7 +160,10 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 /* entrance after the gate */
 .js body:not(.entered) .hero-inner>*{opacity:0;transform:translateY(34px);filter:blur(14px)}
 .entered .hero-inner>*{transition:opacity 1.2s var(--ease),transform 1.2s var(--ease),filter 1.2s var(--ease)}
-.entered .hero-inner>:nth-child(2){transition-delay:.12s}.entered .hero-inner>:nth-child(3){transition-delay:.3s}.entered .hero-inner>:nth-child(4){transition-delay:.42s}.entered .hero-inner>:nth-child(5){transition-delay:.54s}
+.js body:not(.entered) .hero-title .metal{clip-path:inset(0 0 100% 0);transform:translateY(.4em)}
+.entered .hero-title .metal{transition:clip-path 1.4s var(--ease),transform 1.4s var(--ease);transition-delay:.35s}
+.entered .hero-title .metal.ai{transition-delay:.6s}
+.entered .hero-inner>:nth-child(2){transition-delay:.12s}.entered .hero-inner>:nth-child(3){transition-delay:.3s}.entered .hero-inner>:nth-child(4){transition-delay:.42s}.entered .hero-inner>:nth-child(5){transition-delay:.54s}.entered .hero-inner>:nth-child(6){transition-delay:.66s}.entered .hero-inner>:nth-child(7){transition-delay:.8s}
 
 /* ---------- the reel (scroll-driven film) ---------- */
 .reel{position:relative;height:560vh}
@@ -189,6 +204,15 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .statement-text .w{opacity:.14;transition:opacity .45s var(--ease),color .45s}
 .statement-text .w.lit{opacity:1}
 .statement-text .acc.lit{color:var(--spark)}
+
+/* ---------- galaxy title (scales down while pinned) ---------- */
+.zoomsec{position:relative;height:230vh}
+.zoom-sticky{position:sticky;top:0;height:100vh;height:100svh;display:grid;place-items:center;overflow:hidden}
+.zoom-box{display:grid;justify-items:center;gap:22px;text-align:center}
+.zoom-title{font:800 clamp(4.2rem,18vw,15rem)/.92 var(--f-display);letter-spacing:-.065em;white-space:nowrap;padding:0 .04em .06em;background-image:url("media/deep-field.jpg"),linear-gradient(105deg,#6F86FF 0%,#C7D2FF 42%,#FFFFFF 55%,#FFC977 100%);background-size:cover,100% 100%;background-position:center;background-blend-mode:screen;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;filter:saturate(1.15) drop-shadow(0 0 34px rgba(86,114,255,.3));transform-origin:50% 55%}
+.zoom-sub{display:grid;gap:10px;justify-items:center}
+.zoom-sub b{font:650 var(--t-m)/1.1 var(--f-display);letter-spacing:-.03em;color:var(--ink)}
+.zoom-sub b em{font-style:normal;color:var(--spark)}
 
 /* ---------- section scaffolding ---------- */
 .section{position:relative;padding-block:clamp(96px,13vw,170px)}
@@ -238,7 +262,6 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .wave i{width:3px;border-radius:2px;background:linear-gradient(var(--spark),var(--blue));height:10%;animation:wv var(--d,1s) ease-in-out infinite alternate var(--dl,0s)}
 @keyframes wv{to{height:var(--h,80%)}}
 .transcript{font-size:.875rem;color:var(--ink-2);text-align:center}
-.transcript span{color:var(--spark);font-family:"Noto Sans Bengali",var(--f-body)}
 /* photo */
 .photo{position:relative;aspect-ratio:4/3;max-width:100%;border-radius:18px;overflow:hidden;background:radial-gradient(circle at 68% 42%,#FFD27A 0 7%,rgba(255,180,58,.6) 8%,transparent 22%),linear-gradient(180deg,#24357F 0%,#7B5BB0 44%,#F29A5B 68%,#2A2546 69%,#141A3A 100%)}
 .photo::before{content:"";position:absolute;left:-10%;right:-10%;bottom:0;height:42%;background:radial-gradient(60% 90% at 20% 100%,#0E1430 60%,transparent 61%),radial-gradient(70% 80% at 85% 100%,#1A1F45 60%,transparent 61%)}
@@ -277,6 +300,8 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .pcard.hot{background:linear-gradient(160deg,rgba(255,180,58,.24),rgba(10,14,32,.92) 60%);box-shadow:0 0 0 1px rgba(255,180,58,.35) inset}
 .pcard .eyebrow{color:var(--spark)}
 .pcard q{font:650 clamp(1.45rem,2.6vw,2rem)/1.1 var(--f-display);letter-spacing:-.03em;quotes:"“" "”"}
+.pc-img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;border-radius:16px;box-shadow:0 0 0 1px var(--line) inset}
+.pcard-photo q{font-size:clamp(1.25rem,2vw,1.6rem)}
 .pcard .ask{margin-top:auto;display:flex;align-items:center;gap:10px;font-size:.875rem;color:var(--mist)}
 .pcard .ask .mark{--s:16px}
 .track-bar{height:2px;background:var(--line);border-radius:2px;overflow:hidden}
@@ -313,11 +338,25 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .greet span{grid-area:1/1;opacity:0;transform:translateY(40px) scale(.96);filter:blur(16px);transition:opacity .9s var(--ease),transform .9s var(--ease),filter .9s var(--ease)}
 .greet span.on{opacity:1;transform:none;filter:none}
 .greet span[lang="hi"]{font-family:"Noto Sans Devanagari",var(--f-display);letter-spacing:-.02em}
-.greet span[lang="bn"]{font-family:"Noto Sans Bengali",var(--f-display);letter-spacing:-.02em}
+.greet span[lang="ja"]{font-family:"Noto Sans JP",var(--f-display);letter-spacing:0}
 .lang-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:6px;border-radius:999px;box-shadow:0 0 0 1px var(--line-2) inset;background:rgba(255,255,255,.03)}
 .lang-pills span{padding:9px 18px;border-radius:999px;font-size:.9375rem;color:var(--mist);transition:background .5s,color .5s}
 .lang-pills span.on{background:var(--ink);color:var(--void)}
 .langs-copy{color:var(--mist);max-width:40ch;font-size:1.125rem}
+
+/* ---------- creator signature ---------- */
+.sign{text-align:center;overflow:clip}
+.sign-inner{display:grid;justify-items:center;gap:18px}
+.sign-line{font:650 clamp(1.5rem,3.6vw,2.6rem)/1.1 var(--f-display);letter-spacing:-.035em;color:var(--mist)}
+.signature{position:relative;margin:4px 0 2px;font:400 clamp(2.7rem,11.5vw,10rem)/1.2 "Mrs Saint Delafield","Brush Script MT",cursive;letter-spacing:0;padding:0 .2em;white-space:nowrap;max-width:100%}
+.sig-ink{display:inline-block;background:linear-gradient(100deg,#FFFFFF 0%,#FFE3AE 40%,#FFB43A 62%,#FFFFFF 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 22px rgba(255,180,58,.28))}
+.sig-pen{position:absolute;top:50%;left:var(--pen,100%);width:10px;height:10px;border-radius:50%;background:#FFF3DA;box-shadow:0 0 16px 6px rgba(255,180,58,.75),0 0 60px 20px rgba(255,180,58,.25);transform:translate(-50%,-50%);opacity:0;pointer-events:none}
+.js .signature.ready .sig-ink{clip-path:inset(-20% 100% -20% 0)}
+.js .signature.writing .sig-ink{clip-path:inset(-20% 0 -20% 0);transition:clip-path 2.6s cubic-bezier(.45,.05,.3,1)}
+.js .signature.writing .sig-pen{animation:pen 2.6s cubic-bezier(.45,.05,.3,1) forwards}
+@keyframes pen{0%{left:6%;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:96%;opacity:0}}
+.sign-in{color:var(--ink)}
+.sign-copy{color:var(--mist);max-width:44ch}
 
 /* ---------- final call ---------- */
 .cta{position:relative;overflow:clip;isolation:isolate;text-align:center;padding-block:clamp(120px,18vw,220px)}
@@ -402,8 +441,8 @@ details.st-group[open] summary{margin-bottom:6px}
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
   <div class="gate-inner">
     <div class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <p class="eyebrow">NeelOutLoud presents</p>
-    <h1 id="gateTitle" class="shine">Pixel Pro AI</h1>
+    <p class="eyebrow">Neelaksh Naithani presents</p>
+    <h1 id="gateTitle"><span class="metal">Pixel Pro</span> <span class="metal ai">AI</span></h1>
     <p class="gate-copy">A short film you play by scrolling. Pixel Pro tells its own story, so turn your sound on.</p>
     <div class="gate-actions">
       <button class="btn btn-primary" id="enterSound" type="button">
@@ -449,10 +488,13 @@ details.st-group[open] summary{margin-bottom:6px}
     <div class="sparks" id="sparks"></div>
   </div>
   <div class="wrap hero-inner" id="heroInner">
+    <div class="hero-logo" id="heroLogo" aria-hidden="true">
+      <span class="mark hero-fallback"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
     <p class="eyebrow">Introducing</p>
-    <h1 class="hero-title shine">Pixel Pro <span class="ai">AI</span></h1>
+    <h1 class="hero-title"><span class="metal">Pixel Pro</span><span class="metal ai">AI</span></h1>
     <p class="hero-sub">Ask anything. <b>Get answers.</b></p>
-    <p class="hero-copy">A free AI assistant that searches the live web, listens when you speak, looks at your photos and answers in English, हिंदी and বাংলা.</p>
+    <p class="hero-copy">A free AI assistant that searches the live web, listens when you speak, looks at your photos and answers in English, हिंदी and many more languages.</p>
     <div class="ctas">
       <a class="btn btn-primary" data-app href="#start">Try Pixel Pro
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -462,6 +504,7 @@ details.st-group[open] summary{margin-bottom:6px}
         Play the film
       </a>
     </div>
+    <p class="hero-by">Created by <b>Neelaksh Naithani</b></p>
   </div>
   <div class="scroll-cue" aria-hidden="true">Scroll<span></span></div>
 </section>
@@ -498,7 +541,7 @@ details.st-group[open] summary{margin-bottom:6px}
           <div class="cap" data-cap="0.90,0.95,2,3">
             <p class="eyebrow">Chapter 4 · Pixel Pro</p>
             <h2>This is Pixel Pro.</h2>
-            <p>Your AI assistant from NeelOutLoud. Free to use, with no sign-up.</p>
+            <p>Created by Neelaksh Naithani. Free to use, with no sign-up.</p>
           </div>
         </div>
       </div>
@@ -510,10 +553,26 @@ details.st-group[open] summary{margin-bottom:6px}
 <section class="statement" id="statement">
   <div class="statement-sticky">
     <div class="wrap">
-      <p class="statement-text" id="statementText">Pixel Pro reads the live web, listens when you speak, looks at your photos and answers in English, <span class="acc">हिंदी</span> and <span class="acc">বাংলা</span>. Free for everyone, with nothing to sign up for.</p>
+      <p class="statement-text" id="statementText">Pixel Pro reads the live web, listens when you speak, looks at your photos and answers in English, <span class="acc">हिंदी</span> and almost any language you ask in. Free for everyone, with nothing to sign up for.</p>
     </div>
   </div>
 </section>
+
+<!-- ============ GALAXY TITLE ============ -->
+<section class="zoomsec" id="zoom" aria-label="Pixel Pro">
+  <div class="zoom-sticky">
+    <div class="wrap zoom-box">
+      <p class="zoom-title" id="zoomTitle">Pixel Pro</p>
+      <div class="zoom-sub" id="zoomSub">
+        <b>Your AI assistant. <em>Created by Neelaksh Naithani.</em></b>
+        <span class="eyebrow">Free · Live web · Voice · Photos</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PHONE SHOWCASE ============ -->
+<!--MEET-->
 
 <!-- ============ FEATURES ============ -->
 <section class="section" id="features">
@@ -544,7 +603,7 @@ details.st-group[open] summary{margin-bottom:6px}
         <div class="viz vv" aria-hidden="true">
           <div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
           <div class="wave" id="wave"></div>
-          <p class="transcript">“Good morning in Bengali?” → <span>শুভ সকাল</span></p>
+          <p class="transcript">“Good morning in Hindi?” → <span lang="hi">सुप्रभात</span></p>
         </div>
       </article>
       <article class="card c-photo reveal" data-voice="photos">
@@ -558,7 +617,7 @@ details.st-group[open] summary{margin-bottom:6px}
       <article class="card c-news reveal" style="--dl:.1s">
         <p class="eyebrow">Headlines <span class="live">LIVE</span></p>
         <h3>Today's news, in your language.</h3>
-        <p>A live ticker of top stories in English, हिंदी or বাংলা. Tap a headline to ask about it.</p>
+        <p>A live ticker of top stories in English or हिंदी. Tap a headline to ask about it.</p>
         <div class="viz ticker" aria-hidden="true">
           <div class="tk-row" style="--d:38s">
             <span class="tk"><em>EN</em>Top stories, refreshed through the day</span>
@@ -616,9 +675,9 @@ details.st-group[open] summary{margin-bottom:6px}
       <article class="pcard"><p class="eyebrow">Homework</p><q>Explain photosynthesis in simple Hindi.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
       <article class="pcard hot"><p class="eyebrow">Travel</p><q>When should I visit Darjeeling, and what should I pack?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
       <article class="pcard"><p class="eyebrow">Work</p><q>Write a polite email asking for two days of leave.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
-      <article class="pcard"><p class="eyebrow">News</p><q>What are today's top headlines in বাংলা?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard"><p class="eyebrow">News</p><q>आज की बड़ी ख़बरें क्या हैं?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
       <article class="pcard hot"><p class="eyebrow">Kitchen</p><q>A 20-minute dinner with paneer and spinach.</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
-      <article class="pcard"><p class="eyebrow">Photos</p><q>What plant is this, and how often should I water it?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
+      <article class="pcard pcard-photo"><p class="eyebrow">Photos</p><img class="pc-img" src="media/cat.jpg" width="451" height="300" alt="A striped tabby cat with green eyes looking at the camera" loading="lazy"><q>What kind of cat is this?</q><p class="ask"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Ask Pixel Pro</p></article>
     </div>
     <div class="wrap"><div class="track-bar" id="trackBar"><i></i></div></div>
   </div>
@@ -661,13 +720,28 @@ details.st-group[open] summary{margin-bottom:6px}
 <section class="section langs" id="languages" data-voice="languages">
   <div class="wrap langs-inner">
     <p class="eyebrow">Speaks your language</p>
-    <div class="greet" id="greet" aria-label="Hello, Namaste, Nomoskar">
+    <div class="greet" id="greet" aria-label="Hello, in English, Hindi and many other languages">
       <span class="on shine" lang="en" aria-hidden="true">Hello</span>
       <span class="shine" lang="hi" aria-hidden="true">नमस्ते</span>
-      <span class="shine" lang="bn" aria-hidden="true">নমস্কার</span>
+      <span class="shine" lang="es" aria-hidden="true">Hola</span>
+      <span class="shine" lang="fr" aria-hidden="true">Bonjour</span>
+      <span class="shine" lang="ja" aria-hidden="true">こんにちは</span>
+      <span class="shine" lang="it" aria-hidden="true">Ciao</span>
+      <span class="shine" lang="de" aria-hidden="true">Hallo</span>
     </div>
-    <div class="lang-pills" id="langPills" aria-hidden="true"><span class="on">English</span><span lang="hi">हिंदी</span><span lang="bn">বাংলা</span></div>
-    <p class="langs-copy">Read the headlines and get answers in English, हिंदी or বাংলা. Switch whenever you like.</p>
+    <div class="lang-pills" id="langPills" aria-hidden="true"><span class="on">English</span><span lang="hi">हिंदी</span><span>Many more</span></div>
+    <p class="langs-copy">Ask in English, हिंदी or almost any other language, and Pixel Pro replies in the same language. Live headlines come in English and हिंदी.</p>
+  </div>
+</section>
+
+<!-- ============ CREATOR ============ -->
+<section class="section sign" id="creator" data-voice="creator" aria-labelledby="signTitle">
+  <div class="wrap sign-inner">
+    <p class="eyebrow">The creator</p>
+    <h2 class="sign-line" id="signTitle">Designed and created by</h2>
+    <p class="signature" id="signature"><span class="sig-ink">Neelaksh Naithani</span><i class="sig-pen" aria-hidden="true"></i></p>
+    <p class="sign-line sign-in">in India.</p>
+    <p class="sign-copy">Pixel Pro is an AI assistant by Neelaksh Naithani, built under NeelOutLoud Website Builders.</p>
   </div>
 </section>
 
@@ -693,7 +767,7 @@ details.st-group[open] summary{margin-bottom:6px}
       <button class="mark-btn" id="secretMark" type="button" aria-label="Pixel Pro">
         <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
       </button>
-      <span><b>Pixel Pro AI</b> · Built in India by NeelOutLoud Website Builders</span>
+      <span><b>Pixel Pro AI</b> · Created by Neelaksh Naithani · NeelOutLoud Website Builders</span>
     </div>
     <span>Pixel Pro can make mistakes. Check important info. © 2026</span>
   </div>
@@ -753,9 +827,11 @@ details.st-group[open] summary{margin-bottom:6px}
       </div>
 
       <div class="st-group">
-        <h3>Narration</h3>
+        <h3>Narration and music</h3>
         <div class="st-range"><label for="stVolume">Volume</label><output id="oVolume"></output><input id="stVolume" type="range" min="0" max="1" step="0.05"></div>
         <label class="st-check" for="stFallback"><input id="stFallback" type="checkbox"><span>Use the browser's built-in voice when no ElevenLabs voice is available</span></label>
+        <label class="st-check" for="stMusic"><input id="stMusic" type="checkbox"><span>Play background music with the sound on</span></label>
+        <div class="st-range"><label for="stMusicVol">Music volume</label><output id="oMusicVol"></output><input id="stMusicVol" type="range" min="0" max="1" step="0.05"></div>
         <div class="st-btns">
           <button class="st-btn" id="stReplay" type="button">Replay narration from the start</button>
         </div>
@@ -789,6 +865,7 @@ details.st-group[open] summary{margin-bottom:6px}
   </section>
 </div>
 
+<script src="js/music.js"></script>
 <script>
 (() => {
 'use strict';
@@ -804,22 +881,28 @@ const CONFIG = {
   scrollVideo: '',
   // Folder that holds the narration pack made in Voice Studio
   audioPack: 'audio/',
+  // Optional music file to loop instead of the built-in generated score, e.g. 'media/music.mp3'
+  music: '',
+  // 3D engine for the hero logo (loaded after the page is interactive)
+  threeUrl: 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
   // Default ElevenLabs voice (George) and model
   defaultVoiceId: 'JBFqnCBsd6RMkjVDRZzb',
   defaultModel: 'eleven_multilingual_v2',
   // What Pixel Pro says, and when (see data-voice attributes and the film chapters)
   lines: {
-    hello:     "Hi, I'm Pixel Pro. Scroll down, and I'll show you what I can do.",
+    hello:     "Hi, I'm Pixel Pro, created by Neelaksh Naithani. Scroll down, and I'll show you what I can do.",
     pixels:    "Every answer starts small. A single pixel of curiosity. A question you type, or say out loud.",
     web:       "When your question needs fresh facts, I search the live web, and I show you the sources I used.",
     voice:     "You can talk to me, and I'll talk back. Just ask out loud, and listen.",
+    meet:      "Here I am, on your phone. Show me a photo, ask a question, and I'll explain it, with sources you can check.",
     photos:    "Show me a photo, and I'll tell you what's in it.",
-    languages: "I speak English, Hindi and Bengali. Namaste. Nomoskar.",
     free:      "And I'm free. No sign up. No API key. Just ask.",
+    languages: "I speak English, Hindi, and many other languages. Namaste!",
+    creator:   "Pixel Pro was designed and created by Neelaksh Naithani, in India.",
     finale:    "This is Pixel Pro. Ask anything. Get answers."
   }
 };
-const LINE_ORDER = ['hello', 'pixels', 'web', 'voice', 'photos', 'languages', 'free', 'finale'];
+const LINE_ORDER = ['hello', 'pixels', 'web', 'voice', 'meet', 'photos', 'free', 'languages', 'creator', 'finale'];
 const DEFAULT_VOICES = [
   ['JBFqnCBsd6RMkjVDRZzb', 'George · warm British narrator'],
   ['nPczCjzI2devNBz1zQrb', 'Brian · deep American'],
@@ -864,7 +947,7 @@ function toast(msg, ms = 4600) {
 
 /* ---------- saved settings (this browser only) ---------- */
 const SKEY = 'pixelpro.studio.v1';
-const DEFAULTS = { apiKey: '', voiceId: CONFIG.defaultVoiceId, modelId: CONFIG.defaultModel, stability: 0.5, similarity: 0.8, style: 0.15, speed: 1, volume: 0.9, fallback: true, script: {} };
+const DEFAULTS = { apiKey: '', voiceId: CONFIG.defaultVoiceId, modelId: CONFIG.defaultModel, stability: 0.5, similarity: 0.8, style: 0.15, speed: 1, volume: 0.9, fallback: true, music: true, musicVolume: 0.55, script: {} };
 const S = Object.assign({}, DEFAULTS, store.get(SKEY, {}));
 const save = () => store.set(SKEY, S);
 
@@ -948,6 +1031,27 @@ const Eleven = {
     return 'ElevenLabs error ' + r.status + '.' + extra;
   }
 };
+
+/* =====================================================================
+   MUSIC: generated Apple-event-style score (js/music.js), ducked under the voice
+   ===================================================================== */
+const Music = (() => {
+  let on = false, lastI = -1, swelled = false;
+  const pm = () => window.PixelMusic || null;
+  return {
+    start() {
+      const m = pm(); if (!m || !S.music) return;
+      try { m.useFile(CONFIG.music || ''); m.setVolume(S.musicVolume); m.start(); on = true; } catch (e) {}
+    },
+    stop() { const m = pm(); on = false; if (m) try { m.stop(); } catch (e) {} },
+    duck(v) { const m = pm(); if (m) try { m.setDuck(v); } catch (e) {} },
+    volume(v) { const m = pm(); if (m) try { m.setVolume(v); } catch (e) {} },
+    intensity(x) { const m = pm(); if (!m || !on || Math.abs(x - lastI) < 0.01) return; lastI = x; try { m.setIntensity(x); } catch (e) {} },
+    swell() { const m = pm(); if (!m || !on || swelled) return; swelled = true; try { m.swell(); } catch (e) {} },
+    level() { const m = pm(); try { return m && on ? m.level() || 0 : 0; } catch (e) { return 0; } },
+    get on() { return on; }
+  };
+})();
 
 /* =====================================================================
    VOICE: narration queue, ElevenLabs → audio pack → browser voice
@@ -1059,6 +1163,7 @@ const Voice = (() => {
     if (!on || current !== id) { if (current === id) current = null; return; }
     if (!src) { finish(); return; }
     showPill(src.text);
+    Music.duck(true);
     if (src.kind === 'audio') {
       env = src.env;
       audio.onended = finish; audio.onerror = finish;
@@ -1093,7 +1198,7 @@ const Voice = (() => {
   function finish() {
     clearTimeout(safety);
     env = null; tts = false; current = null;
-    hidePill();
+    hidePill(); Music.duck(false);
     if (pending && on) { const p = pending; pending = null; setTimeout(() => play(p), 420); }
   }
 
@@ -1113,7 +1218,7 @@ const Voice = (() => {
       pending = null;
       try { audio.pause(); } catch (e) {}
       try { speechSynthesis.cancel(); } catch (e) {}
-      clearTimeout(safety); env = null; tts = false; current = null; hidePill();
+      clearTimeout(safety); env = null; tts = false; current = null; hidePill(); Music.duck(false);
     }
     btn.setAttribute('aria-pressed', String(v));
     lbl.textContent = v ? 'Sound on' : 'Sound off';
@@ -1157,7 +1262,7 @@ const Voice = (() => {
       const blob = await cachedEleven(text);
       const a = await asAudio(blob, text);
       setOn(true); pending = null; current = 'test'; played.add('hello');
-      showPill(text); env = a.env;
+      showPill(text); env = a.env; Music.duck(true);
       audio.onended = finish; audio.onerror = finish; audio.src = a.url; audio.volume = S.volume;
       await audio.play();
     }
@@ -1215,6 +1320,7 @@ const Reel = (() => {
     setC(col[RG], j, rk[j] === 0 ? (Math.random() < .8 ? PAL.spark : PAL.white) : rk[j] === 1 ? PAL.blue : (Math.random() < .5 ? PAL.deep : PAL.ice));
   }
 
+  const deep = new Image(); deep.decoding = 'async'; deep.src = 'media/deep-field.jpg';
   let W = 0, H = 0, DPR = 1, S = 1, CX = 0, CY = 0, target = 0, p = 0, visible = false, lastTC = '', fired = new Set(), useVid = false;
   const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
   const o = { x: 0, y: 0, z: 0, s: 1, a: 1 };
@@ -1286,7 +1392,7 @@ const Reel = (() => {
   }
 
   function draw(t) {
-    const lvl = Math.max(Voice.level, 0.18 + 0.12 * Math.sin(t * 0.0023));
+    const lvl = Math.max(Voice.level, Music.level() * 0.9, 0.18 + 0.12 * Math.sin(t * 0.0023));
     const [A, B, segT, kIdx] = segment(p);
     const morph = A !== B;
     const dir = kIdx % 4 < 2 ? 1 : -1;
@@ -1296,6 +1402,13 @@ const Reel = (() => {
 
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#05070F'; ctx.fillRect(0, 0, W, H);
+    // the real Hubble deep field fades in behind the scattered pixels and the globe
+    const da = 0.16 * w[SC] + 0.42 * w[SP] + 0.1 * w[RG];
+    if (da > 0.01 && deep.complete && deep.naturalWidth) {
+      const z = (Math.max(W / deep.naturalWidth, H / deep.naturalHeight)) * (1.08 + p * 0.25);
+      const dw = deep.naturalWidth * z, dh = deep.naturalHeight * z;
+      ctx.globalAlpha = da; ctx.drawImage(deep, (W - dw) / 2, (H - dh) / 2, dw, dh); ctx.globalAlpha = 1;
+    }
     ctx.globalCompositeOperation = 'lighter';
     glow(CX, CY, S * 1.9, '70,96,255', 0.2 * wMark + 0.16 * w[SP] + 0.12 * w[RG] + 0.06 * w[SC]);
     glow(CX, CY, S * 0.7, '255,180,58', 0.26 * w[MK] + 0.36 * w[MK2]);
@@ -1422,14 +1535,14 @@ const Studio = (() => {
     if (built) return; built = true;
     fillVoices();
     f('stKey').value = S.apiKey; f('stVoiceId').value = S.voiceId; f('stModel').value = S.modelId; f('stFallback').checked = S.fallback;
-    const ranges = [['stStability', 'stability', 'oStability'], ['stSimilarity', 'similarity', 'oSimilarity'], ['stStyle', 'style', 'oStyle'], ['stSpeed', 'speed', 'oSpeed'], ['stVolume', 'volume', 'oVolume']];
+    const ranges = [['stStability', 'stability', 'oStability'], ['stSimilarity', 'similarity', 'oSimilarity'], ['stStyle', 'style', 'oStyle'], ['stSpeed', 'speed', 'oSpeed'], ['stVolume', 'volume', 'oVolume'], ['stMusicVol', 'musicVolume', 'oMusicVol']];
     for (const [id, key, out] of ranges) {
       const inp = f(id); inp.value = S[key]; f(out).textContent = (+S[key]).toFixed(2);
       inp.addEventListener('input', () => { S[key] = +inp.value; f(out).textContent = (+inp.value).toFixed(2); save(); });
     }
     const box = f('stScript');
     LINE_ORDER.forEach(id => {
-      const lab = document.createElement('label'); lab.htmlFor = 'stLine-' + id; lab.textContent = { hello: 'After entering', pixels: 'Film · chapter 1', web: 'Film · chapter 2', voice: 'Film · chapter 3', photos: 'Photos card', languages: 'Languages section', free: 'Price card', finale: 'Final section' }[id];
+      const lab = document.createElement('label'); lab.htmlFor = 'stLine-' + id; lab.textContent = { hello: 'After entering', pixels: 'Film · chapter 1', web: 'Film · chapter 2', voice: 'Film · chapter 3', meet: 'Phone showcase', photos: 'Photos card', free: 'Price card', languages: 'Languages section', creator: 'Creator section', finale: 'Final section' }[id];
       const ta = document.createElement('textarea'); ta.id = 'stLine-' + id; ta.rows = 2; ta.value = Voice.scriptText(id);
       ta.addEventListener('input', () => { const v = ta.value.trim(); if (v && v !== CONFIG.lines[id]) S.script[id] = v; else delete S.script[id]; save(); });
       box.append(lab, ta);
@@ -1440,6 +1553,9 @@ const Studio = (() => {
     f('stVoiceId').addEventListener('change', e => { S.voiceId = e.target.value.trim(); save(); fillVoices(); Voice.forget(); });
     f('stModel').addEventListener('change', e => { S.modelId = e.target.value; save(); Voice.forget(); });
     f('stFallback').addEventListener('change', e => { S.fallback = e.target.checked; save(); Voice.forget(); mode(); });
+    f('stMusic').checked = S.music;
+    f('stMusic').addEventListener('change', e => { S.music = e.target.checked; save(); if (!S.music) Music.stop(); else if (Voice.on) Music.start(); });
+    f('stMusicVol').addEventListener('input', () => Music.volume(S.musicVolume));
     f('stLoadVoices').addEventListener('click', async e => {
       if (!S.apiKey) { status('Paste your API key first, then load your voices.', 'err'); return; }
       e.target.disabled = true; status('Loading your voices…');
@@ -1553,8 +1669,31 @@ function makeZip(files) {
    ===================================================================== */
 const gate = $('#gate'), nav = $('#nav'), heroInner = $('#heroInner');
 
+// 3D logo: load Three.js and js/hero3d.js after the page is interactive; the CSS logo stays if anything fails
+let entered = false;
+const Hero3D = (() => {
+  const box = $('#heroLogo');
+  let ctl = null;
+  const load = src => new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.async = true; el.onload = res; el.onerror = rej; document.head.appendChild(el); });
+  (async () => {
+    try {
+      if (!window.THREE) await load(CONFIG.threeUrl);
+      if (!window.PixelHero3D) await load('js/hero3d.js');
+      ctl = window.PixelHero3D ? window.PixelHero3D.mount(box, { reducedMotion: RM, dprCap: 2 }) : null;
+      if (!ctl) return;
+      await ctl.ready;
+      box.classList.add('is-3d');
+      if (entered) ctl.intro();
+    } catch (e) { ctl = null; }
+  })();
+  addEventListener('pointermove', e => { if (ctl && e.pointerType === 'mouse') ctl.setPointer(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5); }, { passive: true });
+  return { get ctl() { return ctl; } };
+})();
+
 function enter(withSound) {
-  if (withSound) { Voice.unlock(); Voice.setOn(true); }
+  entered = true;
+  if (Hero3D.ctl) Hero3D.ctl.intro();
+  if (withSound) { Voice.unlock(); Voice.setOn(true); Music.start(); }
   Reel.prime();
   gate.classList.add('leaving');
   document.body.classList.add('entered');
@@ -1566,8 +1705,8 @@ $('#enterSilent').addEventListener('click', () => enter(false));
 setTimeout(() => { if (!gate.hidden && !gate.classList.contains('leaving')) $('#enterSound').focus({ preventScroll: true }); }, 300);
 
 $('#soundBtn').addEventListener('click', () => {
-  if (Voice.on) { Voice.setOn(false); return; }
-  Voice.unlock(); Voice.setOn(true); Voice.prefetch();
+  if (Voice.on) { Voice.setOn(false); Music.stop(); return; }
+  Voice.unlock(); Voice.setOn(true); Music.start(); Voice.prefetch();
   if (!Voice.played.has('hello')) Voice.trigger('hello');
 });
 
@@ -1576,7 +1715,7 @@ function replayStory() {
   const r = $('#reel'); scrollTo({ top: r.offsetTop + 2, behavior: RM ? 'auto' : 'smooth' });
 }
 $('#replayStory').addEventListener('click', () => {
-  if (!Voice.on) { Voice.unlock(); Voice.setOn(true); }
+  if (!Voice.on) { Voice.unlock(); Voice.setOn(true); Music.start(); }
   replayStory();
 });
 
@@ -1643,6 +1782,15 @@ if ('IntersectionObserver' in window) {
   $$('[data-voice]').forEach(el => vo.observe(el));
 }
 
+// creator signature writes itself when it scrolls into view
+(() => {
+  const sig = $('#signature');
+  if (RM || !('IntersectionObserver' in window) || sig.getBoundingClientRect().top < innerHeight) return;
+  sig.classList.add('ready');
+  const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { sig.classList.add('writing'); io.disconnect(); } }, { threshold: 0.6 });
+  io.observe(sig);
+})();
+
 // demo chat: plays when it comes into view
 const Demo = (() => {
   const body = $('#chatBody'), original = body.innerHTML;
@@ -1687,12 +1835,13 @@ const Demo = (() => {
   setInterval(() => {
     if (!vis || RM) return;
     k = (k + 1) % g.length;
-    g.forEach((s, j) => s.classList.toggle('on', j === k)); pills.forEach((s, j) => s.classList.toggle('on', j === k));
-  }, 2300);
+    g.forEach((s, j) => s.classList.toggle('on', j === k)); pills.forEach((s, j) => s.classList.toggle('on', j === Math.min(k, 2)));
+  }, 1900);
 })();
 
 // prompt track: vertical scroll drives a sideways slide
 const trackSec = $('#prompts'), track = $('#track'), trackBar = $('#trackBar');
+const zoomSec = $('#zoom'), zoomTitle = $('#zoomTitle'), zoomSub = $('#zoomSub');
 function sizeTrack() {
   const extra = Math.max(0, track.scrollWidth - innerWidth);
   trackSec.style.height = (innerHeight + extra + innerHeight * 0.25) + 'px';
@@ -1707,13 +1856,25 @@ function frame(t) {
     const k = clamp(y / vh);
     heroInner.style.transform = 'translate3d(0,' + (y * 0.32).toFixed(1) + 'px,0) scale(' + (1 - k * 0.08).toFixed(4) + ')';
     heroInner.style.opacity = (1 - smooth(0.05, 0.75, k)).toFixed(3);
+    if (Hero3D.ctl) Hero3D.ctl.setProgress(k);
   }
+  if (Music.on) Music.intensity(sceneIntensity(vh));
   Reel.update(t, vh);
   const sr = $('#statement').getBoundingClientRect();
   if (sr.top < vh && sr.bottom > 0) {
     const sp = clamp((-sr.top + vh * 0.3) / (sr.height - vh * 0.7));
     const n = Math.floor(sp * stWords.length * 1.05);
     for (let k = 0; k < stWords.length; k++) stWords[k].classList.toggle('lit', k < n);
+  }
+  const zr = zoomSec.getBoundingClientRect();
+  if (zr.top < vh && zr.bottom > 0) {
+    const zp = clamp(-zr.top / Math.max(1, zr.height - vh));
+    const e = 1 - Math.pow(1 - clamp(zp / 0.62), 3);
+    zoomTitle.style.transform = 'scale(' + lerp(9, 1, e).toFixed(3) + ')';
+    zoomTitle.style.opacity = (smooth(0, 0.08, zp) * (1 - smooth(0.9, 1, zp) * 0.6)).toFixed(3);
+    const so = smooth(0.58, 0.78, zp);
+    zoomSub.style.opacity = so.toFixed(3);
+    zoomSub.style.transform = 'translateY(' + ((1 - so) * 24).toFixed(1) + 'px)';
   }
   const tr = trackSec.getBoundingClientRect();
   if (tr.top < vh && tr.bottom > 0) {
@@ -1724,6 +1885,21 @@ function frame(t) {
   }
   Voice.tick(t);
   requestAnimationFrame(frame);
+}
+// how full the score should be for whatever is on screen
+const SCENES = [['top', 0.15], ['reel', -1], ['statement', 0.55], ['zoom', 0.8], ['meet', 0.85], ['features', 0.68], ['prompts', 0.72], ['demo', 0.6], ['languages', 0.5], ['creator', 0.38], ['start', 1]];
+function sceneIntensity(vh) {
+  const mid = vh / 2;
+  for (const [id, val] of SCENES) {
+    const el = document.getElementById(id); if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (r.top <= mid && r.bottom > mid) {
+      if (id === 'reel') return 0.22 + 0.62 * clamp(-r.top / Math.max(1, r.height - vh));
+      if (id === 'start') Music.swell();
+      return val;
+    }
+  }
+  return 0.3;
 }
 function onResize() { vh = innerHeight; Reel.resize(); sizeTrack(); }
 addEventListener('resize', onResize);
