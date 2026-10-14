@@ -288,7 +288,7 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .msg.me{align-self:flex-end;padding:12px 16px;border-radius:18px 18px 4px 18px;background:var(--deep);color:var(--ink)}
 .msg.bot{align-self:flex-start;color:var(--ink-2);display:grid;gap:8px}
 .msg.bot b{color:var(--ink)}
-.msg.pop{animation:chip .5s var(--ease) backwards}
+.msg.pop,#chatBody .pop{animation:chip .5s var(--ease) backwards}
 .dots{display:inline-flex;gap:5px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.06);align-self:flex-start}
 .dots i{width:7px;height:7px;border-radius:50%;background:var(--mist);animation:dot 1.2s ease-in-out infinite}
 .dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
@@ -773,7 +773,7 @@ details.st-group[open] summary{margin-bottom:6px}
       <article class="card c-news reveal" style="--dl:.1s">
         <p class="eyebrow">Headlines <span class="live">LIVE</span></p>
         <h3>Today's news, in your language.</h3>
-        <p>A live ticker of top stories in English or <span lang="hi">हिंदी</span>. Tap a headline to ask about it.</p>
+        <p>Ask for today's news in English or <span lang="hi">हिंदी</span>. Pixel Pro searches the live web and links every source.</p>
         <div class="viz">
           <div class="pp-ui pp-shot pp-shot--news">
   <div class="pp-top">
@@ -917,7 +917,7 @@ details.st-group[open] summary{margin-bottom:6px}
       <span class="shine" lang="de" aria-hidden="true">Hallo</span>
     </div>
     <div class="lang-pills" id="langPills" aria-hidden="true"><span class="on">English</span><span lang="hi">हिंदी</span><span>Many more</span></div>
-    <p class="langs-copy">Ask in English, <span lang="hi">हिंदी</span> or almost any other language, and Pixel Pro replies in the same language. Live headlines come in English and <span lang="hi">हिंदी</span>.</p>
+    <p class="langs-copy">Ask in English, <span lang="hi">हिंदी</span> or almost any other language, and Pixel Pro replies in the same language. Ask for the news in English or <span lang="hi">हिंदी</span> too.</p>
   </div>
 </section>
 
@@ -1018,6 +1018,7 @@ details.st-group[open] summary{margin-bottom:6px}
         <div class="st-range"><label for="stVolume">Volume</label><output id="oVolume"></output><input id="stVolume" type="range" min="0" max="1" step="0.05"></div>
         <label class="st-check" for="stFallback"><input id="stFallback" type="checkbox"><span>Use the browser's built-in voice when no ElevenLabs voice is available</span></label>
         <label class="st-check" for="stMusic"><input id="stMusic" type="checkbox"><span>Play background music with the sound on</span></label>
+        <label class="st-check" for="stHaptics"><input id="stHaptics" type="checkbox"><span>Vibrate on phones as text appears (haptics)</span></label>
         <div class="st-range"><label for="stMusicVol">Music volume</label><output id="oMusicVol"></output><input id="stMusicVol" type="range" min="0" max="1" step="0.05"></div>
         <div class="st-btns">
           <button class="st-btn" id="stReplay" type="button">Replay narration from the start</button>
@@ -1063,7 +1064,7 @@ details.st-group[open] summary{margin-bottom:6px}
    ===================================================================== */
 const CONFIG = {
   // Link for every "Try Pixel Pro" button, e.g. 'https://your-pixelpro.netlify.app'
-  appUrl: '',
+  appUrl: 'https://pixelpro7.netlify.app',
   // Optional real video to scrub while scrolling the film section, e.g. 'media/film.mp4'.
   // Leave empty to use the built-in pixel animation.
   scrollVideo: '',
@@ -1138,7 +1139,7 @@ function toast(msg, ms = 4600) {
 
 /* ---------- saved settings (this browser only) ---------- */
 const SKEY = 'pixelpro.studio.v1';
-const DEFAULTS = { apiKey: '', voiceId: CONFIG.defaultVoiceId, modelId: CONFIG.defaultModel, stability: 0.5, similarity: 0.8, style: 0.15, speed: 1, volume: 0.9, fallback: true, music: true, musicVolume: 0.55, script: {} };
+const DEFAULTS = { apiKey: '', voiceId: CONFIG.defaultVoiceId, modelId: CONFIG.defaultModel, stability: 0.5, similarity: 0.8, style: 0.15, speed: 1, volume: 0.9, fallback: true, music: true, musicVolume: 0.55, haptics: true, script: {} };
 const S = Object.assign({}, DEFAULTS, store.get(SKEY, {}));
 const save = () => store.set(SKEY, S);
 
@@ -1224,6 +1225,74 @@ const Eleven = {
 };
 
 /* =====================================================================
+   HAPTICS: the same patterns as the Pixel Pro app. Android uses the
+   vibration API; iPhone (Safari 18+) gets a Taptic tap from a hidden
+   switch control. Nothing buzzes before the first tap, with haptics off
+   in Voice Studio, or for people who ask the OS to reduce motion.
+   ===================================================================== */
+const Haptics = (() => {
+  const P = { tap: 26, light: 18, select: [22, 45, 30], send: 32, start: 28, done: [34, 70, 34], typed: [18, 40, 26], thud: 40, impact: [70, 50, 110], tick: 12 };
+  const IOS_TAPS = { select: 2, done: 2, typed: 2, impact: 3 };
+  const canVibrate = typeof navigator.vibrate === 'function';
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && 'ontouchend' in document);
+  const iosSwitch = (() => { if (!isIOS) return false; try { const c = document.createElement('input'); c.type = 'checkbox'; return 'switch' in c; } catch (e) { return false; } })();
+  let label = null, armed = false, last = 0, n = 0;
+  function iosLabel() {
+    if (label) return label;
+    label = document.createElement('label');
+    label.setAttribute('aria-hidden', 'true');
+    label.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('switch', ''); cb.tabIndex = -1;
+    label.appendChild(cb); document.body.appendChild(label);
+    return label;
+  }
+  const live = () => armed && S.haptics && !RM;
+  function ios(times) { const l = iosLabel(); for (let i = 0; i < times; i++) setTimeout(() => { try { l.click(); } catch (e) {} }, i * 70); }
+  function play(kind) {
+    if (!live()) return;
+    if (canVibrate) { try { navigator.vibrate(P[kind] != null ? P[kind] : P.tap); } catch (e) {} return; }
+    if (iosSwitch) ios(IOS_TAPS[kind] || 1);
+  }
+  // a light texture while text appears: one short tick per word or character, rate-limited
+  function tick() {
+    if (!live()) return;
+    const now = performance.now(); if (now - last < 45) return; last = now;
+    if (canVibrate) { try { navigator.vibrate(P.tick); } catch (e) {} return; }
+    if (iosSwitch && (++n % 2 === 0)) ios(1);
+  }
+  function arm() { armed = true; if (iosSwitch) iosLabel(); if (canVibrate) try { navigator.vibrate(0); } catch (e) {} }
+  return { play, tick, arm, get supported() { return canVibrate || iosSwitch; } };
+})();
+
+/* =====================================================================
+   TILT: the phone's gyroscope steers the 3D logo and the film's pixels
+   ===================================================================== */
+const Tilt = (() => {
+  let active = false, c0 = null, x = 0, y = 0;
+  function onOrient(e) {
+    if (e.beta == null || e.gamma == null) return;
+    const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    let sx = e.gamma, sy = e.beta;                       // portrait: left-right, front-back
+    if (ang === 90) { sx = e.beta; sy = -e.gamma; }
+    else if (ang === -90 || ang === 270) { sx = -e.beta; sy = e.gamma; }
+    else if (ang === 180) { sx = -e.gamma; sy = -e.beta; }
+    if (!c0) c0 = { x: sx, y: sy };
+    c0.x += (sx - c0.x) * 0.004; c0.y += (sy - c0.y) * 0.004;   // slowly re-centre on however the phone is held
+    x = clamp((sx - c0.x) / 38, -0.5, 0.5); y = clamp((sy - c0.y) / 38, -0.5, 0.5);
+    active = true;
+  }
+  // call from a tap: iPhone asks for motion permission here
+  function start() {
+    const D = window.DeviceOrientationEvent;
+    if (!D || !matchMedia('(pointer: coarse)').matches) return;
+    const listen = () => addEventListener('deviceorientation', onOrient, { passive: true });
+    if (typeof D.requestPermission === 'function') D.requestPermission().then(r => { if (r === 'granted') listen(); }).catch(() => {});
+    else listen();
+  }
+  return { start, get active() { return active; }, get x() { return x; }, get y() { return y; } };
+})();
+
+/* =====================================================================
    MUSIC: generated Apple-event-style score (js/music.js), ducked under the voice
    ===================================================================== */
 const Music = (() => {
@@ -1238,7 +1307,10 @@ const Music = (() => {
     duck(v) { const m = pm(); if (m) try { m.setDuck(v); } catch (e) {} },
     volume(v) { const m = pm(); if (m) try { m.setVolume(v); } catch (e) {} },
     intensity(x) { const m = pm(); if (!m || !on || Math.abs(x - lastI) < 0.01) return; lastI = x; try { m.setIntensity(x); } catch (e) {} },
-    swell() { const m = pm(); if (!m || !on || swelled) return; swelled = true; try { m.swell(); } catch (e) {} },
+    swell() {
+      const m = pm(); if (!m || !on || swelled) return; swelled = true;
+      try { const t = m.swell(); if (t > 0) setTimeout(() => Haptics.play('impact'), t * 1000); } catch (e) {}
+    },
     level() { const m = pm(); try { return m && on ? m.level() || 0 : 0; } catch (e) { return 0; } },
     get on() { return on; }
   };
@@ -1441,6 +1513,7 @@ const Voice = (() => {
     level += (raw - level) * 0.35;
     pill.style.setProperty('--l', level.toFixed(3));
     if (wi !== lit && words.length) {
+      if (wi > lit && wi >= 0) Haptics.tick();
       lit = wi;
       for (let i = 0; i < words.length; i++) words[i].classList.toggle('s', i <= wi);
     }
@@ -1683,6 +1756,8 @@ const Reel = (() => {
     for (const c of caps) {
       const [a0, a1, b0, b1] = c.w;
       const v = smooth(a0, a1, p) * (1 - smooth(b0, b1, p));
+      if (v > 0.6 && !(c.v > 0.6) && target > p - 0.001) Haptics.play('typed');
+      c.v = v;
       c.el.style.opacity = v.toFixed(3);
       c.el.style.transform = 'translate3d(0,' + ((1 - v) * 28).toFixed(1) + 'px,0)';
       c.el.style.visibility = v < 0.01 ? 'hidden' : 'visible';
@@ -1699,9 +1774,10 @@ const Reel = (() => {
   }
 
   addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { mouse.tx = e.clientX / innerWidth - 0.5; mouse.ty = e.clientY / innerHeight - 0.5; } }, { passive: true });
+  function setTilt(x, y) { mouse.tx = x; mouse.ty = y; }
   resize();
   if (CONFIG.scrollVideo) useVideo(CONFIG.scrollVideo);
-  return { resize, update, useVideo, useCanvas, resetTriggers() { fired = new Set(); }, prime() { if (useVid) { const pr = video.play(); if (pr && pr.then) pr.then(() => video.pause()).catch(() => {}); } } };
+  return { resize, update, useVideo, useCanvas, setTilt, resetTriggers() { fired = new Set(); }, prime() { if (useVid) { const pr = video.play(); if (pr && pr.then) pr.then(() => video.pause()).catch(() => {}); } } };
 })();
 
 /* =====================================================================
@@ -1754,6 +1830,8 @@ const Studio = (() => {
     f('stVoiceId').addEventListener('change', e => { S.voiceId = e.target.value.trim(); save(); fillVoices(); Voice.forget(); });
     f('stModel').addEventListener('change', e => { S.modelId = e.target.value; save(); Voice.forget(); });
     f('stFallback').addEventListener('change', e => { S.fallback = e.target.checked; save(); Voice.forget(); mode(); });
+    f('stHaptics').checked = S.haptics;
+    f('stHaptics').addEventListener('change', e => { S.haptics = e.target.checked; save(); if (S.haptics) Haptics.play('select'); });
     f('stMusic').checked = S.music;
     f('stMusic').addEventListener('change', e => { S.music = e.target.checked; save(); if (!S.music) Music.stop(); else if (Voice.on) Music.start(); });
     f('stMusicVol').addEventListener('input', () => Music.volume(S.musicVolume));
@@ -1898,6 +1976,11 @@ const Hero3D = (() => {
 
 function enter(withSound) {
   entered = true;
+  Haptics.arm(); Haptics.play('select'); Tilt.start();
+  if (!RM) {   // the five cubes lock in, then the amber centre ignites (timed to js/hero3d.js intro)
+    [620, 720, 820, 920].forEach(ms => setTimeout(() => { if (Hero3D.ctl) Haptics.play('light'); }, ms));
+    setTimeout(() => { if (Hero3D.ctl) Haptics.play('done'); }, 1480);
+  }
   if (scrollY > 0) { const root = document.documentElement, sb = root.style.scrollBehavior; root.style.scrollBehavior = 'auto'; scrollTo(0, 0); root.style.scrollBehavior = sb; }
   if (Hero3D.ctl) Hero3D.ctl.intro();
   if (withSound) { Voice.unlock(); Voice.setOn(true); Music.start(); }
@@ -1907,6 +1990,7 @@ function enter(withSound) {
   setTimeout(() => { gate.hidden = true; }, 950);
   if (withSound) { setTimeout(() => Voice.trigger('hello'), 900); Voice.prefetch(); }
 }
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.btn,.st-btn,.sound-btn,.st-close')) Haptics.play('tap'); }, true);
 $('#enterSound').addEventListener('click', () => enter(true));
 $('#enterSilent').addEventListener('click', () => enter(false));
 setTimeout(() => { if (!gate.hidden && !gate.classList.contains('leaving')) $('#enterSound').focus({ preventScroll: true }); }, 300);
@@ -1968,7 +2052,7 @@ $('#bento').addEventListener('pointermove', e => {
 
 // reveals: only for elements that start below the fold, so the first screen is complete at rest
 if ('IntersectionObserver' in window && !RM) {
-  const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }), { threshold: 0.15, rootMargin: '0px 0px -6% 0px' });
+  const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); if (en.target.classList.contains('card')) Haptics.play('light'); } }), { threshold: 0.15, rootMargin: '0px 0px -6% 0px' });
   $$('.reveal').forEach(el => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('reveal-ready'); io.observe(el); } else el.classList.add('in'); });
 } else $$('.reveal').forEach(el => el.classList.add('in'));
 
@@ -1984,7 +2068,12 @@ if ('IntersectionObserver' in window) {
   const sig = $('#signature');
   if (RM || !('IntersectionObserver' in window) || sig.getBoundingClientRect().top < innerHeight) return;
   sig.classList.add('ready');
-  const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { sig.classList.add('writing'); io.disconnect(); } }, { threshold: 0.6 });
+  const io = new IntersectionObserver(es => {
+    if (!es[0].isIntersecting) return;
+    sig.classList.add('writing'); io.disconnect();
+    const pen = setInterval(() => Haptics.tick(), 110);
+    setTimeout(() => { clearInterval(pen); Haptics.play('done'); }, 2600);
+  }, { threshold: 0.6 });
   io.observe(sig);
 })();
 
@@ -2001,23 +2090,36 @@ const Demo = (() => {
     body.textContent = '';
     if (RM) { body.innerHTML = original; return; }
     await wait(400); if (id !== running) return;
-    me.classList.add('pop'); body.appendChild(me);
+    me.classList.add('pop'); body.appendChild(me); Haptics.play('send');
     await wait(700); if (id !== running) return;
-    const dots = document.createElement('div'); dots.className = 'dots'; dots.innerHTML = '<i></i><i></i><i></i>'; body.appendChild(dots);
+    const thinkTpl = $('#demoThinking');
+    let dots;
+    if (thinkTpl && thinkTpl.content && thinkTpl.content.firstElementChild) dots = thinkTpl.content.firstElementChild.cloneNode(true);
+    else { dots = document.createElement('div'); dots.className = 'dots'; dots.innerHTML = '<i></i><i></i><i></i>'; }
+    body.appendChild(dots);
     await wait(1300); if (id !== running) return;
     dots.remove();
-    const b = document.createElement('div'); b.className = 'msg bot'; body.appendChild(b);
+    const b = document.createElement('div'); b.className = bot.className; body.appendChild(b);
+    let first = true;
     for (const part of parts) {
       if (id !== running) return;
       if (part.tagName === 'P') {
         const html = part.innerHTML, p = document.createElement('p'); b.appendChild(p);
         const tokens = html.split(/(<[^>]+>|\s+)/).filter(Boolean);
         let acc = '';
-        for (const tk of tokens) { acc += tk; if (!tk.startsWith('<')) { p.innerHTML = acc; await wait(28); if (id !== running) return; } }
+        for (const tk of tokens) {
+          acc += tk;
+          if (!tk.startsWith('<')) {
+            p.innerHTML = acc;
+            if (/\S/.test(tk)) { if (first) { first = false; Haptics.play('start'); } else Haptics.tick(); }
+            await wait(28); if (id !== running) return;
+          }
+        }
         p.innerHTML = html;
         await wait(160);
       } else { part.classList.add('pop'); b.appendChild(part); await wait(120); }
     }
+    Haptics.play('done');
   }
   const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => { if (es[0].isIntersecting && !seen) { seen = true; run(); } }, { threshold: 0.45 }) : null;
   if (io) io.observe(body);
@@ -2033,6 +2135,7 @@ const Demo = (() => {
     if (!vis || RM) return;
     k = (k + 1) % g.length;
     g.forEach((s, j) => s.classList.toggle('on', j === k)); pills.forEach((s, j) => s.classList.toggle('on', j === Math.min(k, 2)));
+    Haptics.play('light');
   }, 1900);
 })();
 
@@ -2042,6 +2145,10 @@ const zoomSec = $('#zoom'), zoomTitle = $('#zoomTitle'), zoomSub = $('#zoomSub')
 // phone showcase (js/device.js): driven from the same frame loop
 const meetSec = $('#meet');
 const Device = window.PixelDevice ? window.PixelDevice.init(meetSec) : null;
+if (Device && Device.onBeat) Device.onBeat(kind => {
+  if (kind === 'char' || kind === 'word') Haptics.tick();
+  else Haptics.play({ tap: 'light', attach: 'select', send: 'send', start: 'start', done: 'done' }[kind] || 'light');
+});
 function sizeTrack() {
   const extra = Math.max(0, track.scrollWidth - innerWidth);
   trackSec.style.height = (innerHeight * 1.25 + extra) + 'px';      // fallback for browsers without lvh
@@ -2049,7 +2156,7 @@ function sizeTrack() {
 }
 
 /* ---------- one animation loop for everything scroll-driven ---------- */
-let vh = innerHeight, lastY = scrollY;
+let vh = innerHeight, lastY = scrollY, stLit = 0, zoomDone = false;
 function frame(t) {
   const y = scrollY;
   fastScroll = Math.abs(y - lastY) > 28; lastY = y;
@@ -2061,11 +2168,14 @@ function frame(t) {
     if (Hero3D.ctl) Hero3D.ctl.setProgress(k);
   }
   if (Music.on) Music.intensity(sceneIntensity(vh));
+  if (Tilt.active) { if (Hero3D.ctl) Hero3D.ctl.setPointer(Tilt.x, Tilt.y); Reel.setTilt(Tilt.x, Tilt.y); }
   Reel.update(t, vh);
   const sr = $('#statement').getBoundingClientRect();
   if (sr.top < vh && sr.bottom > 0) {
     const sp = clamp((-sr.top + vh * 0.3) / (sr.height - vh * 0.7));
     const n = Math.floor(sp * stWords.length * 1.05);
+    if (n > stLit && n <= stWords.length) Haptics.tick();
+    stLit = n;
     for (let k = 0; k < stWords.length; k++) stWords[k].classList.toggle('lit', k < n);
   }
   const zr = zoomSec.getBoundingClientRect();
@@ -2073,6 +2183,7 @@ function frame(t) {
     const zp = clamp(-zr.top / Math.max(1, zr.height - vh));
     const e = 1 - Math.pow(1 - clamp(zp / 0.62), 3);
     zoomTitle.style.transform = 'scale(' + lerp(9, 1, e).toFixed(3) + ')';
+    if (zp > 0.62 && !zoomDone) { zoomDone = true; Haptics.play('done'); } else if (zp < 0.4) zoomDone = false;
     zoomTitle.style.opacity = (smooth(0, 0.08, zp) * (1 - smooth(0.9, 1, zp) * 0.6)).toFixed(3);
     const so = smooth(0.58, 0.78, zp);
     zoomSub.style.opacity = so.toFixed(3);
