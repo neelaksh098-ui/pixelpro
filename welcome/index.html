@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+/* Every path on this page is relative (css/, js/, media/, sw.js). Served as
+   "/welcome" without the slash, the browser resolves them against "/" and
+   the page arrives unstyled with no scripts. One redirect, before anything
+   loads, makes that impossible. */
+if (location.pathname === '/welcome') location.replace('/welcome/' + location.search + location.hash);
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Pixel Pro AI</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -1000,8 +1007,10 @@ details.st-group[open] summary{margin-bottom:6px}
    CONFIG: the only part you normally need to edit
    ===================================================================== */
 const CONFIG = {
-  // Link for every "Try Pixel Pro" button, e.g. 'https://your-pixelpro.netlify.app'
-  appUrl: 'https://pixelpro7.netlify.app',
+  // Link for every "Try Pixel Pro" button. The app lives on this same site, at
+  // the root; "?signin=1" tells it the visitor came from here to sign in, so
+  // it opens straight to the sign-in screen instead of sending them back.
+  appUrl: '/?signin=1',
   // Optional real video to scrub while scrolling the film section, e.g. 'media/film.mp4'.
   // Leave empty to use the built-in pixel animation.
   scrollVideo: '',
@@ -2250,7 +2259,14 @@ $('#replayStory').addEventListener('click', replayStory);
 
 // app links
 $$('[data-app]').forEach(a => {
-  if (CONFIG.appUrl) { a.href = CONFIG.appUrl; a.target = '_blank'; a.rel = 'noopener'; }
+  // Same site: open it in place, so signing in leads straight into the app.
+  // A different site still opens in a new tab, as before.
+  if (CONFIG.appUrl) {
+    a.href = CONFIG.appUrl;
+    let external = false;
+    try { external = new URL(CONFIG.appUrl, location.href).origin !== location.origin; } catch (e) {}
+    if (external) { a.target = '_blank'; a.rel = 'noopener'; }
+  }
   else a.addEventListener('click', e => { e.preventDefault(); toast('Pixel Pro is opening soon. Check back shortly.'); console.warn('Pixel Pro: set CONFIG.appUrl in index.html to link the Try Pixel Pro buttons.'); });
 });
 

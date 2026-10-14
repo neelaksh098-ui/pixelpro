@@ -72,3 +72,31 @@ with a one-tap "Open in Gmail", filled in.
 
 Tests: `tests/actiontest.py` (83 phrasings plus end-to-end runs in chat and
 voice) alongside `tests/orbtest.py`.
+
+## Site structure: launch site + app
+
+| Path | What it is |
+|---|---|
+| `/` | The Pixel Pro app (`index.html`). Unchanged location, so the Android app, `/c/<chat>` links and installed PWAs keep working. |
+| `/welcome/` | The launch site — the front door for anyone not signed in. Its own `css/`, `js/`, `media/` and service worker. |
+
+How a visitor moves between them:
+
+- **Never signed in on this device** → opening `/` goes to `/welcome/` before
+  the app draws anything (a check in the app's `<head>`).
+- **"Try Pixel Pro"** on the launch site → `/?signin=1`, which opens the app
+  straight to its sign-in screen.
+- **Closing sign-in without signing in** → back to `/welcome/`.
+- **Signed in** → `/` opens straight into the app, every time.
+- **Signing out**, or a session that has expired → back to `/welcome/`.
+
+The launch site's button target is `CONFIG.appUrl` near the top of the
+script in `welcome/index.html`.
+
+Two service workers share the origin: the app's (`/sw.js`, scope `/`) and
+the launch site's (`/welcome/sw.js`, scope `/welcome/`). The app's worker
+never handles `/welcome/` requests, saves only app pages as its offline copy,
+and on update deletes only its own `pixelpro-v*` caches — so neither can
+damage the other. `node tests/swtest.js` checks all three.
+
+Tests for the whole journey: `tests/sitetest.py`.

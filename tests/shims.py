@@ -132,3 +132,41 @@ ANDROID_UA = ("Object.defineProperty(navigator,'userAgent',{configurable:true,"
               "get:()=>'Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/126 Mobile Safari/537.36'});")
 
 ALL = ANDROID_SR + CARTESIA_WS
+
+# The app sends anyone who has never signed in on this device to the launch
+# site at /welcome/ before it draws anything. Suites that test the APP itself
+# start as a returning, signed-in visitor so they are not redirected away.
+SIGNED_IN_FLAG = "try{ localStorage.setItem('pp-had-user','1'); }catch(e){}"
+
+# A stand-in for Firebase Auth with the same four entry points the app uses
+# (window.__pixelAuth). The user it reports on load is window.__fakeAuthUser,
+# which a test sets up front; signing in and out report through the listener
+# exactly as Firebase does. Firestore is left absent: cloud sync is guarded
+# on it and simply stays local.
+FAKE_FIREBASE = """
+(function(){
+  /* Real Firebase keeps the session across reloads (browserLocalPersistence);
+     so does this, or every navigation would look like a sign-out. */
+  var KEY = '__fake_firebase_user';
+  function saved(){ try{ return JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(e){ return null; } }
+  function save(u){ try{ if(u) localStorage.setItem(KEY, JSON.stringify(u)); else localStorage.removeItem(KEY); }catch(e){} }
+  if(window.__fakeAuthUser) save(window.__fakeAuthUser);
+  window.__pixelAuth = {
+    auth: {}, provider: { setCustomParameters: function(){} },
+    signInWithPopup: async function(){
+      var u = { uid:'u1', displayName:'Neelaksh Naithani', email:'neelaksh098@gmail.com', photoURL:'' };
+      save(u);
+      setTimeout(function(){ window.__authCb && window.__authCb(u); }, 10);
+      return { user: u };
+    },
+    signOut: async function(){
+      save(null);
+      setTimeout(function(){ window.__authCb && window.__authCb(null); }, 10);
+    },
+    onAuthStateChanged: function(a, cb){
+      window.__authCb = cb;
+      setTimeout(function(){ cb(saved()); }, 60);
+    }
+  };
+})();
+"""

@@ -11,7 +11,7 @@ helper's return value alone.
 import asyncio, json, os, sys, functools, urllib.parse
 print = functools.partial(print, flush=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from shims import ANDROID_SR, CARTESIA_WS, DESKTOP_UA
+from shims import ANDROID_SR, CARTESIA_WS, DESKTOP_UA, SIGNED_IN_FLAG
 from playwright.async_api import async_playwright
 
 CHROME = os.environ.get("PW_CHROME", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
@@ -115,7 +115,7 @@ async def main():
                                   geolocation={"latitude": 22.5726, "longitude": 88.3639},
                                   permissions=["geolocation"])
         pg = await ctx.new_page()
-        await pg.add_init_script(ANDROID_SR + CARTESIA_WS + DESKTOP_UA)
+        await pg.add_init_script(SIGNED_IN_FLAG + ANDROID_SR + CARTESIA_WS + DESKTOP_UA)
         errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
 

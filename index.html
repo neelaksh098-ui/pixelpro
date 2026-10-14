@@ -2,6 +2,30 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8" />
+<script>
+/* SIGNED-OUT VISITORS START ON THE LAUNCH SITE.
+
+   Runs before a single pixel of the app is drawn, so a visitor who has never
+   signed in sees the launch site and never a flash of the chat behind it.
+   The test is the flag the app writes whenever Firebase confirms a session
+   ("pp-had-user"): it is local and synchronous, where the real answer --
+   Firebase restoring its session from IndexedDB -- takes hundreds of
+   milliseconds, and far longer cold in the Android app.
+
+   A stale flag (the session expired, or ended on another device) is caught
+   later, when Firebase answers: maybeShowWelcome() sends that visitor to the
+   launch site then. Arriving FROM the launch site's "Try Pixel Pro" button
+   carries ?signin=1, which opens straight to sign-in instead of bouncing
+   back. If storage is blocked entirely, the app opens and handles sign-in
+   itself, as it always has. */
+(function(){
+  try{
+    if(/(?:^|&)signin=1(?:&|$)/.test(location.search.slice(1))) return;
+    if(localStorage.getItem('pp-had-user') === '1') return;
+    location.replace('/welcome/');
+  }catch(e){}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#2743EE" />
 <title>Pixel Pro — Fast AI Assistant</title>
@@ -3558,20 +3582,38 @@ function bindTapHint(){
   }, { capture:true, passive:true });
 }
 
+/* ================================================================
+   THE FRONT DOOR IS THE LAUNCH SITE NOW
+
+   Signed out, Pixel Pro is the launch site at /welcome/. Signed in, it is
+   this app. The blue in-app landing that used to fill this role stays in the
+   markup but is never shown again; the launch site replaces it.
+
+   Three ways a visitor is sent there from here: Firebase answers "no
+   session" (a stale flag got them past the check in <head>), they sign out,
+   or they close the sign-in screen without signing in. Arriving with
+   ?signin=1 -- from the launch site's own button -- opens sign-in instead.
+   ================================================================ */
+function cameToSignIn(){ return /(?:^|&)signin=1(?:&|$)/.test(location.search.slice(1)); }
+function clearSigninParam(){
+  if(!cameToSignIn()) return;
+  try{ history.replaceState(history.state, '', location.pathname + location.hash); }catch(e){}
+}
+function goToLaunchSite(){ try{ location.replace('/welcome/'); }catch(e){} }
+
 function maybeShowWelcome(){
   var w = document.getElementById('welcome');
-  if(!w) return;
-  if(state.user){ w.classList.add('hide'); stopLandingType(); hideTapHint(); return; }
-  /* Until Firebase has genuinely answered, never reveal the landing page:
-     a remembered session means this user IS signed in and is just waiting on
-     a slow auth restore (routine in the wrapped Android app, where the SDK
-     loads cold and reads its session from IndexedDB). Showing the landing
-     here is what produced the flash that only appeared in the APK. */
-  if(!authResolved){ w.classList.add('hide'); return; }
-  if(hadUser()){ w.classList.add('hide'); return; }
-  w.classList.remove('hide');
-  startLandingType();
-  showTapHint();
+  if(w) w.classList.add('hide');
+  if(typeof stopLandingType === 'function') stopLandingType();
+  if(typeof hideTapHint === 'function') hideTapHint();
+  if(state.user){ clearSigninParam(); return; }
+  /* Until Firebase has genuinely answered, do nothing: a remembered session
+     means this user IS signed in and is waiting on a slow restore (routine
+     in the wrapped Android app). Sending them away here would be wrong. */
+  if(!authResolved) return;
+  if(hadUser()) return;
+  if(cameToSignIn()){ if(typeof openGate === 'function') openGate(); return; }
+  goToLaunchSite();
 }
 document.getElementById('landingLoginBtn').addEventListener('click', function(){ if(typeof openGate === 'function') openGate(); });
 document.getElementById('landingDiscover').addEventListener('click', function(){
@@ -8530,7 +8572,12 @@ function refreshQuotaBadge(){
 
 function openGate(){ document.getElementById('gate').classList.add('show'); lockBody(); }
 function closeGate(){ document.getElementById('gate').classList.remove('show'); unlockBody(); }
-document.getElementById('gateClose').addEventListener('click', closeGate);
+document.getElementById('gateClose').addEventListener('click', function(){
+  closeGate();
+  /* Declining to sign in, having come to sign in, means going back to where
+     they came from -- not into an app that will not answer them. */
+  if(!state.user && authResolved && !hadUser()) goToLaunchSite();
+});
 
 function updateSigninUI(){
   var btn = document.getElementById('signinBtn');
@@ -8569,6 +8616,8 @@ async function doSignIn(hint){
     }
     var res = await A.signInWithPopup(A.auth, A.provider);
     state.user = res.user;
+    setHadUser(true);          /* the next visit opens straight into the app */
+    clearSigninParam();
     haptic('success');
     updateSigninUI();
     closeGate();
@@ -8637,6 +8686,12 @@ document.getElementById('gateEmailInput').addEventListener('keydown', function(e
   if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('gateEmailBtn').click(); }
 });
 document.getElementById('gateGuest').addEventListener('click', function(){ closeGate(); hideWelcome(); });
+
+/* Came from the launch site's "Try Pixel Pro": open sign-in now rather than
+   waiting for Firebase to report what we already know -- that there is no
+   session on this device. If Firebase then finds one after all, the auth
+   listener closes this again. */
+if(cameToSignIn() && !hadUser()){ try{ openGate(); }catch(e){} }
 
 var lastUid = undefined;
 function bindAuthState(){

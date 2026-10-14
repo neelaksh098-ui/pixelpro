@@ -11,7 +11,7 @@ No assertion here calls an internal helper in isolation.
 import asyncio, json, os, sys, functools
 print = functools.partial(print, flush=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from shims import ANDROID_SR, CARTESIA_WS, DESKTOP_UA
+from shims import ANDROID_SR, CARTESIA_WS, DESKTOP_UA, SIGNED_IN_FLAG
 from playwright.async_api import async_playwright
 
 CHROME = os.environ.get("PW_CHROME", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
@@ -30,7 +30,7 @@ async def main():
                                      args=["--no-sandbox", "--autoplay-policy=no-user-gesture-required"])
         ctx = await b.new_context(viewport={"width": 390, "height": 844})
         pg = await ctx.new_page()
-        await pg.add_init_script(ANDROID_SR + CARTESIA_WS + DESKTOP_UA)
+        await pg.add_init_script(SIGNED_IN_FLAG + ANDROID_SR + CARTESIA_WS + DESKTOP_UA)
         errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
 
