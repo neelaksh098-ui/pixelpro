@@ -25,6 +25,7 @@ CFG = {
     "exa_status": 200,
     "exa_results": 2,
     "tavily_status": 200,
+    "plan": '{"steps":[{"type":"answer","text":"hello"}]}',
 }
 
 # 64x64 solid PNG, base64. Deliberately larger than it will be displayed.
@@ -118,6 +119,14 @@ class H(http.server.SimpleHTTPRequestHandler):
                     {"web": bool(CFG["route_web"]), "confidence": 0.9, "reason": "test",
                      "search_query": body.get("query", ""), "topic": "general", "freshness": "day"})})
             if "You name chat" in raw: return self._json({"text": "Chat"})
+            # The action planner. Answers with whatever plan the test set via
+            # /__cfg?plan=..., so a test can state exactly what the model "said"
+            # and assert on what the app then DID with it.
+            if "PIXEL_PRO_PLANNER" in raw:
+                return self._json({"text": CFG["plan"]})
+            if "You write emails for the user" in raw:
+                return self._json({"text": json.dumps({"to": "boss@example.com", "subject": "Leave request for tomorrow",
+                    "body": "Hi,\n\nI would like to request a day of leave tomorrow.\n\nThanks,\nNeelaksh"})})
             return self._json({"text": CFG["text"]})
 
         if p.endswith("/exa"):

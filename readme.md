@@ -36,3 +36,39 @@ After generating the release certificate, publish the SHA-256 fingerprint in `ht
 - The default voice model is `sonic-3.6`; set `CARTESIA_MODEL` to override it.
 - Browser Web Speech API remains the input method for the microphone/orb.
 - Pixel Live includes a text command box as an alternative to speaking.
+
+## Asking Pixel Pro to do things
+
+Every feature that has a button can also be asked for, in chat or by voice,
+in plain words — and several can be asked for in one message. Steps run in
+the order they were asked for.
+
+| Ask for | For example |
+|---|---|
+| a picture | "I want a dog playing picture", "draw a cat in a hat", "ek kutte ki photo banao" |
+| the theme | "dark mode", "set theme to light", "theme dark kar do", "change the theme" |
+| your location | "where am I", "tell me my location", "turn off location" |
+| email | "email me this", "write an email to my boss asking for leave" |
+| the voice | "switch to female voice" |
+| read aloud | "turn on read aloud", "stop reading the answers aloud" |
+| modes | "turn on deep research", "turn off think mode", "turn on web search" |
+| the app | "new chat", "open voice mode", "open settings" |
+| memory | "remember that my exam is on 12 November", "what do you remember about me", "forget everything" |
+
+Mixed: "what is 2+2, also tell me my location, and make an image" — answers
+the question, finds the location, then draws a picture of where you are
+(and says so, since no subject was given). With nothing to infer from, it
+asks what to draw and treats your reply as the subject.
+
+How it decides: a local parser reads clear commands with no network call; a
+model planner is consulted only when a message plainly wants something done
+but the rules cannot read it (another language, unusual phrasing). A message
+that asks for nothing takes the ordinary path untouched, at no extra cost.
+Questions that merely mention a feature — "what is dark mode", "what is the
+theme of Hamlet" — stay questions.
+
+Email to other people is drafted, never sent automatically: the draft comes
+with a one-tap "Open in Gmail", filled in.
+
+Tests: `tests/actiontest.py` (83 phrasings plus end-to-end runs in chat and
+voice) alongside `tests/orbtest.py`.

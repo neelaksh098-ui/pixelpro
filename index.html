@@ -1275,6 +1275,26 @@ body.empty-state .suggests{display:flex}
   margin-top .24s ease,padding-top .24s ease}
 .sources.open{max-height:520px;visibility:visible;opacity:1;margin-top:10px;padding-top:10px;
   border-top:1px dashed var(--line)}
+/* ---------- action receipts ---------- */
+.act-done{display:inline-flex;align-items:center;gap:9px;color:var(--muted);font-size:14.5px;line-height:1.4}
+.act-ico{width:17px;height:17px;flex:none;color:var(--ink);opacity:.85;display:inline-flex}
+.act-ico svg{width:100%;height:100%}
+.act-txt{color:var(--ink)}
+.act-undo{margin-left:4px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;
+  color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;transition:background .15s ease,color .15s ease}
+.act-undo:hover{background:var(--hover);color:var(--ink)}
+.act-undo[disabled]{opacity:.55;cursor:default}
+.act-mail{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--card);max-width:560px}
+.act-mail-row{display:flex;gap:10px;font-size:13.5px;padding:3px 0;color:var(--muted)}
+.act-mail-row span{width:58px;flex:none}
+.act-mail-row b{color:var(--ink);font-weight:600;min-width:0;overflow-wrap:anywhere}
+.act-mail-body{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);white-space:pre-wrap;font-size:14.5px;line-height:1.6;color:var(--ink)}
+.act-mail-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.act-btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);font-size:13.5px;font-weight:600;text-decoration:none;cursor:pointer}
+.act-btn:hover{background:var(--hover)}
+.act-btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.act-btn[disabled]{opacity:.55;cursor:default}
 .web-chip{cursor:pointer;-webkit-appearance:none;appearance:none;font-family:inherit;
   transition:background .15s ease,border-color .15s ease,color .15s ease}
 .web-chip:hover{background:var(--hover);color:var(--ink)}
@@ -2789,6 +2809,11 @@ function lastSubject(){
 function rememberSubject(text){
   var t = String(text || '').trim();
   if(!t || GREETING_ONLY.test(t)) return;
+  /* A COMMAND HAS NO SUBJECT. "Make image" recorded as the thing being
+     discussed made the very next "make image" draw the words "make image" --
+     the request became its own subject. Commands are skipped here; the
+     question inside a mixed message is recorded when its own turn runs. */
+  if(typeof looksLikeAction === 'function' && looksLikeAction(t)) return;
   if(ANAPHOR_ONLY.test(t) && t.split(/\s+/).length <= 6) return;   /* itself a follow-up */
   var terms = (typeof evidenceContentTerms === 'function') ? evidenceContentTerms(t) : [];
   if(!terms.length) return;
@@ -6553,6 +6578,9 @@ function specStart(text){
      user who is out of questions gets a different reply entirely. */
   if(isFarewell(text)) return;
   if(quotaExceeded()) return;
+  /* A command is not a question. Speculating on "set theme to dark" would
+     route it, search the web for it, and start an answer nobody asked for. */
+  if(typeof looksLikeAction === 'function' && looksLikeAction(text)) return;
   /* Already speculating this exact sentence -- leave it running. */
   if(spec && spec.text === text && !spec.cancelled && !spec.failed) return;
   if(specCount >= LIVE_SPEC_MAX) return;
@@ -6663,7 +6691,75 @@ function specClaim(question){
 }
 
 /* ================= asking ================= */
+/* ================================================================
+   THE ORB'S FRONT DOOR
+
+   Same plan, different receipt: actions happen, and the orb SAYS what it
+   did. When a question rides along with them, one spoken reply answers it
+   and confirms the actions in the order they were asked for -- "Four. You're
+   near Kolkata. And the picture is on its way to the chat." -- rather than
+   three separate utterances with silences between.
+
+   Pictures are started, not awaited: the orb keeps talking while they paint.
+   ================================================================ */
 async function liveAsk(question){
+  question = String(question || '').trim();
+  if(!question){ live.locked = false; return; }
+  if(!ACTIONS_ON) return liveAskCore(question);
+  if(pendingImageAsk && !actIsQuestionAbout(question) && !looksLikeAction(question)){
+    pendingImageAsk = false;
+    return liveRunPlan({ steps:[{ type:'image', prompt:question, clause:question }], original:question }, question);
+  }
+  var plan = planLocal(question);
+  if(!actionsWanted(plan)) return liveAskCore(question);
+  return liveRunPlan(plan, question);
+}
+
+async function liveRunPlan(plan, question){
+  var sid = live.sessionId;
+  specCancel('plan');
+  liveCaption(question, 'user');
+  setMemoryFocus(question);
+  liveGo('processing');
+  if(plan.uncertain) plan = await planWithModel(question, plan);
+  if(sid !== live.sessionId) return;
+
+  var ctx = {}, said = [], answers = [];
+  for(var i = 0; i < plan.steps.length; i++){
+    var st = plan.steps[i];
+    if(st.type === 'answer'){ answers.push(st.text); continue; }
+    if(st.type === 'voice_mode' && st.value === 'open'){ said.push('We’re already talking.'); continue; }
+    var s = await runActionStep(st, ctx, false);
+    if(sid !== live.sessionId) return;
+    if(st.type === 'voice_mode' && st.value === 'close') return;        /* the orb is gone */
+    if(s){ said.push(s); rememberTurn(st.clause || st.type, s); }
+  }
+
+  if(answers.length){
+    var extra = said.length
+      ? '\n\nACTIONS ALREADY CARRIED OUT for this same request (they are done -- do not offer to do them): ' +
+        said.join(' ') + '\nThe user\'s full request was: "' + question + '". Answer the question part, and ' +
+        'in the same short spoken reply confirm each completed action, in the order the user asked for them. ' +
+        'Do not claim anything else was done.'
+      : '';
+    return liveAskCore(answers.join('. '), { extraSystem: extra, display: question });
+  }
+
+  /* Nothing to answer, only things done: say them. */
+  var reply = said.join(' ') || 'Done.';
+  live.transcript.push({ role:'user', content: question });
+  live.transcript.push({ role:'assistant', content: reply });
+  liveCaption(reply, 'bot');
+  liveSpeak(reply, function(){
+    if(sid !== live.sessionId) return;
+    live.locked = false;
+    if(live.on && !live.muted) liveTimer('settle', function(){ liveGo('listening'); }, LIVE_SETTLE_MS);
+    else if(live.on) liveGo('idle');
+  });
+}
+
+async function liveAskCore(question, opts){
+  opts = opts || {};
   question = String(question || '').trim();
   if(!question){ live.locked = false; return; }
   if(quotaExceeded()){
@@ -6673,9 +6769,11 @@ async function liveAsk(question){
     });
     return;
   }
-  live.transcript.push({ role:'user', content:question });
+  /* A planned turn shows and records what was actually SAID; the model is
+     sent only the question part, with the actions described alongside it. */
+  live.transcript.push({ role:'user', content: opts.display || question });
   setMemoryFocus(question);     /* which memories this turn's prompt carries */
-  liveCaption(question, 'user');
+  liveCaption(opts.display || question, 'user');
   turnStart();
   liveGo('processing');
   live.abort = new AbortController();
@@ -6721,7 +6819,9 @@ async function liveAsk(question){
        over instead of starting again. `claimed` is non-null only after an
        exact text match, so adopting can never answer a different question
        than the one that was committed. */
-    var claimed = specClaim(question);
+    /* A speculation never ran on a planned turn's question part, and one
+       for the whole sentence would not know about the actions. */
+    var claimed = opts.extraSystem ? null : specClaim(question);
     if(claimed){
       turnT && (turnT.specMs = Date.now() - claimed.startedAt);
       if(claimed.needsWeb && !claimed.searchDone){
@@ -6878,7 +6978,7 @@ async function liveAsk(question){
       /* The grounding rules only ship when there is something to ground
          against, so an ordinary spoken question still gets the short prompt
          and the fast first token. */
-      { role:'system', content: voiceSystemPrompt(lc ? true : (evidenceMissing ? 'unavailable' : false)) }
+      { role:'system', content: voiceSystemPrompt(lc ? true : (evidenceMissing ? 'unavailable' : false)) + (opts.extraSystem || '') }
     ].concat(history).concat([{ role:'user', content: question }]);
 
     /* 20b answers everything on this path, WITH or without evidence. This
@@ -10752,9 +10852,725 @@ function refocusComposer(){
   if(isTouchDevice()) return;
   try{ $input.focus(); }catch(e){}
 }
+/* ================================================================
+   PIXEL PRO DOES THINGS, NOT ONLY SAYS THINGS
+
+   Everything below already existed as a button: the theme, the image
+   generator, location, emailing an answer, the voice, read-aloud, the web
+   and think toggles, deep research, a new chat, voice mode, memory. None of
+   it could be ASKED for. "I want a dog playing picture" got an essay about
+   dogs; "set theme to dark" got a web search about dark themes.
+
+   This layer sits in front of the ordinary turn and does three things:
+
+     1. PLAN.  Split the message into the things it asks for, in order --
+        "what is 2+2, also tell me my location, and make an image" is one
+        answer and two actions. A local parser handles the clear cases with
+        no network at all; a model planner is consulted only when a message
+        plainly wants something done but the phrasing defeats the rules
+        (another language, a slang verb, a subject that needs inferring).
+
+     2. EXECUTE.  Each step runs in the order it was asked for, through the
+        same function its button calls, so a spoken "dark mode" and a tapped
+        one cannot drift apart.
+
+     3. STAY OUT OF THE WAY.  A message that asks for nothing is handed to
+        the ordinary turn untouched: same routing, same search, same
+        latency. The gate that decides this is regex-only and costs
+        microseconds, so a plain question pays nothing for any of this.
+
+   What it deliberately does NOT do: send email to other people on its own.
+   It drafts the email and hands you a one-tap "Open in Gmail" with it
+   filled in. An assistant that mails strangers from your verified address
+   on the strength of a misheard sentence is a spam cannon, not a feature.
+   ================================================================ */
+var ACTIONS_ON = true;
+var PLANNER_TIMEOUT_MS = 6000;
+
+var ACT_IMG_NOUNS = 'picture|pictures|pic|pics|photo|photos|photograph|image|images|drawing|illustration|wallpaper|artwork|art|logo|poster|sketch|painting|portrait|avatar|tasveer|tasvir|chitra|chobi|chhobi|photu';
+/* Generic container words: "a picture of X" is a request for X. The content
+   words -- logo, poster, wallpaper, portrait -- are kept, because "a logo for
+   my bakery" with "logo" stripped is a request for a bakery. */
+var ACT_GENERIC_NOUNS = 'picture|pictures|pic|pics|photo|photos|photograph|image|images|drawing|illustration|artwork|art|tasveer|tasvir|chitra|chobi|chhobi|photu';
+var ACT_IMG_NOUN_RE = new RegExp('\\b(?:' + ACT_IMG_NOUNS + ')\\b', 'i');
+
+var ACT_WAKE_RE = /^\s*(?:(?:hey|hi|hello|ok|okay|yo|oi|arre|are)\s*,?\s*)?(?:pixel(?:\s*pro)?)\b[\s,!.:-]*/i;
+var ACT_FILLER_RE = /^\s*(?:hey|hi|hello|ok|okay|so|um+|uh+|please|pls|plz|kindly|yaar|bhai|bro)\b[\s,!.:-]+/i;
+var ACT_NON_LATIN = /[ऀ-ॿঀ-৿]/;
+var ACT_HINGLISH = /\b(ki|ka|ke|ek|wala|wali|walo|kar|karo|kardo|banao|banado|bana|chahiye|dikhao|lagao|mujhe|meri|mera|apna|koro|dao|dekhao)\b/i;
+
+/* A clause that asks ABOUT a thing rather than asking for it. "What is dark
+   mode" is a question; "can you switch to dark mode" is a request -- the
+   modal opener is what separates them, so it is let through. */
+function actIsQuestionAbout(c){
+  if(/^\s*(?:can|could|will|would)\s+(?:you|u|i)\b/i.test(c)) return false;
+  return /^\s*(?:what|why|which|who|whom|whose|is|are|was|were|does|do|did|how(?!\s+about)|should|explain|define|tell\s+me\s+about|difference|meaning)\b/i.test(c);
+}
+
+function actStripWake(t){
+  var s = String(t || '');
+  for(var i = 0; i < 4; i++){
+    var n = s.replace(ACT_WAKE_RE, '').replace(ACT_FILLER_RE, '');
+    if(n === s) break;
+    s = n;
+  }
+  s = s.trim();
+  return s || String(t || '').trim();     /* "hello" alone is the message, not filler */
+}
+
+/* ---------- one parser per action; each returns a step or null ---------- */
+
+function actParseTheme(c){
+  var low = c.toLowerCase();
+  if(ACT_IMG_NOUN_RE.test(low)) return null;          /* "make the background of the image dark" */
+  if(actIsQuestionAbout(c)) return null;
+  var val = /\b(?:dark|night|black|amoled|dim)\b|डार्क|ডার্ক/.test(low) ? 'dark' :
+            /\b(?:light|day|white|bright)\b|लाइट|লাইট/.test(low) ? 'light' :
+            /\b(?:system|auto|automatic|device|default)\b/.test(low) ? 'system' : null;
+  /* "Change the theme" names no theme: flip to whichever one is not showing. */
+  if(!val && /^\s*(?:please\s+|can\s+you\s+|could\s+you\s+)?(?:change|switch|toggle|flip)\s+(?:the\s+|my\s+)?(?:theme|mode|colou?r\s*scheme)\b/i.test(c)){
+    var showingDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+      (!document.documentElement.getAttribute('data-theme') && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    return { type:'theme', value: showingDark ? 'light' : 'dark', explicit:true };
+  }
+  if(!val) return null;
+  var themeWord = /\b(?:theme|mode|look|appearance|colou?r\s*scheme|ui|interface)\b|थीम|मोड|থিম|মোড/.test(low);
+  var verb = /\b(?:make|turn|switch|change|set|put|go|use|enable|activate|apply|kar|karo|kardo|lagao|chalu|koro|korun|dao)\b/.test(low);
+  var target = /\b(?:it|app|screen|everything|pixel)\b/.test(low);
+  var bare = /^\s*(?:dark|light|night|day)\s*(?:please|pls|plz)?\s*$/i.test(c);
+  if(!(themeWord || (verb && target) || bare)) return null;
+  /* "turn off dark mode" is a request for the other one. */
+  if(/\b(?:off|disable|remove|hatao|band)\b/.test(low)){
+    if(val === 'dark') val = 'light'; else if(val === 'light') val = 'dark';
+  }
+  return { type:'theme', value:val, explicit: themeWord };
+}
+
+function actParseImage(c){
+  var low = c.toLowerCase();
+  if(typeof pendingImage !== 'undefined' && pendingImage) return null;   /* a photo is attached: that turn is ABOUT the photo */
+  var drawFirst = /^\s*(?:please\s+|can\s+you\s+|could\s+you\s+|will\s+you\s+)?(?:draw|paint|sketch|illustrate)\b(?!\s+(?:a\s+|the\s+|any\s+|some\s+)?(?:conclusions?|comparisons?|parallels?|inferences?|attention|the\s+line|a\s+line|lines?\s+between|blood|money|water|lots|cards?|up\s+(?:a\s+)?(?:plan|list|contract|budget|schedule)))/i.test(c);
+  /* "Picture of a lighthouse", said on its own, is a request. */
+  var bareOf = new RegExp('^\\s*(?:an?\\s+|the\\s+)?(?:' + ACT_GENERIC_NOUNS + ')\\s+of\\s+\\S', 'i').test(c) && c.split(/\s+/).length <= 14;
+  var hasNoun = ACT_IMG_NOUN_RE.test(low) || /फोटो|तस्वीर|चित्र|ছবি/.test(c);
+  var asks = /\b(?:make|create|generate|draw|paint|sketch|design|render|produce|give|send|show|get|want|need|like|bana\w*|bna\w*|chahiye|dikhao|koro|dao)\b/.test(low) || /बना|চাই|বানা/.test(c);
+  if(!(drawFirst || bareOf || (hasNoun && asks))) return null;
+  if(actIsQuestionAbout(c)) return null;
+  /* Text ABOUT images is text: a prompt to paste elsewhere, a caption, a size. */
+  if(new RegExp('\\b(?:' + ACT_IMG_NOUNS + ')\\s+(?:prompts?|captions?|descriptions?|editor|editing|size|sizes|format|formats|file|files|url|link|search|ideas?\\s+for\\s+(?:a\\s+)?(?:caption|title))\\b', 'i').test(low)) return null;
+  /* An image that already exists is not a request for a new one. */
+  if(/\b(?:again|you\s+(?:made|created|generated|sent)|from\s+before|previous|the\s+last\s+one)\b/.test(low) && !/\b(?:new|another|different)\b/.test(low)) return null;
+  /* Operations on an image that already exists are not requests for a new one. */
+  if(/\b(?:compress|resize|crop|convert|upload|download|edit|describe|analy[sz]e|read|extract|remove\s+(?:the\s+)?background)\b/.test(low) &&
+     !/\b(?:create|generate|draw|make|paint)\b/.test(low)) return null;
+  var prompt = actImagePrompt(c);
+  var messy = ACT_NON_LATIN.test(prompt) || (ACT_HINGLISH.test(prompt) && prompt.split(/\s+/).length <= 8);
+  return { type:'image', prompt: prompt, uncertain: messy };
+}
+
+function actImagePrompt(c){
+  var s = ' ' + String(c) + ' ';
+  s = s.replace(/\b(?:please|pls|plz|kindly|can\s+you|could\s+you|would\s+you|will\s+you|i\s+want|i\s+need|i\s+would\s+like|i'?d\s+like|i\s+wanna|give\s+me|send\s+me|show\s+me|get\s+me|make\s+me|create\s+me|for\s+me|generate\s+me|draw\s+me|bana\s+do|banado|banao|bana\s+dijiye|chahiye|de\s+do|dikhao)\b/gi, ' ');
+  s = s.replace(/\b(?:make|create|generate|draw|paint|sketch|design|render|produce|illustrate)\b/gi, ' ');
+  s = s.replace(new RegExp('\\b(?:an?\\s+|the\\s+|one\\s+|some\\s+)?(?:ai\\s+|realistic\\s+|cool\\s+|nice\\s+)?(?:' + ACT_GENERIC_NOUNS + ')\\s*(?:of|showing|with|for|about)?\\b', 'gi'), ' ');
+  s = s.replace(/\s+/g, ' ').replace(/^[\s,.:;-]+|[\s,.:;!?-]+$/g, '').trim();
+  s = s.replace(/^(?:of|about|showing|with)\s+/i, '');
+  /* What is left of "make image" is nothing -- and nothing is a valid answer
+     here: the executor knows what was just being talked about. */
+  if(/^(?:an?|the|one|some|it|this|that)?$/i.test(s)) return '';
+  return s;
+}
+
+function actParseLocation(c){
+  var low = c.toLowerCase();
+  if(/\blocation\b[^.?!]{0,12}\b(?:off|disable|stop|band)\b|\b(?:turn|switch)\s+off\b[^.?!]{0,16}\blocation\b|\b(?:stop|disable)\s+(?:sharing\s+)?(?:my\s+)?location\b/.test(low))
+    return { type:'location', value:'off' };
+  if(/\b(?:turn|switch)\s+on\b[^.?!]{0,16}\blocation\b|\b(?:enable|share|start\s+sharing)\s+(?:my\s+)?location\b|\blocation\s+on\b/.test(low))
+    return { type:'location', value:'on' };
+  if(/\b(?:my|current)\s+location\b|\bwhere\s+am\s+i\b|\bwhere\s+i\s+am\b|\b(?:tell|show|give|find|get)\s+(?:me\s+)?(?:my\s+)?(?:current\s+)?location\b|^\s*(?:my\s+)?location\s*\??\s*$|\blocation\s+(?:batao|bolo|dikhao)\b|\b(?:kahan|kaha)\s+(?:hoon|hu|hun)\b|लोकेशन|লোকেশন/.test(low))
+    return { type:'location', value:'show' };
+  return null;
+}
+
+function actParseEmail(c){
+  var low = c.toLowerCase();
+  if(/\b(?:turn|switch)\s+(?:on|off)\b[^.?!]{0,16}\b(?:e-?mail|mail)\b|\b(?:e-?mail|mail)\s+(?:mode|toggle|replies)\s+(?:on|off)\b/.test(low))
+    return { type:'email_toggle', value: /\boff\b/.test(low) ? 'off' : 'on' };
+  if(/\b(?:e-?mail|mail)\s+(?:me|it|this|that|the\s+(?:answer|reply|result))\b|\b(?:send|forward)\s+(?:this|that|it|the\s+(?:answer|reply|result))\s+to\s+(?:my\s+)?(?:e-?mail|mail|inbox|gmail)\b|\bto\s+my\s+(?:e-?mail|inbox|gmail)\b/.test(low))
+    return { type:'email_self' };
+  if(/\b(?:write|draft|compose|create|make|send|prepare)\b[^.?!]{0,16}\b(?:an?\s+)?(?:e-?mail|mail)\b/.test(low)){
+    var to = (c.match(/[\w.+-]+@[\w-]+\.[\w.-]+/) || [''])[0];
+    return { type:'email_draft', to: to, about: c };
+  }
+  return null;
+}
+
+function actParseVoice(c){
+  var low = c.toLowerCase();
+  if(!/\b(?:voice|awaz|awaaz|aawaz|sound)\b|आवाज़|आवाज|কণ্ঠ/.test(low)) return null;
+  if(actIsQuestionAbout(c)) return null;
+  if(/\b(?:female|woman|girl|lady|ladki|mahila)\b|लड़की|মেয়ে/.test(low)) return { type:'voice', value:'female' };
+  if(/\b(?:male|man|boy|ladka|ladke|purush)\b|लड़का|ছেলে/.test(low)) return { type:'voice', value:'male' };
+  return null;
+}
+
+function actParseReadAloud(c){
+  var low = c.toLowerCase();
+  if(/\b(?:turn\s+off|disable|stop|don'?t|do\s+not)\b[^.?!]{0,16}\b(?:read\s*aloud|reading\s+(?:the\s+)?(?:answers|replies)(?:\s+aloud)?|voice\s+replies)\b|\bread\s*aloud\s+off\b/.test(low))
+    return { type:'read_aloud', value:'off' };
+  if(/\b(?:turn\s+on|enable|start)\b[^.?!]{0,12}\b(?:read\s*aloud|voice\s+replies)\b|\bread\s*aloud\s+on\b|\bread\s+(?:the\s+)?(?:answers|replies|everything)\s+(?:aloud|out\s+loud)\b|\b(?:speak|say)\s+(?:the\s+)?(?:answers|replies)\s+(?:aloud|out\s+loud)\b/.test(low))
+    return { type:'read_aloud', value:'on' };
+  return null;
+}
+
+function actParseToggles(c){
+  var low = c.toLowerCase();
+  var on = /\b(?:on|enable|start|activate|use)\b/.test(low), off = /\b(?:off|disable|stop|deactivate)\b/.test(low);
+  if(!(on || off)) return null;
+  var v = off ? 'off' : 'on';
+  if(/\bweb\s*search\b|\bsearch\s*mode\b|\bsearch\s+the\s+web\s+mode\b/.test(low)) return { type:'web_search', value:v };
+  if(/\bthink(?:ing)?\s*mode\b/.test(low)) return { type:'think', value:v };
+  if(/\bdeep\s*(?:research|search)\b/.test(low)) return { type:'deep_research', value:v };
+  return null;
+}
+
+function actParseApp(c){
+  var low = c.toLowerCase().trim();
+  if(/^(?:start\s+|open\s+|begin\s+)?(?:a\s+)?(?:new|fresh)\s+(?:chat|conversation)\b|\bstart\s+over\b|\bclear\s+(?:the\s+)?(?:chat|screen|conversation)\b|\bnaya\s+chat\b/.test(low))
+    return { type:'new_chat' };
+  if(/\b(?:open|start|enter|go\s+to|switch\s+to)\s+(?:the\s+)?(?:voice|live|talk)\s*(?:mode|chat)?\b|\blet'?s\s+talk\b|\bopen\s+(?:the\s+)?orb\b/.test(low))
+    return { type:'voice_mode', value:'open' };
+  if(/\b(?:close|exit|leave|stop)\s+(?:the\s+)?(?:voice|live|talk)\s*(?:mode|chat)?\b/.test(low))
+    return { type:'voice_mode', value:'close' };
+  if(/\bopen\s+(?:the\s+)?settings\b|\bgo\s+to\s+settings\b/.test(low))
+    return { type:'settings' };
+  return null;
+}
+
+function actParseMemory(c){
+  var low = c.toLowerCase().trim();
+  if(/\bwhat\s+do\s+you\s+(?:remember|know)\s+about\s+me\b|\bshow\s+(?:me\s+)?(?:my\s+|your\s+)?memor(?:y|ies)\b/.test(low))
+    return { type:'memory', value:'show' };
+  if(/^(?:please\s+)?(?:forget|clear|delete|wipe|erase)\s+(?:everything|all|your\s+memory|my\s+memory|(?:all\s+)?(?:your\s+|my\s+)?memories|memory)\b(?!\s+about)/.test(low))
+    return { type:'memory', value:'clear' };
+  var fm = low.match(/^(?:please\s+)?forget\s+(?:about\s+|that\s+)(.{3,})$/);
+  if(fm && !/^(?:it|that|this)$/.test(fm[1].trim())) return { type:'memory', value:'forget', text: fm[1].trim() };
+  var rm = c.match(/^\s*(?:please\s+)?remember\s+(?:that\s+)?(.{4,})$/i);
+  if(rm && !/^(?:me|this|that|it)\b/i.test(rm[1])) return { type:'memory', value:'remember', text: rm[1].trim() };
+  return null;
+}
+
+var ACT_PARSERS = [actParseMemory, actParseApp, actParseToggles, actParseReadAloud, actParseVoice,
+                   actParseEmail, actParseLocation, actParseTheme, actParseImage];
+
+/* Something here wants to be DONE, but no rule above could say what. These
+   go to the model planner rather than being answered as questions. The bar
+   is deliberately narrow: "what is the theme of Hamlet" must not cost a
+   planner round trip on its way to an ordinary answer. */
+var ACT_LOOSE_HINT = new RegExp(
+  '\\b(?:dark|light|night)\\s+(?:mode|theme)\\b' +
+  '|\\b(?:' + ACT_IMG_NOUNS + ')\\b[^.?!]{0,30}\\b(?:bana\\w*|bna\\w*|chahiye|dikhao|koro|dao)\\b' +
+  '|\\b(?:bana\\w*|bna\\w*)\\b[^.?!]{0,30}\\b(?:' + ACT_IMG_NOUNS + ')\\b' +
+  '|फोटो|तस्वीर|थीम|डार्क मोड|लाइट मोड|লোকেশন|ছবি|থিম', 'i');
+
+/* ---------- splitting a message into the things it asks for ---------- */
+var ACT_SPLIT_RE = /(?:[;?!]|\.(?=\s)|,?\s*\b(?:and\s+then|and\s+also|and\s+after\s+that|after\s+that|afterwards|then|also|plus|aur\s+(?:phir|fir)|phir|fir|uske\s+baad|iske\s+baad|tarpor|tarpore)\b|,?\s*\band\s+(?=(?:tell|show|make|create|draw|paint|generate|set|switch|turn|change|put|send|email|mail|find|give|open|start|close|use|read|stop|forget|remember|what|who|where|when|why|how|which|can|could|will|please)\b))/gi;
+
+function actSplit(text){
+  var out = [], last = 0, m;
+  ACT_SPLIT_RE.lastIndex = 0;
+  while((m = ACT_SPLIT_RE.exec(text))){
+    if(m.index > last) out.push({ start:last, end:m.index });
+    last = m.index + m[0].length;
+    if(m[0].length === 0) ACT_SPLIT_RE.lastIndex++;
+  }
+  if(last < text.length) out.push({ start:last, end:text.length });
+  return out.map(function(sp){
+    var raw = text.slice(sp.start, sp.end);
+    return { start:sp.start, end:sp.end, text: actStripWake(raw.replace(/^[\s,.]+|[\s,.]+$/g, '')) };
+  }).filter(function(p){ return p.text && /[\wऀ-৿]/.test(p.text); });
+}
+
+/* An answer clause right after an image that only describes it ("with a red
+   hat", "in watercolour") belongs to the image, not to the chat. */
+var ACT_IMG_MODIFIER = /^\s*(?:with|in|wearing|holding|on|under|at|near|in\s+the\s+style|style|as\s+a|that\s+is|which\s+is|make\s+it|and\s+make\s+it)\b/i;
+
+function planLocal(text){
+  var original = String(text || '').trim();
+  var body = actStripWake(original);
+  var pieces = actSplit(body);
+  var steps = [], uncertain = false;
+  pieces.forEach(function(p){
+    var step = null;
+    for(var i = 0; i < ACT_PARSERS.length && !step; i++) step = ACT_PARSERS[i](p.text);
+    var prev = steps[steps.length - 1];
+    if(prev && prev.type === 'image'){
+      if(!step && ACT_IMG_MODIFIER.test(p.text)){ prev.prompt = (prev.prompt + ' ' + p.text).trim(); return; }
+      if(step && step.type === 'theme' && !step.explicit){ prev.prompt = (prev.prompt + ', ' + p.text).trim(); return; }
+    }
+    if(!step){
+      if(ACT_LOOSE_HINT.test(p.text) && !actIsQuestionAbout(p.text)) uncertain = true;
+      if(prev && prev.type === 'answer'){ prev.end = p.end; prev.text = actStripWake(body.slice(prev.start, p.end)).replace(/^[\s,.]+|[\s,.]+$/g, ''); return; }
+      steps.push({ type:'answer', text:p.text, start:p.start, end:p.end });
+      return;
+    }
+    if(step.uncertain) uncertain = true;
+    step.clause = p.text;
+    steps.push(step);
+  });
+  if(!steps.length) steps.push({ type:'answer', text: original });
+  return { steps: steps, uncertain: uncertain, original: original };
+}
+
+/* Does this message ask for anything to be DONE? The gate every caller uses. */
+function actionsWanted(plan){
+  return !!plan && (plan.uncertain || plan.steps.some(function(s){ return s.type !== 'answer'; }));
+}
+function looksLikeAction(text){ return ACTIONS_ON && actionsWanted(planLocal(text)); }
+
+/* ---------- the planner, for the phrasings the rules cannot read ---------- */
+var ACT_TYPES = { answer:1, image:1, theme:1, location:1, email_self:1, email_draft:1, email_toggle:1,
+                  voice:1, read_aloud:1, web_search:1, think:1, deep_research:1, new_chat:1,
+                  voice_mode:1, settings:1, memory:1 };
+var ACT_VALUES = {
+  theme:['dark','light','system'], location:['show','on','off'], email_toggle:['on','off'],
+  voice:['male','female'], read_aloud:['on','off'], web_search:['on','off'], think:['on','off'],
+  deep_research:['on','off'], voice_mode:['open','close'], memory:['show','clear','forget','remember']
+};
+
+function actSanitize(raw){
+  if(!raw || !Array.isArray(raw.steps)) return null;
+  var out = [];
+  raw.steps.slice(0, 8).forEach(function(s){
+    if(!s || !ACT_TYPES[s.type]) return;
+    var step = { type: s.type };
+    if(ACT_VALUES[s.type]){
+      if(ACT_VALUES[s.type].indexOf(s.value) < 0) return;
+      step.value = s.value;
+    }
+    if(s.type === 'answer'){ step.text = String(s.text || '').slice(0, 1500).trim(); if(!step.text) return; }
+    if(s.type === 'image'){ step.prompt = String(s.prompt || '').slice(0, 600).trim(); }
+    if(s.type === 'email_draft'){ step.to = String(s.to || '').slice(0, 120); step.about = String(s.about || '').slice(0, 600); }
+    if(s.type === 'memory' && (s.value === 'forget' || s.value === 'remember')){
+      step.text = String(s.text || '').slice(0, 180).trim(); if(!step.text) return;
+    }
+    out.push(step);
+  });
+  return out.length ? out : null;
+}
+
+var PLANNER_SYSTEM =
+  'PIXEL_PRO_PLANNER. You turn one message to the Pixel Pro assistant into an ordered list of steps. ' +
+  'Allowed steps (use ONLY these shapes):\n' +
+  '{"type":"answer","text":"<a question or request to answer in words, rewritten to stand alone, in the user\'s language>"}\n' +
+  '{"type":"image","prompt":"<an English image-generation prompt, faithful to what was asked; empty string if no subject was given>"}\n' +
+  '{"type":"theme","value":"dark|light|system"}\n' +
+  '{"type":"location","value":"show|on|off"}\n' +
+  '{"type":"email_self"}  (email the latest answer to the user\'s own inbox)\n' +
+  '{"type":"email_draft","to":"<address or name, may be empty>","about":"<what the email should say>"}\n' +
+  '{"type":"email_toggle","value":"on|off"}\n' +
+  '{"type":"voice","value":"male|female"}\n' +
+  '{"type":"read_aloud","value":"on|off"}\n' +
+  '{"type":"web_search","value":"on|off"}\n' +
+  '{"type":"think","value":"on|off"}\n' +
+  '{"type":"deep_research","value":"on|off"}\n' +
+  '{"type":"new_chat"}\n' +
+  '{"type":"voice_mode","value":"open|close"}\n' +
+  '{"type":"settings"}\n' +
+  '{"type":"memory","value":"show|clear|forget|remember","text":"<the fact or topic, for forget/remember>"}\n' +
+  'Rules: keep the user\'s order. Questions, explanations, maths, writing, translation and facts are "answer" steps. ' +
+  'Use an action step ONLY when the user asks the app to DO that thing. A question ABOUT a topic ' +
+  '("what is dark mode", "what is the theme of Hamlet", "how do I compress an image") is an answer. ' +
+  'Merge neighbouring answer parts into one answer step. Understand any language or accent (English, Hindi, ' +
+  'Hinglish, Bengali) but write image prompts in English. Reply with JSON only: {"steps":[...]}';
+
+async function planWithModel(text, fallback){
+  var ctrl = new AbortController();
+  var timer = setTimeout(function(){ ctrl.abort(); }, PLANNER_TIMEOUT_MS);
+  try{
+    var recent = (typeof sharedHistory === 'function' ? sharedHistory() : []).slice(-4)
+      .map(function(m){ return m.role + ': ' + String(m.content || '').slice(0, 200); }).join('\n');
+    var out = await callAI([
+      { role:'system', content: PLANNER_SYSTEM },
+      { role:'user', content: (recent ? 'Recent conversation:\n' + recent + '\n\n' : '') + 'Message: ' + text }
+    ], false, ctrl.signal, '', false);
+    var raw = String(out || '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+    var j = raw.indexOf('{'), k = raw.lastIndexOf('}');
+    var parsed = JSON.parse(j >= 0 && k > j ? raw.slice(j, k + 1) : raw);
+    var steps = actSanitize(parsed);
+    if(steps) return { steps: steps, uncertain: false, original: text, planner: true };
+  }catch(e){ /* the local plan is the answer when the planner is not available */ }
+  finally{ clearTimeout(timer); }
+  var fb = fallback || planLocal(text);
+  return { steps: fb.steps, uncertain: false, original: text, planner: false };
+}
+
+/* ---------- executing a plan ---------- */
+var ACT_ICONS = {
+  theme: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>',
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>',
+  voice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>',
+  brain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>',
+  ask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>'
+};
+
+/* The visible trace of an action: one quiet line, an icon, an optional Undo.
+   Not a chat answer -- it is a receipt for something the app did. */
+function actionBubble(icon, text, undo){
+  var b = addMessage('bot', '<div class="act-done"><span class="act-ico" aria-hidden="true">' +
+    (ACT_ICONS[icon] || ACT_ICONS.check) + '</span><span class="act-txt">' + esc(text) + '</span></div>');
+  if(undo){
+    var u = document.createElement('button');
+    u.type = 'button'; u.className = 'act-undo'; u.textContent = 'Undo';
+    u.addEventListener('click', function(){ undo(); u.disabled = true; u.textContent = 'Undone'; haptic('tap'); });
+    var row = b.querySelector('.act-done'); if(row) row.appendChild(u);
+  }
+  scrollDown();
+  return b;
+}
+
+/* "Make image", with no subject, after a location or an answer: draw what
+   was just being talked about, and say so. Nothing to go on: ask. */
+function deriveImagePrompt(ctx){
+  if(ctx.recentImageSubject){ ctx.imageLabel = ctx.recentImageLabel || ''; return ctx.recentImageSubject; }
+  var subj = (typeof lastSubject === 'function') ? lastSubject() : '';
+  if(subj && !/^\d[\d\s]*$/.test(subj)){ ctx.imageLabel = 'a picture of ' + subj; return 'a detailed, beautiful illustration of ' + subj; }
+  return '';
+}
+
+function setReadAloud(on){
+  state.speak = !!on;
+  var b = document.getElementById('speakBtn'); if(b) b.classList.toggle('on', state.speak);
+  if(!state.speak && typeof stopChatSpeech === 'function') stopChatSpeech();
+}
+
+/* Location as something to WAIT for. enableLocation() reports through a
+   callback into its own bubble; a plan needs to know when it is done and
+   what it found, so this resolves with the place (or null). */
+function actFindLocation(){
+  return new Promise(function(resolve){
+    if(locationOn && currentLocation && currentLocation.city && (Date.now() - (currentLocation.ts || 0)) < 6*3600*1000){
+      var now = locationNowText();
+      var where = [currentLocation.city, currentLocation.region, currentLocation.country].filter(Boolean).join(', ');
+      addMessage('bot', '<span class="locfound"><span>📍 You’re near <b>' + esc(where) + '</b></span><span class="locfound-time">🕒 ' +
+                 esc(now.timePart) + ' · ' + esc(now.datePart) + '</span></span>');
+      scrollDown();
+      return resolve(currentLocation);
+    }
+    enableLocation();
+    var started = Date.now();
+    (function wait(){
+      if(!locationRequesting){ return resolve(locationOn ? currentLocation : null); }
+      if(Date.now() - started > 16000) return resolve(null);
+      setTimeout(wait, 120);
+    })();
+  });
+}
+
+function gmailComposeUrl(to, subject, body){
+  return 'https://mail.google.com/mail/u/0/?view=cm&fs=1' + (to ? '&to=' + encodeURIComponent(to) : '') +
+         '&su=' + encodeURIComponent(subject || '') + '&body=' + encodeURIComponent(body || '');
+}
+
+async function actDraftEmail(step){
+  addThinking('Writing your email');
+  var draft = null;
+  try{
+    var raw = await callAI([
+      { role:'system', content:'You write emails for the user. Reply with JSON only: {"to":"<recipient address or name, or empty>","subject":"...","body":"..."}. ' +
+        'The body is plain text, ready to send, warm and clear, no placeholders like [Name] unless the name is genuinely unknown. ' +
+        'Sign off with the user\'s name if known: ' + ((state.user && state.user.displayName) || '') + '.' },
+      { role:'user', content: step.about || step.clause || '' }
+    ], false, null, '', false);
+    var s = String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '');
+    var j = s.indexOf('{'), k = s.lastIndexOf('}');
+    draft = JSON.parse(j >= 0 ? s.slice(j, k + 1) : s);
+  }catch(e){ draft = null; }
+  removeThinking();
+  if(!draft || !draft.body){ actionBubble('mail', 'I couldn’t write that email just now — try again in a moment.'); return null; }
+  var to = step.to || draft.to || '';
+  var toAddr = /@/.test(to) ? to : '';
+  var b = addMessage('bot',
+    '<div class="act-mail">' +
+      '<div class="act-mail-row"><span>To</span><b>' + esc(to || '—') + '</b></div>' +
+      '<div class="act-mail-row"><span>Subject</span><b>' + esc(draft.subject || '') + '</b></div>' +
+      '<div class="act-mail-body">' + esc(draft.body) + '</div>' +
+      '<div class="act-mail-btns">' +
+        '<a class="act-btn primary" target="_blank" rel="noopener" href="' + esc(gmailComposeUrl(toAddr, draft.subject, draft.body)) + '">Open in Gmail</a>' +
+        '<button type="button" class="act-btn" data-act="copy">Copy</button>' +
+        (state.user && state.user.email ? '<button type="button" class="act-btn" data-act="self">Email to me</button>' : '') +
+      '</div>' +
+    '</div>');
+  var cp = b.querySelector('[data-act="copy"]');
+  if(cp) cp.addEventListener('click', function(){ copyPlain('Subject: ' + (draft.subject || '') + '\n\n' + draft.body, 'Email copied'); });
+  var me = b.querySelector('[data-act="self"]');
+  if(me) me.addEventListener('click', function(){ sendReplyAsEmail('Draft: ' + (draft.subject || ''), draft.body); me.disabled = true; });
+  scrollDown();
+  return draft;
+}
+
+function lastAssistantAnswer(){
+  var h = (typeof sharedHistory === 'function') ? sharedHistory() : [];
+  for(var i = h.length - 1; i >= 0; i--){ if(h[i].role === 'assistant') return { a: h[i].content, q: (h[i-1] && h[i-1].role === 'user') ? h[i-1].content : '' }; }
+  return null;
+}
+
+/* One step, whichever surface asked for it. Returns a short sentence that
+   says what happened -- shown in the chat, spoken in the orb. `ui` is false
+   in voice mode, where the receipt is the spoken sentence instead. */
+async function runActionStep(step, ctx, ui){
+  var say = '', prev;
+  switch(step.type){
+    case 'theme':
+      prev = savedThemeChoice;
+      applyThemeChoice(step.value); haptic('select');
+      say = step.value === 'system' ? 'Theme now follows your device.' : (step.value === 'dark' ? 'Dark theme is on.' : 'Light theme is on.');
+      if(ui) actionBubble(step.value === 'light' ? 'sun' : 'theme', say, function(){ applyThemeChoice(prev); });
+      break;
+
+    case 'image': {
+      var p = step.prompt || deriveImagePrompt(ctx);
+      if(!p){
+        pendingImageAsk = true;
+        say = 'What would you like the picture to be of?';
+        if(ui) actionBubble('ask', say);
+        break;
+      }
+      if(quotaExceeded()){ openGate(); say = 'Sign in to make more pictures.'; break; }
+      var label = step.prompt ? ('a picture of ' + step.prompt.replace(/^(?:an?|the)\s+/i, '')) : (ctx.imageLabel || ('a picture of ' + p));
+      if(!step.prompt){
+        ctx.inferredImage = p;
+        if(ui) actionBubble('ask', 'You didn’t say what to draw, so I’m making ' + label +
+          ' — tell me if you’d like something else.');
+      }
+      say = 'Making ' + label + '.';
+      if(ui){ await generateImage(p); }
+      else { generateImage(p); }          /* the orb speaks while it paints */
+      if(!state.user) bumpUsage();
+      ctx.lastImagePrompt = p;
+      break;
+    }
+
+    case 'location':
+      if(step.value === 'off'){ disableLocation(); say = 'Location sharing is off.'; if(ui) actionBubble('check', say); break; }
+      var place = await actFindLocation();
+      if(place && place.city){
+        var where = [place.city, place.region, place.country].filter(Boolean).join(', ');
+        say = 'You’re near ' + where + '.';
+        ctx.recentImageSubject = 'a beautiful, detailed scenic view of ' + [place.city, place.region].filter(Boolean).join(', ') + ', golden hour light';
+        ctx.recentImageLabel = 'a picture of ' + [place.city, place.region].filter(Boolean).join(', ');
+        ctx.place = where;
+      } else {
+        say = 'I couldn’t get your location — check that location access is allowed.';
+      }
+      break;
+
+    case 'email_self': {
+      var last = lastAssistantAnswer();
+      if(!state.user || !state.user.email){ say = 'Sign in first, so I know which inbox to send it to.'; if(ui) actionBubble('mail', say); break; }
+      if(!last){ say = 'There’s no answer yet to email — ask me something first.'; if(ui) actionBubble('mail', say); break; }
+      sendReplyAsEmail(last.q || 'Pixel Pro', last.a);
+      say = 'Sending that to ' + state.user.email + '.';
+      if(ui) actionBubble('mail', say);
+      break;
+    }
+
+    case 'email_toggle':
+      mailToggleOn = step.value === 'on';
+      try{
+        var mt = document.getElementById('mailToggle');
+        if(mt){ mt.classList.toggle('on', mailToggleOn); mt.setAttribute('aria-pressed', mailToggleOn ? 'true' : 'false'); }
+        var mst = document.getElementById('mailState'); if(mst) mst.textContent = mailToggleOn ? 'On' : '';
+      }catch(e){}
+      if(mailToggleOn && !state.user){ mailToggleOn = false; say = 'Sign in first, so I know which inbox to send answers to.'; if(ui) actionBubble('mail', say); break; }
+      say = mailToggleOn ? 'I’ll also email you each answer.' : 'I’ve stopped emailing answers.';
+      if(ui) actionBubble('mail', say);
+      break;
+
+    case 'email_draft':
+      if(ui){ await actDraftEmail(step); say = 'Your email is drafted — tap Open in Gmail to send it.'; }
+      else { actDraftEmail(step); say = 'I’ve drafted that email in the chat — open it there to send.'; }
+      break;
+
+    case 'voice':
+      setVoiceGender(step.value);
+      say = step.value === 'female' ? 'Switched to the female voice.' : 'Switched to the male voice.';
+      if(ui) actionBubble('voice', say);
+      break;
+
+    case 'read_aloud':
+      setReadAloud(step.value === 'on');
+      say = step.value === 'on' ? 'I’ll read my answers aloud.' : 'Read aloud is off.';
+      if(ui) actionBubble('voice', say);
+      break;
+
+    case 'web_search':
+      webForceOn = step.value === 'on'; syncWeb();
+      say = webForceOn ? 'Web search is forced on.' : 'Web search is back to automatic.';
+      if(ui) actionBubble('check', say);
+      break;
+
+    case 'think':
+      thinkOn = step.value === 'on'; syncThink();
+      say = thinkOn ? 'Think mode is on — answers will be more thorough.' : 'Think mode is off.';
+      if(ui) actionBubble('brain', say);
+      break;
+
+    case 'deep_research':
+      deepOn = step.value === 'on'; try{ store('pp-deep', deepOn ? '1' : '0'); }catch(e){} syncDeep();
+      say = deepOn ? 'Deep research is on for your next question.' : 'Deep research is off.';
+      if(ui) actionBubble('brain', say);
+      break;
+
+    case 'new_chat':
+      activeAgent = null; applyAgentUI();
+      newChat(); setActiveChatPointer(null); startFreshView(); renderSidebar(); setChatUrl(null);
+      if(typeof personalizeHero === 'function') personalizeHero();
+      say = 'Started a new chat.';
+      break;
+
+    case 'voice_mode':
+      if(step.value === 'open'){ if(!live.on) openLive(); say = 'Voice mode is open.'; }
+      else { if(live.on) closeLive(); say = 'Closed voice mode.'; }
+      break;
+
+    case 'settings':
+      if(typeof openSettingsPage === 'function') openSettingsPage();
+      say = 'Opened settings.';
+      break;
+
+    case 'memory': {
+      if(step.value === 'show'){
+        var mem = loadMemory();
+        if(!mem.length){ say = 'I don’t have anything saved about you yet.'; if(ui) actionBubble('brain', say); break; }
+        say = 'I remember ' + mem.length + (mem.length === 1 ? ' thing' : ' things') + ' about you and our chats.';
+        if(ui){
+          addMessage('bot', md('**' + say + '** The most recent:\n\n' + mem.slice(-12).reverse().map(function(f){ return '- ' + f; }).join('\n')));
+          scrollDown();
+        } else {
+          say += ' The latest is: ' + mem[mem.length - 1] + '.';
+        }
+      } else if(step.value === 'clear'){
+        var before = loadMemory();
+        saveMemory([]);
+        try{ store(subjectKey(), ''); }catch(e){}
+        say = 'I’ve cleared my memory of you.';
+        if(ui) actionBubble('brain', say, function(){ saveMemory(before); });
+      } else if(step.value === 'remember'){
+        addMemoryFact(step.text);
+        say = 'Got it — I’ll remember that.';
+        if(ui) actionBubble('brain', say);
+      } else if(step.value === 'forget'){
+        var terms = evidenceContentTerms(step.text);
+        var all = loadMemory();
+        var keep = all.filter(function(f){ var lf = f.toLowerCase(); return !terms.some(function(t){ return lf.indexOf(t) >= 0; }); });
+        saveMemory(keep);
+        var gone = all.length - keep.length;
+        say = gone ? ('Forgotten — removed ' + gone + (gone === 1 ? ' memory.' : ' memories.')) : 'I didn’t have anything saved about that.';
+        if(ui) actionBubble('brain', say, gone ? function(){ saveMemory(all); } : null);
+      }
+      break;
+    }
+  }
+  return say;
+}
+
+/* Text mode: the steps in the order they were asked for. Answers go
+   through the ordinary turn -- same routing, search, streaming and memory
+   -- so a question inside a command is answered exactly as well as one
+   asked on its own. */
+var pendingImageAsk = false;
+var ACT_NO_HISTORY = { new_chat:1, settings:1, voice_mode:1 };
+async function runPlanText(plan){
+  var ctx = {};
+  for(var i = 0; i < plan.steps.length; i++){
+    var st = plan.steps[i];
+    if(st.type === 'answer'){
+      state.busy = false;
+      await sendMessageCore(st.text, { fromPlan:true });
+      state.busy = true;
+      if(typeof lastSubject === 'function'){
+        var subj = evidenceContentTerms(st.text).filter(function(w){ return !/^\d+$/.test(w); });
+        if(subj.length){
+          ctx.recentImageSubject = 'a detailed, beautiful illustration of ' + subj.slice(0, 5).join(' ');
+          ctx.recentImageLabel = 'a picture of ' + subj.slice(0, 5).join(' ');
+        }
+      }
+      continue;
+    }
+    var say = await runActionStep(st, ctx, true);
+    /* Receipts go into the conversation only when there IS one. A settings
+       command typed on an empty screen used to create a chat named after it
+       ("set theme to dark", "new chat") in the sidebar, which is clutter, not
+       history. And a new chat must not open with a note about having been
+       opened. */
+    if(say && activeChatId && !ACT_NO_HISTORY[st.type]){
+      appendToHistory('user', st.clause || st.type);
+      appendToHistory('assistant', say);
+      rememberTurn(st.clause || st.type, say);
+    }
+  }
+}
+
+
+/* ================================================================
+   THE FRONT DOOR
+
+   A message that asks for nothing is handed to the ordinary turn untouched.
+   One that asks for something -- alone or alongside a question -- is run as
+   a plan, in the order it was asked for.
+   ================================================================ */
 async function sendMessage(text){
-  text = (text || $input.value).trim();
+  text = String(text || $input.value || '').trim();
   if(!text || state.busy) return;
+  if(!ACTIONS_ON || pendingImage) return sendMessageCore(text);
+
+  /* The last thing Pixel Pro said was "what should I draw?". A short reply
+     that is not itself a question or a command is the answer to it. */
+  if(pendingImageAsk){
+    pendingImageAsk = false;
+    if(!actIsQuestionAbout(text) && !looksLikeAction(text) && text.split(/\s+/).length <= 40){
+      return runPlanned({ steps:[{ type:'image', prompt:text, clause:text }], original:text }, text);
+    }
+  }
+
+  var plan = planLocal(text);
+  if(!actionsWanted(plan)) return sendMessageCore(text);
+  return runPlanned(plan, text);
+}
+
+async function runPlanned(plan, text){
+  state.busy = true; state.lastUser = text;
+  haptic('send');
+  $send.disabled = true;
+  $input.value = ''; autoGrow(); if(typeof updateSendVisual === 'function') updateSendVisual();
+  if($hero){ $hero.style.display = 'none'; syncEmptyState(); }
+  addMessage('user', esc(text));
+  setMemoryFocus(text);
+  try{
+    if(plan.uncertain){
+      addThinking('Thinking');
+      plan = await planWithModel(text, plan);
+      removeThinking();
+    }
+    await runPlanText(plan);
+  }catch(e){
+    removeThinking();
+    actionBubble('ask', 'Something went wrong doing that — please try again.');
+  }finally{
+    state.busy = false; $send.disabled = false; refocusComposer();
+  }
+}
+
+/* The ordinary turn: routing, search, streaming, memory. Unchanged, except
+   that a plan which has already shown the user's message can ask it not to
+   show it twice. */
+async function sendMessageCore(text, opts){
+  opts = opts || {};
+  text = String(text || $input.value || '').trim();
+  if(!text || (state.busy && !opts.fromPlan)) return;
   if(quotaExceeded()){ haptic('warn'); openGate(); return; }
   state.busy = true; state.lastUser = text;
   /* T0 for a typed turn is the Enter key. Read Aloud runs the same sentence
@@ -10771,7 +11587,7 @@ async function sendMessage(text){
   /* With a photo attached the turn is about THAT photo. "create an image like
      this one" used to drop the attachment and generate something unrelated. */
   if(looksLikeImageRequest(text) && !pendingImage){
-    addMessage('user', esc(text));
+    if(!opts.fromPlan) addMessage('user', esc(text));
     if($hero) $hero.style.display = 'none';
     await generateImage(text);
     if(!state.user) bumpUsage();
@@ -10783,7 +11599,7 @@ async function sendMessage(text){
     addMessage('user', '<img class="sent-img" src="' + imgForThisTurn.dataUrl + '" alt="attached photo" />' + esc(text));
     clearImage();
     $input.placeholder = 'Ask anything';
-  } else {
+  } else if(!opts.fromPlan){
     addMessage('user', esc(text));
   }
   setMemoryFocus(text);         /* which memories this turn's prompt carries */
