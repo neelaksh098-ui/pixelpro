@@ -12,7 +12,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect x='10.5' y='0' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3Crect x='0' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='10.5' width='9' height='9' rx='2' fill='%23FFB43A'/%3E%3Crect x='21' y='10.5' width='9' height='9' rx='2' fill='%235672FF'/%3E%3Crect x='10.5' y='21' width='9' height='9' rx='2' fill='%232E46E2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700;800&family=Noto+Sans+JP:wght@700&family=Mrs+Saint+Delafield&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700;800&family=Noto+Sans+JP:wght@700&family=Mrs+Saint+Delafield&family=Figtree:wght@400;500;600;700;800&display=swap">
 <script>document.documentElement.classList.add('js')</script>
 <style>
 /* Layout: a cinematic launch reel. Full-bleed pinned chapters, type set huge on a left-anchored grid,
@@ -138,7 +138,7 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .sparks i{position:absolute;width:var(--z,4px);height:var(--z,4px);border-radius:1px;background:var(--c,var(--blue));opacity:0;animation:twinkle var(--d,5s) ease-in-out infinite var(--dl,0s);box-shadow:0 0 10px var(--c,var(--blue))}
 @keyframes twinkle{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:.9;transform:scale(1)}}
 .hero-inner{display:grid;justify-items:center;text-align:center;gap:18px;will-change:transform,opacity}
-.hero-logo{position:relative;width:min(620px,100%);height:clamp(190px,30vh,330px);display:grid;place-items:center;margin-bottom:-6px}
+.hero-logo{position:relative;width:min(680px,100%);height:clamp(220px,36vh,400px);display:grid;place-items:center;margin:-10px 0 -22px}
 .hero-logo canvas{opacity:0;transition:opacity 1.2s var(--ease)}
 .hero-logo.is-3d canvas{opacity:1}
 .hero-fallback{--s:clamp(96px,14vh,140px);transition:opacity .8s var(--ease),transform .8s var(--ease);filter:drop-shadow(0 0 40px rgba(86,114,255,.45))}
@@ -154,9 +154,6 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
 .hero-sub b{color:var(--ink);font-weight:inherit}
 .hero-copy{max-width:44ch;color:var(--mist)}
 .ctas{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:6px}
-.scroll-cue{position:absolute;left:50%;bottom:calc(26px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:grid;justify-items:center;gap:10px;font:500 .68rem/1 var(--f-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--mist)}
-.scroll-cue span{width:1px;height:44px;background:linear-gradient(var(--spark),transparent);animation:cue 2.2s var(--ease) infinite;transform-origin:top}
-@keyframes cue{0%{transform:scaleY(0)}50%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
 /* entrance after the gate */
 .js body:not(.entered) .hero-inner>*{opacity:0;transform:translateY(34px);filter:blur(14px)}
 .entered .hero-inner>*{transition:opacity 1.2s var(--ease),transform 1.2s var(--ease),filter 1.2s var(--ease)}
@@ -239,56 +236,18 @@ body::after{content:"";position:fixed;inset:0;z-index:300;pointer-events:none;op
   .c-photo{grid-column:span 2}.c-news{grid-column:span 4}
   .c-free,.c-chat{grid-column:span 3}
 }
-/* live web */
-.vw{display:grid;gap:14px;padding:18px;border-radius:18px;background:rgba(5,7,15,.6);box-shadow:0 0 0 1px var(--line) inset}
-.vw-q{justify-self:end;max-width:80%;padding:10px 14px;border-radius:16px 16px 4px 16px;background:var(--deep);font-size:.9375rem}
-.vw-a{font-size:.9375rem;color:var(--ink-2);max-width:56ch}
-.vw-a b{color:var(--ink)}
+/* shared bits used by the demo chat and the headlines label */
 .src-label{font:500 .65rem/1 var(--f-mono);letter-spacing:.18em;color:var(--mist)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips span{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:999px;background:rgba(86,114,255,.12);box-shadow:0 0 0 1px rgba(86,114,255,.3) inset;font-size:.8125rem;color:var(--ink-2)}
 .chips b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--blue);color:var(--ink);font:600 .7rem/1 var(--f-mono)}
-.in .chips span{animation:chip .6s var(--ease) backwards}
-.in .chips span:nth-child(2){animation-delay:.12s}.in .chips span:nth-child(3){animation-delay:.24s}
 @keyframes chip{from{opacity:0;transform:translateY(10px) scale(.9)}}
-/* voice */
-.vv{display:grid;gap:16px;justify-items:center}
-.mic{position:relative;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:var(--spark);color:var(--void)}
-.mic svg{width:26px;height:26px}
-.mic::before,.mic::after{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 2px rgba(255,180,58,.6);animation:ring 2.4s var(--ease) infinite}
-.mic::after{animation-delay:1.2s}
-@keyframes ring{to{transform:scale(2.1);opacity:0}}
-.wave{display:flex;align-items:center;gap:3px;height:48px;width:100%;justify-content:center}
-.wave i{width:3px;border-radius:2px;background:linear-gradient(var(--spark),var(--blue));height:10%;animation:wv var(--d,1s) ease-in-out infinite alternate var(--dl,0s)}
-@keyframes wv{to{height:var(--h,80%)}}
-.transcript{font-size:.875rem;color:var(--ink-2);text-align:center}
-/* photo */
-.photo{position:relative;aspect-ratio:4/3;max-width:100%;border-radius:18px;overflow:hidden;background:radial-gradient(circle at 68% 42%,#FFD27A 0 7%,rgba(255,180,58,.6) 8%,transparent 22%),linear-gradient(180deg,#24357F 0%,#7B5BB0 44%,#F29A5B 68%,#2A2546 69%,#141A3A 100%)}
-.photo::before{content:"";position:absolute;left:-10%;right:-10%;bottom:0;height:42%;background:radial-gradient(60% 90% at 20% 100%,#0E1430 60%,transparent 61%),radial-gradient(70% 80% at 85% 100%,#1A1F45 60%,transparent 61%)}
-.photo::after{content:"";position:absolute;left:0;right:0;height:30%;top:-30%;background:linear-gradient(transparent,rgba(255,210,122,.35),transparent);border-bottom:1px solid rgba(255,210,122,.9);animation:scan 3.2s var(--ease) infinite}
-@keyframes scan{to{top:100%}}
-.tags{position:absolute;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:6px;z-index:1}
-.tags span{padding:4px 9px;border-radius:999px;background:rgba(5,7,15,.7);backdrop-filter:blur(6px);font:500 .7rem/1.3 var(--f-mono);color:var(--ink)}
-/* news ticker */
-.ticker{display:grid;gap:10px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);overflow:hidden}
-.tk-row{display:flex;gap:10px;width:max-content;animation:marq var(--d,30s) linear infinite}
-.tk-row.rev{animation-direction:reverse}
-@keyframes marq{to{transform:translateX(-50%)}}
-.tk{display:inline-flex;align-items:center;gap:10px;padding:10px 16px;border-radius:14px;background:rgba(5,7,15,.6);box-shadow:0 0 0 1px var(--line) inset;font-size:.9375rem;white-space:nowrap;color:var(--ink-2)}
-.tk em{font:500 .62rem/1 var(--f-mono);font-style:normal;letter-spacing:.14em;padding:4px 6px;border-radius:5px;background:rgba(86,114,255,.18);color:var(--ink)}
 .live{display:inline-flex;align-items:center;gap:7px;font:500 .68rem/1 var(--f-mono);letter-spacing:.18em;color:var(--bad)}
 .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--bad);animation:blink 1.4s steps(2) infinite}
 /* free */
 .zero{font:800 clamp(5.5rem,13vw,9.5rem)/.85 var(--f-display);letter-spacing:-.06em}
 .free-list{display:flex;flex-wrap:wrap;gap:8px}
 .free-list span{padding:8px 12px;border-radius:999px;box-shadow:0 0 0 1px var(--line-2) inset;font-size:.875rem;color:var(--ink-2)}
-/* chats */
-.side{display:grid;gap:8px;padding:14px;border-radius:18px;background:rgba(5,7,15,.6);box-shadow:0 0 0 1px var(--line) inset}
-.side small{font:500 .65rem/1 var(--f-mono);letter-spacing:.18em;color:var(--mist);padding:2px 4px 6px}
-.side div{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;font-size:.9rem;color:var(--ink-2)}
-.side div:first-of-type{background:rgba(86,114,255,.16);color:var(--ink)}
-.side div::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--blue);flex:none}
-.side div:first-of-type::before{background:var(--spark)}
 
 /* ---------- prompt track (horizontal while pinned) ---------- */
 .track-sec{position:relative}
@@ -434,6 +393,7 @@ details.st-group[open] summary{margin-bottom:6px}
   .reveal-ready{opacity:1;transform:none;filter:none}
 }
 </style>
+<link rel="stylesheet" href="css/device.css">
 </head>
 <body>
 
@@ -506,7 +466,6 @@ details.st-group[open] summary{margin-bottom:6px}
     </div>
     <p class="hero-by">Created by <b>Neelaksh Naithani</b></p>
   </div>
-  <div class="scroll-cue" aria-hidden="true">Scroll<span></span></div>
 </section>
 
 <!-- ============ THE REEL: scroll-driven film ============ -->
@@ -572,7 +531,161 @@ details.st-group[open] summary{margin-bottom:6px}
 </section>
 
 <!-- ============ PHONE SHOWCASE ============ -->
-<!--MEET-->
+<!-- ============ PHONE SHOWCASE (device module: css/device.css + js/device.js) ============ -->
+<section class="pp-device-section" id="meet" aria-labelledby="ppMeetTitle">
+  <div class="pp-stage">
+    <div class="pp-backdrop" aria-hidden="true">
+      <div class="pp-beam"></div>
+      <div class="pp-glow"></div>
+      <div class="pp-glow pp-glow--amber"></div>
+      <div class="pp-fade"></div>
+    </div>
+
+    <header class="pp-intro">
+      <p class="pp-eyebrow">On your phone</p>
+      <h2 class="pp-title" id="ppMeetTitle">Meet <span class="pp-metal">Pixel Pro.</span></h2>
+      <p class="pp-lede">The whole assistant in your phone's browser. Nothing to install.</p>
+    </header>
+
+    <!-- the phone (decorative: the captions and callouts carry the story for screen readers) -->
+    <div class="pp-scene" aria-hidden="true">
+      <div class="pp-floor"></div>
+      <div class="pp-phone">
+        <i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i>
+        <i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i><i class="pp-slice"></i>
+        <i class="pp-key pp-key--act"></i><i class="pp-key pp-key--up"></i><i class="pp-key pp-key--dn"></i><i class="pp-key pp-key--pwr"></i>
+        <div class="pp-face">
+          <div class="pp-bezel">
+            <div class="pp-screen">
+
+              <!-- ======= the real Pixel Pro app, dark theme ======= -->
+              <div class="pp-ui pp-app">
+                <div class="pp-chrome">
+                  <div class="pp-statusbar">
+                    <span class="pp-clock">9:41</span>
+                    <span class="pp-sys">
+                      <svg viewBox="0 0 18 12" width="18" height="12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+                      <svg viewBox="0 0 16 12" width="16" height="12" fill="currentColor"><path d="M8 11.6 5.7 9.2a3.3 3.3 0 0 1 4.6 0Z"/><path d="M3.5 7a6.4 6.4 0 0 1 9 0l-1.5 1.5a4.3 4.3 0 0 0-6 0Z"/><path d="M1.2 4.7a9.6 9.6 0 0 1 13.6 0l-1.5 1.5a7.5 7.5 0 0 0-10.6 0Z"/></svg>
+                      <svg viewBox="0 0 27 13" width="27" height="13" fill="currentColor"><rect x=".5" y=".5" width="23" height="12" rx="3.6" fill="none" stroke="currentColor" opacity=".45"/><rect x="2.2" y="2.2" width="17.4" height="8.6" rx="2"/><path d="M25.2 4.6v3.8a2 2 0 0 0 0-3.8Z" opacity=".5"/></svg>
+                    </span>
+                  </div>
+                  <div class="pp-top">
+                    <div class="pp-brand">
+                      <span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                      <b class="pp-name">Pixel Pro</b>
+                      <span class="pp-status"><i></i>Live</span>
+                    </div>
+                    <div class="pp-controls">
+                      <span class="pp-langs"><span class="pp-on">EN</span><span lang="hi">हिं</span></span>
+                      <span class="pp-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span>
+                      <span class="pp-icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pp-ticker">
+                  <span class="pp-live"><i></i>LIVE</span>
+                  <div class="pp-tk-view">
+                    <div class="pp-tk-track">
+                      <span class="pp-tk"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
+                      <span class="pp-tk"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
+                      <span class="pp-tk" lang="hi"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
+                      <span class="pp-tk" lang="hi"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
+                      <span class="pp-tk"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
+                      <span class="pp-tk"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
+                      <span class="pp-tk" lang="hi"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
+                      <span class="pp-tk" lang="hi"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pp-main">
+                  <div class="pp-hero">
+                    <span class="pp-mark pp-mark--hero"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                    <p class="pp-hero-h">Ask anything. <em>Get answers.</em></p>
+                    <p class="pp-hero-p">Your free AI assistant with live web answers &amp; news, in English, <span lang="hi">हिंदी</span> and many more languages. No sign-up.</p>
+                    <div class="pp-chips">
+                      <span class="pp-chip">📰 Today’s top headlines</span>
+                      <span class="pp-chip" lang="hi">🇮🇳 आज की ताज़ा ख़बरें</span>
+                      <span class="pp-chip">✉️ Write an email</span>
+                      <span class="pp-chip">🍲 Quick paneer dinner</span>
+                    </div>
+                  </div>
+
+                  <div class="pp-thread">
+                    <div class="pp-msg pp-msg--user pp-q">
+                      <div class="pp-bubble pp-bubble--photo">
+                        <img src="media/rocket.jpg" width="640" height="427" alt="A white rocket standing on its launch pad at twilight, with four tall lattice towers around it" decoding="async">
+                        <span class="pp-cap-text">What rocket is this?</span>
+                      </div>
+                    </div>
+                    <div class="pp-msg pp-msg--bot pp-thinking-row">
+                      <span class="pp-avatar"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+                      <div class="pp-bubble"><span class="pp-think"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="pp-think-lbl">Thinking…</span></span></div>
+                    </div>
+                    <div class="pp-msg pp-msg--bot pp-answer">
+                      <span class="pp-avatar"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+                      <div class="pp-bubble">
+                        <p class="pp-answer-text">That's a <strong>SpaceX Falcon 9</strong> standing on its launch pad at Cape Canaveral, Florida. The tall towers around it are lightning masts that protect the rocket before launch.</p>
+                        <div class="pp-sources">
+                          <span class="pp-src-lbl">LIVE WEB SOURCES</span>
+                          <span class="pp-src-a"><b>1</b>spacex.com <span class="pp-src">· Falcon 9</span></span>
+                          <span class="pp-src-a"><b>2</b>en.wikipedia.org <span class="pp-src">· Falcon 9</span></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pp-composer-wrap">
+                  <div class="pp-composer">
+                    <div class="pp-attachment"><div class="pp-attachment-in">
+                      <span class="pp-thumb"><img src="media/rocket.jpg" width="640" height="427" alt="" decoding="async"><i>×</i></span>
+                      <span class="pp-file"><b>rocket.jpg</b><span>Photo</span></span>
+                    </div></div>
+                    <div class="pp-crow">
+                      <span class="pp-attach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="m21 15-5-5L5 21"/></svg></span>
+                      <span class="pp-input"><span class="pp-typed"></span><i class="pp-caret"></i><span class="pp-ph">Ask anything…</span></span>
+                      <span class="pp-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span>
+                      <span class="pp-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span>
+                    </div>
+                  </div>
+                  <p class="pp-fine">Pixel Pro can make mistakes. Check important info.</p>
+                </div>
+                <i class="pp-homebar"></i>
+              </div>
+              <!-- ======= /app ======= -->
+
+              <i class="pp-island"><i></i></i>
+              <i class="pp-sleep"></i>
+              <i class="pp-glass"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <svg class="pp-leaders" aria-hidden="true" focusable="false">
+      <g class="pp-ld"><path d=""/><circle class="pp-ld-halo" r="9" cx="-40" cy="-40"/><circle class="pp-ld-dot" r="3.5" cx="-40" cy="-40"/></g>
+      <g class="pp-ld"><path d=""/><circle class="pp-ld-halo" r="9" cx="-40" cy="-40"/><circle class="pp-ld-dot" r="3.5" cx="-40" cy="-40"/></g>
+      <g class="pp-ld"><path d=""/><circle class="pp-ld-halo" r="9" cx="-40" cy="-40"/><circle class="pp-ld-dot" r="3.5" cx="-40" cy="-40"/></g>
+    </svg>
+
+    <!-- callouts: shown beside the phone on wide screens (order = order they appear) -->
+    <ul class="pp-callouts">
+      <li class="pp-callout" data-target="photo"><b>Photos, understood.</b><span>Add a picture and ask what's in it.</span></li>
+      <li class="pp-callout" data-target="sources"><b>Answers with sources you can open.</b><span>Fresh facts from the web, with links to check them.</span></li>
+      <li class="pp-callout" data-target="ticker"><b>Live headlines in English and <span lang="hi">हिंदी</span>.</b><span>Top stories in a ticker. Tap one to ask about it.</span></li>
+    </ul>
+
+    <!-- one caption that changes with the story (beside the phone, or under it on small screens) -->
+    <div class="pp-caption" aria-hidden="true">
+      <p class="pp-cap"><span class="pp-cap-k">01</span><b>Photos, understood.</b><span>Add a picture and ask what's in it.</span></p>
+      <p class="pp-cap"><span class="pp-cap-k">02</span><b>Answers with sources you can open.</b><span>Fresh facts from the web, with links to check them.</span></p>
+      <p class="pp-cap"><span class="pp-cap-k">03</span><b>Live headlines in English and <span lang="hi">हिंदी</span>.</b><span>Top stories in a ticker. Tap one to ask about it.</span></p>
+    </div>
+  </div>
+</section>
 
 <!-- ============ FEATURES ============ -->
 <section class="section" id="features">
@@ -587,58 +700,102 @@ details.st-group[open] summary{margin-bottom:6px}
         <p class="eyebrow">Live web answers</p>
         <h3>Ask about today, not last year.</h3>
         <p>Pixel Pro searches the web when your question needs fresh facts, then shows the sources under its answer.</p>
-        <div class="viz" aria-hidden="true">
-          <div class="vw">
-            <div class="vw-q">How tall is the Statue of Unity?</div>
-            <p class="vw-a">The Statue of Unity in Gujarat stands <b>182 metres</b> tall, which is about twice the height of the Statue of Liberty.</p>
-            <span class="src-label">LIVE WEB SOURCES</span>
-            <div class="chips"><span><b>1</b>wikipedia.org</span><span><b>2</b>gujarattourism.com</span><span><b>3</b>pib.gov.in</span></div>
-          </div>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--web">
+  <div class="pp-msg pp-msg--user pp-rise"><div class="pp-bubble">How tall is the Statue of Unity?</div></div>
+  <div class="pp-msg pp-msg--bot pp-rise">
+    <span class="pp-avatar" aria-hidden="true"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+    <div class="pp-bubble">
+      <p>The Statue of Unity in Gujarat is <strong>182 metres</strong> tall, about twice the height of the Statue of Liberty.</p>
+      <div class="pp-sources">
+        <span class="pp-src-lbl">LIVE WEB SOURCES</span>
+        <span class="pp-src-a"><b>1</b>wikipedia.org <span class="pp-src">· Statue of Unity</span></span>
+        <span class="pp-src-a"><b>2</b>gujarattourism.com <span class="pp-src">· Statue of Unity</span></span>
+      </div>
+    </div>
+  </div>
+</div>
         </div>
       </article>
       <article class="card c-voice reveal" style="--dl:.1s">
         <p class="eyebrow">Voice</p>
         <h3>Say it. Hear it.</h3>
         <p>Speak your question and Pixel Pro reads the answer aloud.</p>
-        <div class="viz vv" aria-hidden="true">
-          <div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
-          <div class="wave" id="wave"></div>
-          <p class="transcript">“Good morning in Hindi?” → <span lang="hi">सुप्रभात</span></p>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--voice">
+  <div class="pp-vtop">
+    <span class="pp-vtitle"><span class="pp-mark pp-mark--sm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Voice</span>
+    <span class="pp-vstate"><span class="pp-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Speaking</span>
+  </div>
+  <div class="pp-orb-wrap" aria-hidden="true"><span class="pp-ring"></span><span class="pp-ring"></span><span class="pp-ring"></span><span class="pp-orb"></span></div>
+  <div class="pp-vlines">
+    <p class="pp-vline pp-vline--you"><span class="pp-who">You said</span><span class="pp-said">“Say good morning in Hindi”</span></p>
+    <p class="pp-vline pp-vline--bot"><span class="pp-who">Pixel Pro</span><span class="pp-said"><span lang="hi">सुप्रभात</span> <span class="pp-roman">(Suprabhat)</span></span></p>
+  </div>
+  <div class="pp-vctl" aria-hidden="true">
+    <span class="pp-vbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span>
+    <span class="pp-vmic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg></span>
+    <span class="pp-vbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+  </div>
+</div>
         </div>
       </article>
       <article class="card c-photo reveal" data-voice="photos">
         <p class="eyebrow">Photos</p>
         <h3>Show it a photo.</h3>
         <p>Add a picture and ask what's in it.</p>
-        <div class="viz" aria-hidden="true">
-          <div class="photo"><div class="tags"><span>sunset</span><span>hills</span><span>evening sky</span></div></div>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--photo">
+  <div class="pp-msg pp-msg--user pp-rise">
+    <div class="pp-bubble pp-bubble--photo">
+      <img src="media/espresso.jpg" width="600" height="400" alt="An espresso with golden crema in a red cup on a red saucer with a spoon, on a wooden table" loading="lazy" decoding="async">
+      <span class="pp-cap-text">What drink is this?</span>
+    </div>
+  </div>
+  <div class="pp-msg pp-msg--bot pp-rise">
+    <span class="pp-avatar" aria-hidden="true"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+    <div class="pp-bubble"><p>That's an espresso with a golden crema, served in a red cup on a saucer with a spoon.</p></div>
+  </div>
+</div>
         </div>
       </article>
       <article class="card c-news reveal" style="--dl:.1s">
         <p class="eyebrow">Headlines <span class="live">LIVE</span></p>
         <h3>Today's news, in your language.</h3>
         <p>A live ticker of top stories in English or हिंदी. Tap a headline to ask about it.</p>
-        <div class="viz ticker" aria-hidden="true">
-          <div class="tk-row" style="--d:38s">
-            <span class="tk"><em>EN</em>Top stories, refreshed through the day</span>
-            <span class="tk"><em>HI</em>आज की बड़ी ख़बरें, दिन भर अपडेट</span>
-            <span class="tk"><em>BN</em>আজকের সেরা খবর, সারাদিন আপডেট</span>
-            <span class="tk"><em>EN</em>Tap any headline to ask about it</span>
-            <span class="tk"><em>EN</em>Top stories, refreshed through the day</span>
-            <span class="tk"><em>HI</em>आज की बड़ी ख़बरें, दिन भर अपडेट</span>
-            <span class="tk"><em>BN</em>আজকের সেরা খবর, সারাদিন আপডেট</span>
-            <span class="tk"><em>EN</em>Tap any headline to ask about it</span>
-          </div>
-          <div class="tk-row rev" style="--d:44s">
-            <span class="tk"><em>BN</em>খবর নিয়ে প্রশ্ন করুন</span>
-            <span class="tk"><em>EN</em>Sport, tech, business and more</span>
-            <span class="tk"><em>HI</em>किसी भी ख़बर पर सवाल पूछें</span>
-            <span class="tk"><em>EN</em>Switch languages any time</span>
-            <span class="tk"><em>BN</em>খবর নিয়ে প্রশ্ন করুন</span>
-            <span class="tk"><em>EN</em>Sport, tech, business and more</span>
-            <span class="tk"><em>HI</em>किसी भी ख़बर पर सवाल पूछें</span>
-            <span class="tk"><em>EN</em>Switch languages any time</span>
-          </div>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--news">
+  <div class="pp-top">
+    <div class="pp-brand">
+      <span class="pp-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <b class="pp-name">Pixel Pro</b>
+      <span class="pp-status"><i></i>Live</span>
+    </div>
+    <span class="pp-langs" aria-label="News language: English or Hindi"><span class="pp-on">EN</span><span lang="hi">हिं</span></span>
+  </div>
+  <div class="pp-ticker">
+    <span class="pp-live"><i></i>LIVE</span>
+    <div class="pp-tk-view">
+      <div class="pp-tk-track pp-tk-en">
+        <span class="pp-tk"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
+        <span class="pp-tk"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
+        <span class="pp-tk" aria-hidden="true"><b>◆</b> Today's top stories, refreshed through the day <span class="pp-src">· Top stories</span></span>
+        <span class="pp-tk" aria-hidden="true"><b>◆</b> Tap any headline to ask Pixel Pro about it <span class="pp-src">· Tip</span></span>
+      </div>
+      <div class="pp-tk-track pp-tk-hi" lang="hi">
+        <span class="pp-tk"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
+        <span class="pp-tk"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
+        <span class="pp-tk" aria-hidden="true"><b>◆</b> आज की बड़ी ख़बरें, दिन भर अपडेट <span class="pp-src">· मुख्य</span></span>
+        <span class="pp-tk" aria-hidden="true"><b>◆</b> किसी भी ख़बर पर सवाल पूछें <span class="pp-src">· टिप</span></span>
+      </div>
+    </div>
+  </div>
+  <div class="pp-npeek" aria-hidden="true">
+    <span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    <p>Ask anything. <em>Get answers.</em></p>
+    <div class="pp-chips"><span class="pp-chip">📰 Today’s top headlines</span><span class="pp-chip" lang="hi">🇮🇳 आज की ताज़ा ख़बरें</span></div>
+  </div>
+</div>
         </div>
       </article>
       <article class="card c-free reveal" data-voice="free">
@@ -651,11 +808,30 @@ details.st-group[open] summary{margin-bottom:6px}
         <p class="eyebrow">Your chats</p>
         <h3>Pick up where you left off.</h3>
         <p>Recent chats stay in the sidebar. Light mode or dark, your choice.</p>
-        <div class="viz side" aria-hidden="true">
-          <small>RECENT</small>
-          <div>Jaipur trip on a budget</div>
-          <div>Photosynthesis in simple Hindi</div>
-          <div>Leave email to my manager</div>
+        <div class="viz">
+          <div class="pp-ui pp-shot pp-shot--chats">
+  <div class="pp-side">
+    <div class="pp-side-top">
+      <span class="pp-mark pp-mark--sm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <b class="pp-name">Pixel Pro</b>
+      <span class="pp-icon-btn" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M15 10l-2 2 2 2"/></svg></span>
+    </div>
+    <span class="pp-newchat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New chat</span>
+    <span class="pp-side-lbl">Recent</span>
+    <span class="pp-item pp-item--on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>Jaipur trip on a budget</span></span>
+    <span class="pp-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>Photosynthesis in simple Hindi</span></span>
+    <span class="pp-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>Leave email to my manager</span></span>
+    <span class="pp-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z"/></svg><span>What rocket is this?</span></span>
+    <div class="pp-side-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Dark mode<span class="pp-switch" aria-hidden="true"></span></div>
+  </div>
+  <div class="pp-side-peek" aria-hidden="true">
+    <div class="pp-msg pp-msg--user"><div class="pp-bubble">Plan a 3-day Jaipur trip on a student budget.</div></div>
+    <div class="pp-msg pp-msg--bot">
+      <span class="pp-avatar"><span class="pp-mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+      <div class="pp-bubble"><p>Here's a simple plan that keeps costs low:</p><p><strong>Day 1:</strong> Amber Fort in the morning, then sunset at Nahargarh Fort.</p><p><strong>Day 2:</strong> City Palace, Jantar Mantar and Hawa Mahal, then street food for dinner.</p><p><strong>Day 3:</strong> Albert Hall Museum, then shopping at Johari and Bapu Bazaar.</p></div>
+    </div>
+  </div>
+</div>
         </div>
       </article>
     </div>
@@ -866,6 +1042,7 @@ details.st-group[open] summary{margin-bottom:6px}
 </div>
 
 <script src="js/music.js"></script>
+<script src="js/device.js"></script>
 <script>
 (() => {
 'use strict';
@@ -1736,16 +1913,6 @@ $$('[data-app]').forEach(a => {
   }
 })();
 
-// voice waveform bars in the feature card
-(() => {
-  const wv = $('#wave'); const n = 30;
-  for (let k = 0; k < n; k++) {
-    const b = document.createElement('i');
-    const h = 25 + Math.sin(k / n * Math.PI) * 60 + Math.random() * 15;
-    b.style.cssText = '--h:' + h.toFixed(0) + '%;--d:' + (0.5 + Math.random() * 0.7).toFixed(2) + 's;--dl:' + (-Math.random()).toFixed(2) + 's';
-    wv.appendChild(b);
-  }
-})();
 
 // statement: split into words
 const stWords = (() => {
@@ -1842,6 +2009,9 @@ const Demo = (() => {
 // prompt track: vertical scroll drives a sideways slide
 const trackSec = $('#prompts'), track = $('#track'), trackBar = $('#trackBar');
 const zoomSec = $('#zoom'), zoomTitle = $('#zoomTitle'), zoomSub = $('#zoomSub');
+// phone showcase (js/device.js): driven from the same frame loop
+const Device = window.PixelDevice ? window.PixelDevice.init($('#meet')) : null;
+if (Device) Device.onStage(st => { if (st === 'typing') Voice.trigger('meet'); });
 function sizeTrack() {
   const extra = Math.max(0, track.scrollWidth - innerWidth);
   trackSec.style.height = (innerHeight + extra + innerHeight * 0.25) + 'px';
@@ -1883,6 +2053,7 @@ function frame(t) {
     track.style.transform = 'translate3d(' + (-tp * extra).toFixed(1) + 'px,0,0)';
     trackBar.style.setProperty('--p', tp.toFixed(4));
   }
+  if (Device) Device.update(vh);
   Voice.tick(t);
   requestAnimationFrame(frame);
 }
@@ -1901,7 +2072,7 @@ function sceneIntensity(vh) {
   }
   return 0.3;
 }
-function onResize() { vh = innerHeight; Reel.resize(); sizeTrack(); }
+function onResize() { vh = innerHeight; Reel.resize(); sizeTrack(); if (Device) Device.resize(); }
 addEventListener('resize', onResize);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizeTrack);
 sizeTrack();
