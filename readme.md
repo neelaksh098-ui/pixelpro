@@ -47,6 +47,7 @@ the order they were asked for.
 |---|---|
 | a picture | "I want a dog playing picture", "draw a cat in a hat", "ek kutte ki photo banao" |
 | the theme | "dark mode", "set theme to light", "theme dark kar do", "change the theme" |
+| the glass design | "turn off the glass design", "liquid glass on" |
 | your location | "where am I", "tell me my location", "turn off location" |
 | email | "email me this", "write an email to my boss asking for leave" |
 | the voice | "switch to female voice" |
@@ -70,8 +71,42 @@ theme of Hamlet" — stay questions.
 Email to other people is drafted, never sent automatically: the draft comes
 with a one-tap "Open in Gmail", filled in.
 
-Tests: `tests/actiontest.py` (83 phrasings plus end-to-end runs in chat and
+Tests: `tests/actiontest.py` (94 phrasings plus end-to-end runs in chat and
 voice) alongside `tests/orbtest.py`.
+
+## Liquid Glass on iPhone and iPad
+
+iPhones and iPads get an iOS 26-style Liquid Glass design automatically;
+every other device (Android, Windows, Mac, Linux) keeps the normal design,
+pixel for pixel. Every browser on an iPhone counts (Safari, Chrome, Firefox,
+Edge), and so does an iPad, even though iPadOS says it is a Mac.
+
+What changes on those devices: the chat scrolls under a floating glass
+composer and floating glass header buttons, the header and the strip under
+the composer fade into the page instead of being solid bars, and the + menu,
+the account menu, the chats sidebar, the voice orb's buttons and the sign-in
+and confirm cards are glass too. The page background stays as it was (white,
+or pure black in dark theme).
+
+Switching it:
+
+| How | What it does |
+|---|---|
+| Settings → General → Glass design | Turn off / Turn on, on this device |
+| Say or type "turn off the glass design" / "liquid glass on" | the same, from chat or voice |
+| `?glass=1` on the address | preview it on any device, e.g. a laptop |
+| `?glass=0` | turn it off |
+| `?glass=auto` | back to automatic (on for iPhone/iPad only) |
+
+With iOS "Increase Contrast" on, the glass turns solid. The lens-like
+refraction at the edges of Apple's own glass cannot be done in Safari (it
+needs an SVG filter Safari does not support), so it is not attempted; the
+blur, the colour through the glass, the lit rim and the fading edges are.
+
+Tests: `tests/glasstest.py` — which devices get it, that it really blurs,
+that the chat really runs under the bars and the newest reply still lands
+above the composer, the switches, and screenshots of Android and a laptop
+compared pixel for pixel against the previous build.
 
 ## Site structure: launch site + app
 

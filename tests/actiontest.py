@@ -91,6 +91,13 @@ T = [
  ("how do i set dark mode on windows", "answer"),
  ("who won the match and email me the answer", "answer|email_self"),
  ("make a picture of a dog, then make it dark", "image:a dog, make it dark"),
+ # --- the glass design (on by itself on iPhone; these switch it by hand) ---
+ ("turn off the glass design", "glass:off"), ("liquid glass on", "glass:on"),
+ ("switch to the glass look", "glass:on"), ("disable liquid glass", "glass:off"),
+ ("glass off", "glass:off"), ("turn on glass", "glass:on"),
+ ("turn off liquid glass and set dark theme", "glass:off|theme:dark"),
+ ("what is liquid glass", "answer"), ("is the glass design bad for battery", "answer"),
+ ("a glass of water", "answer"), ("i don't want liquid glass", "glass:off"),
 ]
 
 def summ(steps):

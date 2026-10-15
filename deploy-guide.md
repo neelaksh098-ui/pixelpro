@@ -1300,6 +1300,10 @@ The browser tests live in `tests/` and need Playwright plus a Chromium build:
     pip install playwright
     python3 tests/mockserver.py 8880 &
     python3 tests/orbtest.py
+    python3 tests/actiontest.py
+    python3 tests/sitetest.py
+    python3 tests/glasstest.py
+    node tests/swtest.js
 
 `tests/mockserver.py` stands in for every Netlify function, and
 `tests/shims.py` replaces speech recognition and the Cartesia WebSocket.
