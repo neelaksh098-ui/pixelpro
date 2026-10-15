@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+# deploy bundles built from this repo (git ls-files | zip) -- never part of it
+*.zip
