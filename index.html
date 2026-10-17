@@ -2280,56 +2280,90 @@ html,body{overscroll-behavior:none}
    unreliable about var() inside -webkit-backdrop-filter.
    ================================================================ */
 html.liquid-glass{
+  /* MEASURED, NOT GUESSED. The values below come from Apple-style glass
+     (the Solid Glass reference icons): sampled pixel by pixel, the dark
+     face is flat -- the same grey from top to bottom, no gloss -- and the
+     light face is white with only a whisper of shading toward the bottom.
+     All the light lives in a hairline rim: bright on the side facing the
+     light (123/255 over a face of 34 in dark), softer at the opposite
+     corner (108), and almost nothing along the sides between. In dark the
+     inside bottom edge also glows faintly, where light passing through the
+     glass collects. An earlier version put a white gloss down every dark
+     surface; that is what read as "shiny", and it is gone. */
   --lg-bg-rgb:255,255,255;
-  --lg-fill:rgba(255,255,255,.52);
-  --lg-fill-strong:rgba(250,250,252,.80);
-  --lg-fill-hover:rgba(255,255,255,.74);
+  --lg-fill:rgba(255,255,255,.58);
+  --lg-fill-strong:rgba(250,250,252,.82);
+  --lg-fill-hover:rgba(255,255,255,.76);
   --lg-panel:rgba(248,248,250,.84);
+  --lg-sheen:linear-gradient(180deg,rgba(255,255,255,.30) 0%,rgba(255,255,255,0) 55%,rgba(15,23,42,.025) 100%);
+  --lg-glint:.34;
+  --lg-rim-hi:.98;
+  --lg-rim-lo:.62;
+  --lg-rim-base:.26;
+  --lg-tint-sheen:.30;
+  --lg-edge:rgba(15,23,42,.10);
+  --lg-depth:inset 0 0 10px -4px rgba(15,23,42,.10);
   --lg-glow-on:rgba(255,255,255,.85);
   --lg-select:rgba(15,23,42,.06);
   --lg-rim:rgba(255,255,255,.95);
   --lg-rim-low:rgba(255,255,255,.5);
-  --lg-edge:rgba(15,23,42,.10);
-  --lg-sheen:linear-gradient(180deg,rgba(255,255,255,.62) 0%,rgba(255,255,255,.16) 45%,rgba(255,255,255,0) 72%);
-  --lg-shadow:0 12px 32px -14px rgba(15,23,42,.32),0 2px 8px -3px rgba(15,23,42,.10);
+  --lg-shadow:0 10px 28px -12px rgba(15,23,42,.28),0 1px 4px -1px rgba(15,23,42,.08);
   --lg-menu-shadow:0 26px 60px -20px rgba(15,23,42,.38),0 4px 14px -6px rgba(15,23,42,.14);
   --glass:rgba(255,255,255,.74);
   --glass-line:rgba(15,23,42,.10);
+  /* where the light is: set from the phone's tilt (or the mouse) by the
+     LIGHT THAT MOVES script; these are the resting values, light from
+     the top left as on iOS */
+  --lg-angle:322deg;
+  --lg-gx:16%;
+  --lg-gy:0%;
 }
 html.liquid-glass[data-theme="dark"]{
   --lg-bg-rgb:0,0,0;
-  --lg-fill:rgba(44,44,46,.42);
-  --lg-fill-strong:rgba(28,28,30,.78);
-  --lg-fill-hover:rgba(64,64,68,.52);
+  --lg-fill:rgba(38,38,40,.58);
+  --lg-fill-strong:rgba(26,26,28,.80);
+  --lg-fill-hover:rgba(58,58,62,.62);
   --lg-panel:rgba(12,12,14,.74);
-  --lg-glow-on:rgba(255,255,255,.24);
+  --lg-sheen:linear-gradient(transparent,transparent);
+  --lg-glint:.05;
+  --lg-rim-hi:.34;
+  --lg-rim-lo:.17;
+  --lg-rim-base:.05;
+  --lg-tint-sheen:.12;
+  --lg-edge:rgba(255,255,255,.05);
+  --lg-depth:inset 0 -12px 16px -16px rgba(255,255,255,.14);
+  --lg-glow-on:rgba(255,255,255,.18);
   --lg-select:rgba(255,255,255,.09);
-  --lg-rim:rgba(255,255,255,.30);
-  --lg-rim-low:rgba(255,255,255,.10);
-  --lg-edge:rgba(255,255,255,.10);
-  --lg-sheen:linear-gradient(180deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,.035) 45%,rgba(255,255,255,0) 72%);
-  --lg-shadow:0 12px 32px -12px rgba(0,0,0,.9);
+  --lg-rim:rgba(255,255,255,.14);
+  --lg-rim-low:rgba(255,255,255,.05);
+  --lg-shadow:0 10px 28px -12px rgba(0,0,0,.9);
   --lg-menu-shadow:0 26px 60px -18px rgba(0,0,0,.95);
-  --glass:rgba(28,28,30,.74);
-  --glass-line:rgba(255,255,255,.10);
+  --glass:rgba(26,26,28,.78);
+  --glass-line:rgba(255,255,255,.08);
 }
 @media (prefers-color-scheme: dark){
   html.liquid-glass:not([data-theme="light"]){
     --lg-bg-rgb:0,0,0;
-    --lg-fill:rgba(44,44,46,.42);
-    --lg-fill-strong:rgba(28,28,30,.78);
-    --lg-fill-hover:rgba(64,64,68,.52);
+    --lg-fill:rgba(38,38,40,.58);
+    --lg-fill-strong:rgba(26,26,28,.80);
+    --lg-fill-hover:rgba(58,58,62,.62);
     --lg-panel:rgba(12,12,14,.74);
-    --lg-glow-on:rgba(255,255,255,.24);
+    --lg-sheen:linear-gradient(transparent,transparent);
+    --lg-glint:.05;
+    --lg-rim-hi:.34;
+    --lg-rim-lo:.17;
+    --lg-rim-base:.05;
+    --lg-tint-sheen:.12;
+    --lg-edge:rgba(255,255,255,.05);
+    --lg-depth:inset 0 -12px 16px -16px rgba(255,255,255,.14);
+    --lg-glow-on:rgba(255,255,255,.18);
     --lg-select:rgba(255,255,255,.09);
-    --lg-rim:rgba(255,255,255,.30);
-    --lg-rim-low:rgba(255,255,255,.10);
-    --lg-edge:rgba(255,255,255,.10);
-    --lg-sheen:linear-gradient(180deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,.035) 45%,rgba(255,255,255,0) 72%);
-    --lg-shadow:0 12px 32px -12px rgba(0,0,0,.9);
+    --lg-rim:rgba(255,255,255,.14);
+    --lg-rim-low:rgba(255,255,255,.05);
+    --lg-shadow:0 10px 28px -12px rgba(0,0,0,.9);
     --lg-menu-shadow:0 26px 60px -18px rgba(0,0,0,.95);
-    --glass:rgba(28,28,30,.74);
-    --glass-line:rgba(255,255,255,.10);
+    --glass:rgba(26,26,28,.78);
+    --glass-line:rgba(255,255,255,.08);
   }
 }
 
@@ -2368,9 +2402,11 @@ html.liquid-glass.apple-ui body{
 }
 
 /* ---- the material ----
-   The first layer is the light under a finger: transparent until pressed
-   (--lg-glow, animated where the browser can animate it), then a soft
-   bloom centred on the touch point. */
+   Layers, top to bottom: the bloom under a finger (--lg-glow, transparent
+   until pressed), the glint the light throws on the face (it moves with
+   the light), the sheen (light theme only), the fill. Depth comes from an
+   inner shade -- a soft darkening at the edge in light, the faint glow
+   along the inside bottom in dark -- never from gloss. */
 @property --lg-glow{syntax:'<color>';inherits:false;initial-value:rgba(255,255,255,0)}
 html.liquid-glass .pill,
 html.liquid-glass .menu-btn,
@@ -2384,26 +2420,56 @@ html.liquid-glass .live-ctl,
 html.liquid-glass .live-gear,
 html.liquid-glass .page-back{
   background:radial-gradient(circle at var(--lg-x,50%) var(--lg-y,50%),var(--lg-glow,transparent) 0,transparent 72%),
+             radial-gradient(140% 120% at var(--lg-gx) var(--lg-gy),rgba(255,255,255,var(--lg-glint)) 0,transparent 58%),
              var(--lg-sheen),var(--lg-fill);
   -webkit-backdrop-filter:blur(18px) saturate(180%);
   backdrop-filter:blur(18px) saturate(180%);
   border:.5px solid var(--lg-edge);
-  box-shadow:inset 0 1px 0 var(--lg-rim),inset 0 -1px 0 var(--lg-rim-low),var(--lg-shadow);
+  box-shadow:var(--lg-depth),var(--lg-shadow);
   transition:--lg-glow .3s ease,color .16s ease,box-shadow .2s ease;
 }
 html.liquid-glass .pill:focus-within{border-color:var(--lg-edge)}
 
-/* the send button is tinted glass: the accent, lit from above */
+/* the send button is tinted glass: the accent, lit from above -- a light
+   wash in light theme, barely any in dark */
 html.liquid-glass .pill .send,
 html.liquid-glass .pill .send.empty,
 html.liquid-glass .pill .send:hover:not(:disabled),
 html.liquid-glass .icon-btn.on{
   background:radial-gradient(circle at var(--lg-x,50%) var(--lg-y,50%),var(--lg-glow,transparent) 0,transparent 72%),
-             linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.06) 50%,rgba(255,255,255,0) 72%),var(--accent);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(0,0,0,.12),
-             0 6px 16px -6px color-mix(in srgb,var(--accent) 75%,transparent);
+             linear-gradient(180deg,rgba(255,255,255,var(--lg-tint-sheen)) 0%,rgba(255,255,255,0) 62%),var(--accent);
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,.10),0 6px 16px -7px color-mix(in srgb,var(--accent) 70%,transparent);
   transition:--lg-glow .3s ease,opacity .13s ease;
 }
+
+/* ---- the rim light ----
+   A 1px ring just inside the edge: a conic gradient centred on the light
+   (--lg-angle), brightest facing it, softer directly opposite, faint in
+   between -- the two-corner highlight of real glass. The mask keeps the
+   whole box and cuts the content box out of it, which leaves exactly the
+   1px of padding as the ring, following any border radius. As the phone
+   tilts the light angle turns, and the highlight slides round the rim. */
+html.liquid-glass :is(.pill,.menu-btn,.lg-compose,.top .controls,.stop-btn,.imgchip,.page-back,.live-ctl,
+  .web-chip,.act-undo,.suggest,.pill .send,.icon-btn.on,.gate-card,.confirm-card,.email-panel-inner){position:relative}
+html.liquid-glass :is(.pill,.menu-btn,.lg-compose,.top .controls,.agent-bar,.stop-btn,.imgchip,.to-bottom,
+  .live-ctl,.live-gear,.page-back,.pill .send,.icon-btn.on,.plus-menu,.acct-menu,.tier-menu,.acct-submenu,
+  .sb-account,.web-chip,.act-undo,.suggest,.gate-card,.confirm-card,.email-panel-inner)::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:conic-gradient(from var(--lg-angle),
+    rgba(255,255,255,var(--lg-rim-hi)) 0deg,
+    rgba(255,255,255,var(--lg-rim-base)) 58deg,
+    rgba(255,255,255,var(--lg-rim-base)) 122deg,
+    rgba(255,255,255,var(--lg-rim-lo)) 180deg,
+    rgba(255,255,255,var(--lg-rim-base)) 238deg,
+    rgba(255,255,255,var(--lg-rim-base)) 302deg,
+    rgba(255,255,255,var(--lg-rim-hi)) 360deg);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+}
+/* the flat design's own highlights would double the rim */
+html.liquid-glass .sb-account::before{display:none}
+html.liquid-glass .rail::before,html.liquid-glass .rail::after{display:none}
 
 /* ---- header: [menu]  ...  [voice · read aloud] [compose] ----
    The left button and the compose button are glass circles; the two
@@ -2464,13 +2530,14 @@ html.liquid-glass :is(.sb-nav,.sb-item,.sb-section-label,.plus-item,.acct-item,.
 html.liquid-glass .plus-menu,
 html.liquid-glass .acct-menu,
 html.liquid-glass .tier-menu{
-  background:var(--lg-sheen),var(--lg-fill-strong);
+  background:radial-gradient(140% 120% at var(--lg-gx) var(--lg-gy),rgba(255,255,255,var(--lg-glint)) 0,transparent 58%),
+             var(--lg-sheen),var(--lg-fill-strong);
   -webkit-backdrop-filter:blur(30px) saturate(190%);
   backdrop-filter:blur(30px) saturate(190%);
   border:.5px solid var(--lg-edge);
   border-radius:26px;
   padding:8px;
-  box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow);
+  box-shadow:var(--lg-depth),var(--lg-menu-shadow);
 }
 /* a submenu inside a blurred menu can only blur that menu, so it carries
    its own near-opaque fill instead of relying on what is behind it */
@@ -2478,7 +2545,7 @@ html.liquid-glass .acct-submenu{
   background:var(--lg-sheen),var(--card);
   border:.5px solid var(--lg-edge);
   border-radius:20px;
-  box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow);
+  box-shadow:var(--lg-depth),var(--lg-menu-shadow);
 }
 html.liquid-glass .plus-item,
 html.liquid-glass .acct-item,
@@ -2515,11 +2582,22 @@ html.liquid-glass .sidebar{
     top:calc(8px + env(safe-area-inset-top));bottom:calc(8px + env(safe-area-inset-bottom));left:8px;
     width:min(300px,calc(86vw - 8px));
     border:.5px solid var(--lg-edge);border-radius:30px;overflow:hidden;
-    box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow);
+    box-shadow:var(--lg-depth),var(--lg-menu-shadow);
     transform:translateX(calc(-100% - 24px));
   }
   /* closed, its shadow would still fall on the left edge of the screen */
   html.liquid-glass .sidebar:not(.open){box-shadow:none}
+  /* the floating panel gets the same moving rim as every other glass */
+  html.liquid-glass .sidebar::after{
+    content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;z-index:2;
+    background:conic-gradient(from var(--lg-angle),
+      rgba(255,255,255,var(--lg-rim-hi)) 0deg,rgba(255,255,255,var(--lg-rim-base)) 58deg,
+      rgba(255,255,255,var(--lg-rim-base)) 122deg,rgba(255,255,255,var(--lg-rim-lo)) 180deg,
+      rgba(255,255,255,var(--lg-rim-base)) 238deg,rgba(255,255,255,var(--lg-rim-base)) 302deg,
+      rgba(255,255,255,var(--lg-rim-hi)) 360deg);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;
+  }
   html.liquid-glass .sidebar.open{transform:none}
 }
 html.liquid-glass .sb-head{padding:20px 14px 10px 20px}
@@ -2537,7 +2615,7 @@ html.liquid-glass .sb-item.active::after{display:none}
 html.liquid-glass .sb-account{
   width:100%;margin:0;
   background:var(--lg-sheen),var(--lg-fill);border:.5px solid var(--lg-edge);border-radius:20px;
-  box-shadow:inset 0 1px 0 var(--lg-rim),0 6px 18px -10px rgba(0,0,0,.3);
+  box-shadow:var(--lg-depth),0 6px 18px -10px rgba(0,0,0,.3);
 }
 html.liquid-glass .rail{
   background:var(--lg-panel);
@@ -2552,7 +2630,7 @@ html.liquid-glass .overlay{background:rgba(0,0,0,.22);transition:opacity .4s eas
 /* ---- cards and sheets ---- */
 html.liquid-glass .gate-card,
 html.liquid-glass .confirm-card,
-html.liquid-glass .email-panel-inner{border-radius:30px;border-width:.5px;box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow)}
+html.liquid-glass .email-panel-inner{border-radius:30px;border-width:.5px;box-shadow:var(--lg-depth),var(--lg-menu-shadow)}
 html.liquid-glass .confirm-actions button{border-radius:999px;border-width:.5px}
 
 /* ---- full pages (settings, library, agents): an iOS navigation bar ---- */
@@ -2577,9 +2655,10 @@ html.liquid-glass .web-chip,
 html.liquid-glass .act-undo,
 html.liquid-glass .suggest{
   background:radial-gradient(circle at var(--lg-x,50%) var(--lg-y,50%),var(--lg-glow,transparent) 0,transparent 72%),
+             radial-gradient(140% 120% at var(--lg-gx) var(--lg-gy),rgba(255,255,255,var(--lg-glint)) 0,transparent 58%),
              var(--lg-sheen),var(--lg-fill);
   border:.5px solid var(--lg-edge);
-  box-shadow:inset 0 1px 0 var(--lg-rim),0 4px 14px -8px rgba(0,0,0,.28);
+  box-shadow:var(--lg-depth),0 4px 14px -8px rgba(0,0,0,.28);
   transition:--lg-glow .3s ease;
 }
 html.liquid-glass .msg.user .bubble{border-radius:22px}
@@ -12705,6 +12784,9 @@ function renderSettings(tab){
         '<div class="settings-row"><div class="settings-row-meta"><b>Glass design</b><small>The Liquid Glass look, on every screen. Off gives the plain flat design</small></div>' +
           '<div class="settings-row-val">' + (glassOn() ? 'On' : 'Off') + '</div>' +
           '<button class="settings-row-btn" id="setGlass" type="button">' + (glassOn() ? 'Turn off' : 'Turn on') + '</button></div>' +
+        '<div class="settings-row"><div class="settings-row-meta"><b>Reflections follow motion</b><small>The glass catches the light as you tilt your phone, or move the mouse on a computer</small></div>' +
+          '<div class="settings-row-val" id="glassMotionVal">' + glassMotionLabel() + '</div>' +
+          '<button class="settings-row-btn" id="setGlassMotion" type="button">' + (window.ppGlassLight && ppGlassLight.on() ? 'Turn off' : 'Turn on') + '</button></div>' +
         '<div class="settings-row"><div class="settings-row-meta"><b>Saved memory</b><small>Facts Pixel Pro remembers about you</small></div>' +
           '<div class="settings-row-val">' + loadMemory().length + ' saved</div>' +
           '<button class="settings-row-btn" id="setClearMem" type="button">Clear</button></div>' +
@@ -12728,6 +12810,17 @@ function renderSettings(tab){
       try{ cur = store('pp-theme-choice') || 'system'; }catch(e){}
       applyThemeChoice(order[(order.indexOf(cur) + 1) % 3]);
       renderSettings('general');
+    });
+    document.getElementById('setGlassMotion').addEventListener('click', function(){
+      if(!window.ppGlassLight) return;
+      var turnOn = !ppGlassLight.on();
+      ppGlassLight.set(turnOn).then(function(r){
+        renderSettings('general');
+        if(!turnOn) showToast('The light stays still now');
+        else if(r === 'denied') showToast("Your phone didn't allow motion access. Reopen Pixel Pro and choose Allow when asked.");
+        else if(r === 'still') showToast('Reduce Motion is on, so the light stays still');
+        else showToast('Tilt your phone: the glass follows the light');
+      });
     });
     document.getElementById('setGlass').addEventListener('click', function(){
       setGlass(!glassOn());
@@ -13116,6 +13209,12 @@ $chat.addEventListener('click', function(e){
    With glass turned off none of this is installed.
    ================================================================ */
 function glassOn(){ return document.documentElement.classList.contains('liquid-glass'); }
+function glassMotionLabel(){
+  var L = window.ppGlassLight;
+  if(!L || !L.on()) return 'Off';
+  if(L.permission() === 'denied') return 'Not allowed on this phone';
+  return L.sensing() ? 'On' : 'On — tilt to see it';
+}
 function setGlass(on){
   try{ localStorage.setItem('pp-glass', on ? '1' : '0'); }catch(e){}
   document.documentElement.classList.toggle('liquid-glass', !!on);
@@ -13172,12 +13271,13 @@ glassLayout();
    scroll cancels the press and springs back the same way. With reduced
    motion on, the light still answers the touch but nothing moves.
    ================================================================ */
-(function(){
-  var SEL = '.menu-btn,.lg-compose,.icon-btn,.pill-plus,.pill .mic,.pill .send,.pill-think,.live-ctl,.live-gear,' +
+var GLASS_PRESS_SEL = '.menu-btn,.lg-compose,.icon-btn,.pill-plus,.pill .mic,.pill .send,.pill-think,.live-ctl,.live-gear,' +
             '.to-bottom,.suggest,.web-chip,.act-undo,.act-btn,.stop-btn,.sb-nav:not(.searching),.sb-item,' +
             '.sb-section-label,.plus-item,.acct-item,.acct-subitem,.rail-btn,.rail-avatar,.sb-account,' +
             '.settings-row-btn,.settings-rail-item,.feedback button,.confirm-actions button,.page-back,' +
             '.agent-bar-exit,.imgchip .rm';
+(function(){
+  var SEL = GLASS_PRESS_SEL;
   var canScale = !!(window.CSS && CSS.supports && CSS.supports('scale', '1')) &&
                  typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function';
   var still = false;
@@ -13246,6 +13346,181 @@ glassLayout();
     press(el, r.left + r.width / 2, r.top + r.height / 2);
     setTimeout(function(){ release(el); }, 120);
   }, true);
+})();
+
+/* ================================================================
+   LIGHT THAT MOVES — the glass catches the light as the phone tilts
+
+   iOS 26 glass is lit from above, so as the phone tilts the highlight on
+   every rim slides round it and a faint glint drifts across the face.
+   Here the phone's motion sensor steers one light: the rim highlight sits
+   at --lg-angle, the glint at --lg-gx/--lg-gy (see "the rim light" in the
+   CSS).
+
+   - It follows CHANGES in tilt, not the absolute angle. The resting point
+     slowly re-centres on however the phone is being held, so in bed or at
+     a desk the light starts where it belongs, top left, and moves when the
+     phone does.
+   - The screen's rotation is accounted for, so landscape works too.
+   - iPhone and iPad only let a page read the sensor after the person says
+     yes, and only from inside a tap. So nothing is asked at load: the first
+     tap on a glass control asks, once (Safari shows its own prompt). A "no"
+     is remembered and not asked again; Settings > General can ask again.
+   - Android hands the sensor over without asking. A computer has none, so
+     there the light follows the mouse instead, gently.
+   - It is cheap on purpose. The values go on the dozen containers that
+     hold glass, not on <html> (that would restyle every message in the
+     chat on every frame); only containers on screen are touched (a closed
+     sidebar or a page nobody opened waits until it is shown); the light
+     moves in whole degrees, so the tremor of a hand holding the phone
+     repaints nothing; and it repaints at most 30 times a second.
+   - With Reduce Motion, or "Reflections follow motion" off, the light
+     stays still, top left.
+   ================================================================ */
+(function(){
+  var DEF_X = -0.62, DEF_Y = -0.78;                 /* top left, as on iOS */
+  var cur = { x: DEF_X, y: DEF_Y }, goal = { x: DEF_X, y: DEF_Y };
+  var raf = 0, lastA = null, lastGX = null, lastGY = null, base = null, lastPaint = 0;
+  var sensing = false, listening = false, holders = [];
+  var still = false;
+  try{ still = window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+  var ASK = typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function';
+
+  function motionOn(){ try{ return localStorage.getItem('pp-glass-motion') !== '0'; }catch(e){ return true; } }
+  function clamp(v){ return v < -1 ? -1 : v > 1 ? 1 : v; }
+  function collect(){
+    holders = Array.prototype.slice.call(document.querySelectorAll(
+      'header.top,#agentBar,.composer-wrap,#sidebar,.rail,.to-bottom,.live,.gate,.confirm-modal,.email-panel,.page'));
+    var stop = document.getElementById('stopBtn');
+    if(stop && stop.parentElement && holders.indexOf(stop.parentElement) < 0) holders.push(stop.parentElement);
+  }
+  function shown(el){
+    if(!el.offsetWidth && !el.offsetHeight) return false;          /* display:none */
+    if(el.id === 'sidebar') return el.classList.contains('open') || (typeof sidebarIsDocked === 'function' && sidebarIsDocked());
+    return true;
+  }
+  function paint(now){
+    raf = 0;
+    if(now - lastPaint < 32){ raf = requestAnimationFrame(paint); return; }   /* 30 a second is plenty */
+    lastPaint = now;
+    cur.x += (goal.x - cur.x) * 0.28;
+    cur.y += (goal.y - cur.y) * 0.28;
+    var len = Math.sqrt(cur.x * cur.x + cur.y * cur.y) || 1, lx = cur.x / len, ly = cur.y / len;
+    var ang = Math.round((Math.atan2(lx, -ly) * 180 / Math.PI + 360) % 360);
+    var gx = Math.round(50 + lx * 55), gy = Math.round(50 + ly * 65);
+    if(ang !== lastA || gx !== lastGX || gy !== lastGY){
+      lastA = ang; lastGX = gx; lastGY = gy;
+      if(!holders.length) collect();
+      for(var i = 0; i < holders.length; i++){
+        var el = holders[i];
+        if(!shown(el)){ el._lgStale = true; continue; }
+        el._lgStale = false;
+        el.style.setProperty('--lg-angle', ang + 'deg');
+        el.style.setProperty('--lg-gx', gx + '%');
+        el.style.setProperty('--lg-gy', gy + '%');
+      }
+    }
+    if(Math.abs(goal.x - cur.x) > 0.004 || Math.abs(goal.y - cur.y) > 0.004) raf = requestAnimationFrame(paint);
+  }
+  /* a container that was hidden when the light last moved catches up the
+     moment it is shown (the sidebar opening, a page, the voice orb) */
+  function catchUp(){
+    if(lastA === null) return;
+    for(var i = 0; i < holders.length; i++){
+      var el = holders[i];
+      if(el._lgStale && shown(el)){
+        el._lgStale = false;
+        el.style.setProperty('--lg-angle', lastA + 'deg');
+        el.style.setProperty('--lg-gx', lastGX + '%');
+        el.style.setProperty('--lg-gy', lastGY + '%');
+      }
+    }
+  }
+  document.addEventListener('click', function(){ setTimeout(catchUp, 0); setTimeout(catchUp, 400); }, true);
+  function aim(x, y){
+    goal.x = x; goal.y = y;
+    if(!raf && glassOn()) raf = requestAnimationFrame(paint);
+  }
+  function rest(){ base = null; aim(DEF_X, DEF_Y); }
+
+  function onTilt(e){
+    if(e.beta == null || e.gamma == null || still || !motionOn()) return;
+    sensing = true;
+    var b = e.beta, g = e.gamma, rot = 0, sx, sy;
+    try{ rot = (screen.orientation && screen.orientation.angle) || window.orientation || 0; }catch(err){}
+    if(rot === 90){ sx = b; sy = -g; }
+    else if(rot === -90 || rot === 270){ sx = -b; sy = g; }
+    else if(rot === 180){ sx = -g; sy = -b; }
+    else { sx = g; sy = b; }
+    if(!base) base = { x: sx, y: sy };
+    base.x += (sx - base.x) * 0.012;               /* ~1.5s to re-centre */
+    base.y += (sy - base.y) * 0.012;
+    var dx = clamp((sx - base.x) / 30), dy = clamp((sy - base.y) / 30);
+    aim(DEF_X - dx * 1.2, DEF_Y - dy * 1.2);       /* a reflection slides against the tilt */
+  }
+  function listen(){
+    if(listening) return;
+    listening = true;
+    window.addEventListener('deviceorientation', onTilt, { passive: true });
+  }
+  /* must run inside a tap on iPhone and iPad */
+  function askMotion(){
+    if(!ASK){ listen(); return Promise.resolve('granted'); }
+    return DeviceOrientationEvent.requestPermission().then(function(r){
+      try{ localStorage.setItem('pp-glass-motion-perm', r); }catch(e){}
+      if(r === 'granted') listen();
+      return r;
+    }).catch(function(){ return 'error'; });
+  }
+
+  if(!still){
+    if(!ASK) listen();
+    else{
+      var perm = null;
+      try{ perm = localStorage.getItem('pp-glass-motion-perm'); }catch(e){}
+      if(perm !== 'denied'){
+        /* already allowed in this session? Safari then answers at once with
+           no prompt; otherwise it refuses without a tap, and we wait */
+        if(perm === 'granted'){
+          try{ DeviceOrientationEvent.requestPermission().then(function(r){ if(r === 'granted') listen(); }).catch(function(){}); }catch(e){}
+        }
+        var firstTap = function(e){
+          if(listening){ document.removeEventListener('click', firstTap, true); return; }
+          if(!glassOn() || !motionOn()) return;
+          var el = e.target && e.target.closest ? e.target.closest(GLASS_PRESS_SEL) : null;
+          if(!el) return;                              /* never from the text box */
+          document.removeEventListener('click', firstTap, true);
+          askMotion();
+        };
+        document.addEventListener('click', firstTap, true);
+      }
+    }
+  }
+
+  /* no sensor (a computer): the light leans toward the mouse */
+  document.addEventListener('pointermove', function(e){
+    if(sensing || still || e.pointerType !== 'mouse' || !motionOn()) return;
+    var mx = clamp(e.clientX / window.innerWidth * 2 - 1), my = clamp(e.clientY / window.innerHeight * 2 - 1);
+    aim(DEF_X * 0.55 + mx * 0.75, DEF_Y * 0.55 + my * 0.75);
+  }, { passive: true });
+  document.addEventListener('mouseleave', function(){ if(!sensing) aim(DEF_X, DEF_Y); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) base = null; });
+
+  window.ppGlassLight = {
+    on: motionOn,
+    sensing: function(){ return listening; },
+    permission: function(){ try{ return localStorage.getItem('pp-glass-motion-perm'); }catch(e){ return null; } },
+    set: function(on){
+      try{
+        if(on){ localStorage.removeItem('pp-glass-motion'); localStorage.removeItem('pp-glass-motion-perm'); }
+        else localStorage.setItem('pp-glass-motion', '0');
+      }catch(e){}
+      if(!on){ rest(); return Promise.resolve('off'); }
+      return still ? Promise.resolve('still') : askMotion();
+    },
+    refresh: collect
+  };
 })();
 
 

@@ -15,7 +15,7 @@
    3. On activation it deletes only its OWN old caches ("pixelpro-v*"). It
       used to delete every cache that was not its current one, which would
       have emptied the launch site's cache every time the app updated. */
-const CACHE_VERSION = "pixelpro-v64";
+const CACHE_VERSION = "pixelpro-v65";
 const CACHE_PREFIX = "pixelpro-v";
 const SHELL = ["/", "/index.html", "/privacy.html", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 const NEVER_CACHE = ["/.netlify/functions/", "api.cartesia.ai", "api.groq.com", "api.tavily.com", "api.exa.ai", "identitytoolkit.googleapis", "securetoken.googleapis", "firebaseapp.com/__/auth"];

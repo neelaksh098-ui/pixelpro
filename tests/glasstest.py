@@ -11,7 +11,7 @@ laptop.
     python3 tests/mockserver.py 8880 &
     python3 tests/glasstest.py            (screenshots go to $PP_SHOTS if set)
 """
-import asyncio, base64, json, os, subprocess, sys, functools
+import asyncio, base64, json, math, os, subprocess, sys, functools
 print = functools.partial(print, flush=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from shims import SIGNED_IN_FLAG
@@ -123,6 +123,44 @@ DIFF = """async ([a,b,skipLeft])=>{
     if(da[i]!==db[i]||da[i+1]!==db[i+1]||da[i+2]!==db[i+2])n++;}
   return {size:false,diff:n,total:da.length/4};
 }"""
+
+# Brightness of the rim at given angles (0 = top, clockwise, as CSS conic
+# gradients count), read from a real screenshot of the element: the max of a
+# 3x3 patch just inside the edge. Done in dark theme over black, so the only
+# light there is the rim's.
+RIM = """async ([b64, pts])=>{
+  const i=new Image(); await new Promise(r=>{i.onload=r; i.src='data:image/png;base64,'+b64;});
+  const c=document.createElement('canvas'); c.width=i.width; c.height=i.height;
+  const x=c.getContext('2d'); x.drawImage(i,0,0); const d=x.getImageData(0,0,c.width,c.height).data;
+  return pts.map(([px,py])=>{ let m=0;
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+      const X=Math.round(px)+dx, Y=Math.round(py)+dy; if(X<0||Y<0||X>=c.width||Y>=c.height) continue;
+      const o=(Y*c.width+X)*4; m=Math.max(m,(d[o]+d[o+1]+d[o+2])/3); }
+    return Math.round(m); });
+}"""
+async def rim_light(pg, sel, angles):
+    box = await pg.locator(sel).first.bounding_box()
+    pad = 4
+    clip = {"x": box["x"] - pad, "y": box["y"] - pad, "width": box["width"] + 2 * pad, "height": box["height"] + 2 * pad}
+    b64 = base64.b64encode(await pg.screenshot(clip=clip)).decode()
+    r = min(box["width"], box["height"]) / 2 - 1.0
+    cx, cy = pad + box["width"] / 2, pad + box["height"] / 2
+    pts = [[cx + r * math.sin(math.radians(a)), cy - r * math.cos(math.radians(a))] for a in angles]
+    return await pg.evaluate(RIM, [b64, pts])
+
+TILT = "([b,g])=>window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{alpha:0,beta:b,gamma:g}))"
+ANGLE = "()=>parseFloat(document.querySelector('header.top').style.getPropertyValue('--lg-angle'))"
+async def tilt(pg, b, g, n=1, gap=30):
+    for _ in range(n):
+        await pg.evaluate(TILT, [b, g])
+        await pg.wait_for_timeout(gap)
+
+# An iPhone's permission prompt, stood in for: like Safari, it refuses
+# unless called from inside a tap, and grants when it is.
+IOS_MOTION = """window.__asks=[];
+DeviceOrientationEvent.requestPermission=function(){
+  const tap=!!(navigator.userActivation&&navigator.userActivation.isActive); window.__asks.push(tap);
+  return tap?Promise.resolve('granted'):Promise.reject(new DOMException('needs a tap','NotAllowedError'));};"""
 
 async def save(pg, name):
     if SHOTS:
@@ -308,7 +346,12 @@ async def main():
         await pg.wait_for_timeout(350)
         dk = await pg.evaluate("()=>{const c=getComputedStyle(document.getElementById('pill'));return {bg:c.backgroundColor, page:getComputedStyle(document.body).backgroundColor};}")
         chk("dark theme: the page stays pure black", dk["page"] == "rgb(0, 0, 0)", dk)
-        chk("dark theme: the glass is a dark tint, not a white sheet", dk["bg"].startswith("rgba(44, 44, 46"), dk)
+        chk("dark theme: the glass is a dark tint, not a white sheet", dk["bg"].startswith("rgba(38, 38, 40"), dk)
+        mat = await pg.evaluate("""()=>{const p=document.getElementById('pill'), c=getComputedStyle(p), a=getComputedStyle(p,'::after');
+            return {sheen:c.getPropertyValue('--lg-sheen').trim(), glint:parseFloat(c.getPropertyValue('--lg-glint')),
+                    ring:a.backgroundImage, mask:(a.webkitMaskImage||a.maskImage||'')};}""")
+        chk("dark theme: the face is matte -- no gloss running down it", "rgba(255, 255, 255" not in mat["sheen"] and "255,255,255" not in mat["sheen"] and mat["glint"] <= 0.06, mat)
+        chk("...the light is in a rim instead: a conic highlight masked to a 1px ring", "conic-gradient" in mat["ring"] and "linear-gradient" in mat["mask"], mat)
         await pg.evaluate("()=>{const m=document.getElementById('main'); m.scrollTop=m.scrollHeight-m.clientHeight-260;}")
         await pg.wait_for_timeout(200)
         await save(pg, "glass-iphone-dark-midscroll.png")
@@ -411,6 +454,88 @@ async def main():
         await pg.goto(URL + "?glass=auto", wait_until="domcontentloaded")
         await pg.wait_for_timeout(900)
         chk("?glass=auto turns it back on", await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
+        await ctx.close()
+
+        # ============ 6b. the light moves with the phone ============
+        ctx, pg, errs = await page(b, ANDROID)
+        await pg.evaluate("()=>applyThemeChoice('dark')")
+        await pg.wait_for_timeout(400)
+        a0 = await pg.evaluate("()=>getComputedStyle(document.querySelector('header.top')).getPropertyValue('--lg-angle').trim()")
+        chk("at rest the light is top left, as on iOS", a0 == "322deg", a0)
+        L = await rim_light(pg, "#menuBtn", [322, 142, 232, 52])
+        chk("the rim is brightest facing the light, softer opposite, faint between", L[0] > L[1] > max(L[2], L[3]), L)
+        await tilt(pg, 40, 0, 6)                       # how the phone is being held
+        await tilt(pg, 40, -32, 25)                    # tilt it left...
+        await pg.wait_for_timeout(500)
+        a1 = await pg.evaluate(ANGLE)
+        chk("tilting the phone turns the light round the glass", a1 == a1 and (a1 < 300 and a1 > 20), a1)
+        L2 = await rim_light(pg, "#menuBtn", [a1, 322])
+        chk("...and the bright spot on the rim really moves with it", L2[0] > L2[1] + 8, (a1, L2))
+        await save(pg, "glass-android-dark-tilted.png")
+        held = await pg.evaluate("()=>[document.documentElement.style.getPropertyValue('--lg-angle'), document.querySelector('.composer-wrap').style.getPropertyValue('--lg-angle')]")
+        chk("...set on the glass containers, never on <html> (that would restyle the whole chat)", held[0] == "" and held[1] != "", held)
+        for _ in range(120):                            # hold it still at the new angle
+            await tilt(pg, 40, -32, 1, 12)
+        await pg.wait_for_timeout(600)
+        a2 = await pg.evaluate(ANGLE)
+        chk("held still, the light drifts back to rest (it follows changes, not the pose)", abs(a2 - 322) < abs(a1 - 322), (a1, a2))
+        await pg.evaluate("()=>{openSettingsPage(); renderSettings('general');}")
+        await pg.wait_for_timeout(300)
+        mrow = await pg.evaluate("()=>{const b=document.getElementById('setGlassMotion'); return b?[b.textContent, document.getElementById('glassMotionVal').textContent]:null;}")
+        chk("Settings has 'Reflections follow motion'", mrow is not None and mrow[0] == "Turn off", mrow)
+        await pg.evaluate("()=>document.getElementById('setGlassMotion').click()")
+        await pg.wait_for_timeout(900)
+        await pg.evaluate("()=>closePage('settingsPage')")
+        before = await pg.evaluate(ANGLE)
+        await tilt(pg, 40, 30, 20)
+        await pg.wait_for_timeout(400)
+        after = await pg.evaluate(ANGLE)
+        chk("...switched off, tilting does nothing and the light rests top left", after == before and abs(after - 322) <= 2, (before, after))
+        chk("Android light run: no page errors", not errs, errs)
+        await ctx.close()
+
+        # iPhone: Safari asks permission, and only inside a tap
+        ctx, pg, errs = await page(b, IPHONE + IOS_MOTION)
+        await pg.evaluate("()=>applyThemeChoice('dark')")
+        await pg.wait_for_timeout(300)
+        await tilt(pg, 40, 0, 4); await tilt(pg, 40, -32, 20)
+        await pg.wait_for_timeout(300)
+        st0 = await pg.evaluate("()=>({asks:window.__asks, sensing:ppGlassLight.sensing(), angle:document.querySelector('header.top').style.getPropertyValue('--lg-angle')})")
+        chk("iPhone: nothing is asked when the page opens, and the sensor is not read yet", st0["asks"] == [] and not st0["sensing"] and st0["angle"] == "", st0)
+        await pg.click("#input")
+        await pg.wait_for_timeout(200)
+        chk("...tapping the text box does not ask either (no prompt while typing)", await pg.evaluate("()=>window.__asks.length") == 0)
+        await pg.click("#plusBtn"); await pg.wait_for_timeout(300); await pg.click("#plusBtn")
+        await pg.wait_for_timeout(300)
+        st1 = await pg.evaluate("()=>({asks:window.__asks, sensing:ppGlassLight.sensing()})")
+        chk("...the first tap on a glass button asks, from inside the tap, and it is allowed", st1["asks"] == [True] and st1["sensing"], st1)
+        await tilt(pg, 40, 0, 6); await tilt(pg, 40, -32, 25)
+        await pg.wait_for_timeout(500)
+        a3 = await pg.evaluate(ANGLE)
+        chk("...after which tilting the iPhone moves the light", a3 == a3 and 20 < a3 < 300, a3)
+        await pg.click("#plusBtn"); await pg.wait_for_timeout(250); await pg.click("#plusBtn")
+        chk("...and it never asks twice", await pg.evaluate("()=>window.__asks.length") == 1)
+        await save(pg, "glass-iphone-dark-tilted.png")
+        chk("iPhone light run: no page errors", not errs, errs)
+        await ctx.close()
+
+        # a laptop has no sensor: the light leans toward the mouse
+        ctx, pg, errs = await page(b, WINDOWS, 1280, 800)
+        await pg.mouse.move(1270, 790); await pg.wait_for_timeout(700)
+        br = await pg.evaluate(ANGLE)
+        await pg.mouse.move(5, 5); await pg.wait_for_timeout(700)
+        tl = await pg.evaluate(ANGLE)
+        chk("laptop: the light follows the mouse (bottom right, then top left)", 100 < br < 170 and (tl > 290 or tl < 10), (br, tl))
+        await ctx.close()
+
+        # Reduce Motion: still light, no sensor
+        ctx = await b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, has_touch=True, reduced_motion="reduce")
+        await ctx.add_init_script(SIGNED_IN_FLAG + ANDROID)
+        pg = await ctx.new_page()
+        await pg.goto(URL, wait_until="domcontentloaded"); await pg.wait_for_timeout(1400)
+        await tilt(pg, 40, 0, 4); await tilt(pg, 40, -32, 20); await pg.wait_for_timeout(300)
+        rm = await pg.evaluate("()=>[ppGlassLight.sensing(), document.querySelector('header.top').style.getPropertyValue('--lg-angle')]")
+        chk("with Reduce Motion on, the light never moves", rm == [False, ""], rm)
         await ctx.close()
 
         # ============ 7. glass off is exactly the flat design ============

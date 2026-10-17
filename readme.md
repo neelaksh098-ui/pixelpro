@@ -96,6 +96,20 @@ iPad, Android, Mac, Windows and Linux, in every browser.
   open). The sidebar's New Chat uses the same icon.
 - **Apple's typeface on Apple devices.** iPhone, iPad and Mac show SF Pro;
   everything else keeps Inter.
+- **The material, measured.** Values were taken pixel by pixel from
+  Apple-style glass (the Solid Glass reference icons). Dark glass is matte:
+  a flat face with no gloss. The light lives in a 1px rim, brightest facing
+  the light, softer at the opposite corner and faint between, with a faint
+  glow along the inside bottom edge. Light glass is white with a breath of
+  shading toward the bottom.
+- **Reflections that move.** Tilt the phone and the highlight slides round
+  every rim while a faint glint drifts across the faces, as on iOS 26. It
+  follows changes in tilt (the resting point re-centres on however you hold
+  the phone) and handles landscape. On iPhone and iPad, Safari asks for
+  motion access the first time you tap a glass button (never at load, never
+  from the text box); a "no" is remembered. Android needs no permission. On
+  a computer the light leans toward the mouse. Settings → General →
+  "Reflections follow motion" turns it off; Reduce Motion keeps it still.
 
 Switching it:
 
@@ -115,7 +129,10 @@ through the glass, the lit rim and the fading edges are.
 
 Tests: `tests/glasstest.py` — every device gets it, it really blurs, the chat
 really runs under the bars and the newest reply still lands above the
-composer, the press-and-spring is measured mid-bounce, the compose button,
+composer, the press-and-spring is measured mid-bounce, the dark face has no
+gloss, the rim is brightest toward the light and the bright spot moves when
+the phone tilts (read from screenshot pixels), the iPhone permission is asked
+only inside a tap, the light follows the mouse on a laptop, the compose button,
 the switches, and glass-off screenshots of Android and a laptop compared
 pixel for pixel with a flat build (`PP_BASELINE=934c528` for the last
 flat-only one).
