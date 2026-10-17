@@ -27,36 +27,33 @@
 })();
 </script>
 <script>
-/* LIQUID GLASS ON IPHONE AND IPAD.
+/* LIQUID GLASS, ON EVERY DEVICE.
 
-   Apple devices get the glass design automatically; every other device keeps
-   the flat design exactly as it was. It is decided here, before the
-   stylesheet is applied, so an iPhone never draws one frame of the flat look
-   and then swaps.
+   The glass design is the design now -- iPhone, iPad, Android, Mac, Windows,
+   Linux, every browser. It is switched on here, before the stylesheet is
+   applied, so no device ever draws one frame of the flat look and then swaps.
 
-   iPadOS reports itself as a Mac, so "a Mac with a touchscreen" counts as an
-   iPad -- there is no such thing as a touch Mac. Every browser on an iPhone
-   (Safari, Chrome, Firefox, Edge) puts "iPhone" in its user agent, so they
-   all get it.
-
-   ?glass=1 turns it on anywhere (to preview it on a laptop), ?glass=0 turns
-   it off, ?glass=auto goes back to deciding by device. The choice is kept in
-   "pp-glass" and Settings > General can change it too. */
+   The flat design is still there for anyone who turns glass off, and for
+   browsers too old to blur (the stylesheet falls back to solid surfaces by
+   itself). Off is remembered in "pp-glass": Settings > General > Glass
+   design, saying "turn off the glass design", or ?glass=0 on the address.
+   ?glass=1 or ?glass=auto puts it back on. */
 (function(){
   try{
     var m = /(?:^|[?&])glass=(1|0|auto)(?:&|$)/.exec(location.search);
     if(m){
-      if(m[1] === 'auto') localStorage.removeItem('pp-glass');
-      else localStorage.setItem('pp-glass', m[1]);
+      if(m[1] === '0') localStorage.setItem('pp-glass', '0');
+      else localStorage.removeItem('pp-glass');
     }
   }catch(e){}
   var pref = null;
   try{ pref = localStorage.getItem('pp-glass'); }catch(e){}
-  var ua = navigator.userAgent || '';
-  var apple = /iPad|iPhone|iPod/.test(ua) ||
-              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var on = pref === '1' ? true : pref === '0' ? false : apple;
-  if(on) document.documentElement.classList.add('liquid-glass');
+  if(pref !== '0') document.documentElement.classList.add('liquid-glass');
+  /* Apple devices also get Apple's typeface (SF Pro) inside the glass design.
+     iPadOS reports itself as a Mac, which is fine here: both are Apple. */
+  var ua = navigator.userAgent || '', pf = navigator.platform || '';
+  if(/iPhone|iPad|iPod|Macintosh/.test(ua) || /^(Mac|iPhone|iPad|iPod)/.test(pf))
+    document.documentElement.classList.add('apple-ui');
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -2253,10 +2250,11 @@ html,body{overscroll-behavior:none}
 }
 
 /* ================================================================
-   LIQUID GLASS — iPhone and iPad only (html.liquid-glass)
+   LIQUID GLASS — every device (html.liquid-glass)
 
-   The head script sets that class on Apple touch devices and nowhere else,
-   and every rule below hangs off it, so no other device changes by a pixel.
+   The head script sets that class unless glass has been turned off, and
+   every rule below hangs off it, so with glass off the flat design is
+   exactly what it was.
 
    What makes it read as glass rather than as a see-through box:
 
@@ -2276,7 +2274,8 @@ html,body{overscroll-behavior:none}
    True refraction (the lens bending light at the rim) needs an SVG
    displacement map inside backdrop-filter, which Safari does not support,
    so it is not faked; everything here is CSS iOS has drawn well since
-   iOS 9, with the -webkit- prefix Safari still wants. The blur values are
+   iOS 9 and Chrome, Edge and Firefox draw too, with the -webkit- prefix
+   Safari still wants. The blur values are
    written out in full rather than through a variable: older Safari has been
    unreliable about var() inside -webkit-backdrop-filter.
    ================================================================ */
@@ -2284,6 +2283,10 @@ html.liquid-glass{
   --lg-bg-rgb:255,255,255;
   --lg-fill:rgba(255,255,255,.52);
   --lg-fill-strong:rgba(250,250,252,.80);
+  --lg-fill-hover:rgba(255,255,255,.74);
+  --lg-panel:rgba(248,248,250,.84);
+  --lg-glow-on:rgba(255,255,255,.85);
+  --lg-select:rgba(15,23,42,.06);
   --lg-rim:rgba(255,255,255,.95);
   --lg-rim-low:rgba(255,255,255,.5);
   --lg-edge:rgba(15,23,42,.10);
@@ -2297,6 +2300,10 @@ html.liquid-glass[data-theme="dark"]{
   --lg-bg-rgb:0,0,0;
   --lg-fill:rgba(44,44,46,.42);
   --lg-fill-strong:rgba(28,28,30,.78);
+  --lg-fill-hover:rgba(64,64,68,.52);
+  --lg-panel:rgba(12,12,14,.74);
+  --lg-glow-on:rgba(255,255,255,.24);
+  --lg-select:rgba(255,255,255,.09);
   --lg-rim:rgba(255,255,255,.30);
   --lg-rim-low:rgba(255,255,255,.10);
   --lg-edge:rgba(255,255,255,.10);
@@ -2311,6 +2318,10 @@ html.liquid-glass[data-theme="dark"]{
     --lg-bg-rgb:0,0,0;
     --lg-fill:rgba(44,44,46,.42);
     --lg-fill-strong:rgba(28,28,30,.78);
+    --lg-fill-hover:rgba(64,64,68,.52);
+    --lg-panel:rgba(12,12,14,.74);
+    --lg-glow-on:rgba(255,255,255,.24);
+    --lg-select:rgba(255,255,255,.09);
     --lg-rim:rgba(255,255,255,.30);
     --lg-rim-low:rgba(255,255,255,.10);
     --lg-edge:rgba(255,255,255,.10);
@@ -2349,21 +2360,36 @@ html.liquid-glass .composer-wrap{
     rgba(var(--lg-bg-rgb),0) calc(env(safe-area-inset-bottom) + 60px));
 }
 
-/* ---- the material ---- */
+/* Apple's own typeface on Apple devices (SF Pro, through -apple-system);
+   everyone else keeps Inter. */
+html.liquid-glass.apple-ui body{
+  font-family:-apple-system,BlinkMacSystemFont,'Inter','Noto Sans','Hind',system-ui,sans-serif;
+  font-feature-settings:normal;
+}
+
+/* ---- the material ----
+   The first layer is the light under a finger: transparent until pressed
+   (--lg-glow, animated where the browser can animate it), then a soft
+   bloom centred on the touch point. */
+@property --lg-glow{syntax:'<color>';inherits:false;initial-value:rgba(255,255,255,0)}
 html.liquid-glass .pill,
 html.liquid-glass .menu-btn,
+html.liquid-glass .lg-compose,
 html.liquid-glass .top .controls,
 html.liquid-glass .agent-bar,
 html.liquid-glass .stop-btn,
 html.liquid-glass .imgchip,
 html.liquid-glass .to-bottom,
 html.liquid-glass .live-ctl,
-html.liquid-glass .live-gear{
-  background:var(--lg-sheen),var(--lg-fill);
+html.liquid-glass .live-gear,
+html.liquid-glass .page-back{
+  background:radial-gradient(circle at var(--lg-x,50%) var(--lg-y,50%),var(--lg-glow,transparent) 0,transparent 72%),
+             var(--lg-sheen),var(--lg-fill);
   -webkit-backdrop-filter:blur(18px) saturate(180%);
   backdrop-filter:blur(18px) saturate(180%);
   border:.5px solid var(--lg-edge);
   box-shadow:inset 0 1px 0 var(--lg-rim),inset 0 -1px 0 var(--lg-rim-low),var(--lg-shadow);
+  transition:--lg-glow .3s ease,color .16s ease,box-shadow .2s ease;
 }
 html.liquid-glass .pill:focus-within{border-color:var(--lg-edge)}
 
@@ -2372,37 +2398,69 @@ html.liquid-glass .pill .send,
 html.liquid-glass .pill .send.empty,
 html.liquid-glass .pill .send:hover:not(:disabled),
 html.liquid-glass .icon-btn.on{
-  background:linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.06) 50%,rgba(255,255,255,0) 72%),var(--accent);
+  background:radial-gradient(circle at var(--lg-x,50%) var(--lg-y,50%),var(--lg-glow,transparent) 0,transparent 72%),
+             linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.06) 50%,rgba(255,255,255,0) 72%),var(--accent);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(0,0,0,.12),
              0 6px 16px -6px color-mix(in srgb,var(--accent) 75%,transparent);
+  transition:--lg-glow .3s ease,opacity .13s ease;
 }
 
-/* header: a round glass button on the left, one capsule holding the rest */
-html.liquid-glass .top .controls{border-radius:999px;padding:2px;gap:0}
+/* ---- header: [menu]  ...  [voice · read aloud] [compose] ----
+   The left button and the compose button are glass circles; the two
+   in the middle share one capsule, as grouped controls do on iOS. */
+html.liquid-glass .top .controls{border-radius:999px;padding:0;gap:0}
 html.liquid-glass .top .controls .icon-btn{background:transparent;color:var(--ink)}
 html.liquid-glass .top .controls .icon-btn.on{color:#fff}
 html.liquid-glass .menu-btn{color:var(--ink)}
+.lg-compose,.lg-only{display:none}
+html.liquid-glass .flat-only{display:none}
+html.liquid-glass .lg-only{display:block}
+html.liquid-glass .lg-compose{
+  display:grid;place-items:center;flex:none;
+  width:36px;height:36px;border-radius:50%;color:var(--accent);
+}
+html.liquid-glass .lg-compose svg{width:19px;height:19px;margin:-1px 0 0 1px}
+@media (max-width:640px){
+  html.liquid-glass .lg-compose{width:44px;height:44px}
+  html.liquid-glass .lg-compose svg{width:21px;height:21px}
+}
 html.liquid-glass .agent-bar{position:relative;z-index:21;margin:2px 12px 0;padding:8px 10px 8px 8px;border-radius:999px}
-
-/* pressing glass gives a little, the way iOS controls do */
-html.liquid-glass .menu-btn,
-html.liquid-glass .icon-btn,
-html.liquid-glass .live-ctl,
-html.liquid-glass .live-gear,
-html.liquid-glass .pill .send,
-html.liquid-glass .pill-plus,
-html.liquid-glass .pill .mic,
-html.liquid-glass .to-bottom{transition:background .16s ease,color .16s ease,transform .22s cubic-bezier(.34,1.5,.5,1)}
-html.liquid-glass .menu-btn:active,
-html.liquid-glass .icon-btn:active,
-html.liquid-glass .pill .send:active:not(:disabled),
-html.liquid-glass .pill-plus:active,
-html.liquid-glass .pill .mic:active{transform:scale(.9)}
-html.liquid-glass .to-bottom{bottom:calc(var(--lg-bottom,138px) + 12px);width:40px;height:40px;z-index:20}
-html.liquid-glass .to-bottom.show:active{transform:translateX(-50%) scale(.9)}
+/* centred with `translate`, not transform: the bounce's `scale` is applied
+   after translate but BEFORE transform, so a centring transform would get
+   scaled too and the arrow would drift sideways as it bounced */
+html.liquid-glass .to-bottom{bottom:calc(var(--lg-bottom,138px) + 12px);width:40px;height:40px;z-index:20;
+  translate:-50% 0;transform:scale(.9)}
+html.liquid-glass .to-bottom.show,
+html.liquid-glass .to-bottom.show:active{transform:none}
 html.liquid-glass .stop-btn{color:var(--ink)}
 
-/* ---- menus and panels: the same glass, thicker, rounder ---- */
+/* ---- tapping: glass gives under a finger and springs back ----
+   The squash and the spring are run from script on the `scale` property,
+   which multiplies with any transform an element already has instead of
+   replacing it -- so a control that is positioned by transform (the
+   jump-to-latest arrow) bounces in place. The older press-shrink rules
+   are switched off here so the two never compound. */
+html.liquid-glass :is(.menu-btn,.lg-compose,.icon-btn,.pill-plus,.pill .mic,.pill .send,.pill-think,.live-ctl,
+  .live-gear,.suggest,.web-chip,.act-undo,.stop-btn,.sb-nav,.sb-item,.plus-item,.acct-item,.acct-subitem,
+  .rail-btn,.sb-account,.settings-row-btn,.settings-rail-item,.feedback button,.page-back):active{transform:none}
+html.liquid-glass .suggest:hover{transform:none}
+html.liquid-glass button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+html.liquid-glass .lg-lit{--lg-glow:var(--lg-glow-on)}
+/* rows and the buttons inside a capsule are not glass of their own, so a
+   press lights the row instead */
+html.liquid-glass :is(.sb-nav,.sb-item,.sb-section-label,.plus-item,.acct-item,.acct-subitem,.rail-btn,
+  .settings-rail-item,.top .controls .icon-btn,.pill-plus,.pill .mic,.pill-think,.feedback button,.sb-account).lg-lit{
+  background-color:var(--lg-select)
+}
+
+/* ---- pointer devices: glass brightens under the cursor ---- */
+@media (hover:hover) and (pointer:fine){
+  html.liquid-glass :is(.menu-btn,.lg-compose,.to-bottom,.live-ctl,.live-gear,.stop-btn,.page-back):hover{--lg-fill:var(--lg-fill-hover)}
+  html.liquid-glass .top .controls .icon-btn:hover{background:var(--lg-select)}
+  html.liquid-glass .top .controls .icon-btn.on:hover{background:var(--accent)}
+}
+
+/* ---- menus: the same glass, thicker, rounder, and they spring open ---- */
 html.liquid-glass .plus-menu,
 html.liquid-glass .acct-menu,
 html.liquid-glass .tier-menu{
@@ -2410,7 +2468,7 @@ html.liquid-glass .tier-menu{
   -webkit-backdrop-filter:blur(30px) saturate(190%);
   backdrop-filter:blur(30px) saturate(190%);
   border:.5px solid var(--lg-edge);
-  border-radius:24px;
+  border-radius:26px;
   padding:8px;
   box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow);
 }
@@ -2419,58 +2477,131 @@ html.liquid-glass .tier-menu{
 html.liquid-glass .acct-submenu{
   background:var(--lg-sheen),var(--card);
   border:.5px solid var(--lg-edge);
-  border-radius:18px;
+  border-radius:20px;
   box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow);
 }
 html.liquid-glass .plus-item,
 html.liquid-glass .acct-item,
-html.liquid-glass .acct-subitem{border-radius:14px}
+html.liquid-glass .acct-subitem{border-radius:16px}
+html.liquid-glass .plus-sep{background:var(--lg-edge);margin:6px 10px}
+@keyframes lgMenuIn{
+  0%{opacity:0;transform:scale(.62)}
+  55%{opacity:1;transform:scale(1.025)}
+  100%{opacity:1;transform:scale(1)}
+}
+html.liquid-glass .plus-menu.show{animation:lgMenuIn .44s cubic-bezier(.25,.85,.3,1) both;transform-origin:18px 100%}
+html.liquid-glass .acct-menu,
+html.liquid-glass .tier-menu{animation:lgMenuIn .44s cubic-bezier(.25,.85,.3,1) both;transform-origin:24px 100%}
+html.liquid-glass .tier-menu{transform-origin:calc(100% - 24px) 100%}
+html.liquid-glass .acct-submenu{animation:lgMenuIn .38s cubic-bezier(.25,.85,.3,1) both;transform-origin:0 18px}
+
+/* ---- the sidebar ----
+   On a phone or a small tablet it is a floating glass panel with rounded
+   corners, as on iPadOS 26, that springs in. Docked on a laptop it stays a
+   full-height panel (the layout depends on it), in the same glass. */
 html.liquid-glass .sidebar{
-  background:var(--lg-sheen),var(--lg-fill-strong);
+  /* a big panel is flat glass, no sheen -- a gradient down 800px of
+     sidebar reads as a grey wash, and in dark theme it would lift the
+     true black the design is built on */
+  background:var(--lg-panel);
   -webkit-backdrop-filter:blur(30px) saturate(190%);
   backdrop-filter:blur(30px) saturate(190%);
   border-right:.5px solid var(--lg-edge);
   box-shadow:inset -1px 0 0 var(--lg-rim-low);
+  transition:transform .52s cubic-bezier(.32,.72,0,1);
+}
+@media (max-width:899px){
+  html.liquid-glass .sidebar{
+    top:calc(8px + env(safe-area-inset-top));bottom:calc(8px + env(safe-area-inset-bottom));left:8px;
+    width:min(300px,calc(86vw - 8px));
+    border:.5px solid var(--lg-edge);border-radius:30px;overflow:hidden;
+    box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow);
+    transform:translateX(calc(-100% - 24px));
+  }
+  /* closed, its shadow would still fall on the left edge of the screen */
+  html.liquid-glass .sidebar:not(.open){box-shadow:none}
+  html.liquid-glass .sidebar.open{transform:none}
+}
+html.liquid-glass .sb-head{padding:20px 14px 10px 20px}
+html.liquid-glass .sb-brand{font-size:28px;font-weight:800;letter-spacing:-.025em}
+html.liquid-glass.apple-ui .sb-brand{font-family:-apple-system,BlinkMacSystemFont,'Bricolage Grotesque',sans-serif;letter-spacing:-.02em}
+html.liquid-glass .sb-nav,
+html.liquid-glass .sb-item,
+html.liquid-glass .sb-section-label{border-radius:14px}
+html.liquid-glass #sbNew svg{color:var(--accent)}
+html.liquid-glass .sb-item.active{background:var(--lg-select);box-shadow:inset 0 1px 0 var(--lg-rim-low)}
+html.liquid-glass .sb-item.active::after{display:none}
+/* two older rules disagree about this card (one sets a 10px margin, a
+   later one 100% width), so it overhung the panel by 10px -- invisible
+   while it had no background, plain to see in glass */
+html.liquid-glass .sb-account{
+  width:100%;margin:0;
+  background:var(--lg-sheen),var(--lg-fill);border:.5px solid var(--lg-edge);border-radius:20px;
+  box-shadow:inset 0 1px 0 var(--lg-rim),0 6px 18px -10px rgba(0,0,0,.3);
 }
 html.liquid-glass .rail{
-  background:var(--lg-fill-strong);
+  background:var(--lg-panel);
   -webkit-backdrop-filter:blur(30px) saturate(190%);
   backdrop-filter:blur(30px) saturate(190%);
   border-right:.5px solid var(--lg-edge);
 }
-html.liquid-glass .overlay{background:rgba(0,0,0,.22)}
+html.liquid-glass .rail-btn{border-radius:14px}
+html.liquid-glass #railNew svg{color:var(--accent)}
+html.liquid-glass .overlay{background:rgba(0,0,0,.22);transition:opacity .4s ease}
+
+/* ---- cards and sheets ---- */
 html.liquid-glass .gate-card,
 html.liquid-glass .confirm-card,
-html.liquid-glass .email-panel-inner{border-radius:28px;border-width:.5px;box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow)}
+html.liquid-glass .email-panel-inner{border-radius:30px;border-width:.5px;box-shadow:inset 0 1px 0 var(--lg-rim),var(--lg-menu-shadow)}
+html.liquid-glass .confirm-actions button{border-radius:999px;border-width:.5px}
+
+/* ---- full pages (settings, library, agents): an iOS navigation bar ---- */
+html.liquid-glass .page-nav{
+  position:sticky;top:0;z-index:5;
+  background:rgba(var(--lg-bg-rgb),.72);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  backdrop-filter:blur(24px) saturate(180%);
+  border-bottom:.5px solid var(--lg-edge);
+}
+html.liquid-glass .page-back{padding:8px 16px;border-radius:999px;color:var(--ink);font-weight:600}
+html.liquid-glass .page-back:hover{opacity:1}
+html.liquid-glass .settings-rows{border:.5px solid var(--lg-edge);border-radius:22px;box-shadow:0 10px 30px -18px rgba(0,0,0,.25)}
+html.liquid-glass .settings-row-btn{border-radius:999px;border-color:transparent;background:var(--lg-select);font-weight:600}
+html.liquid-glass .settings-row-btn:hover{background:var(--active)}
+html.liquid-glass .settings-rail-item{border-radius:14px}
+html.liquid-glass .agent-card,
+html.liquid-glass .lib-card{border-radius:22px;border-width:.5px}
 
 /* ---- in the conversation: the same rim, no blur (nothing to blur) ---- */
 html.liquid-glass .web-chip,
 html.liquid-glass .act-undo,
 html.liquid-glass .suggest{
-  background:var(--lg-sheen),var(--lg-fill);
+  background:radial-gradient(circle at var(--lg-x,50%) var(--lg-y,50%),var(--lg-glow,transparent) 0,transparent 72%),
+             var(--lg-sheen),var(--lg-fill);
   border:.5px solid var(--lg-edge);
   box-shadow:inset 0 1px 0 var(--lg-rim),0 4px 14px -8px rgba(0,0,0,.28);
+  transition:--lg-glow .3s ease;
 }
+html.liquid-glass .msg.user .bubble{border-radius:22px}
 html.liquid-glass .live-ctl.muted{background:var(--lg-sheen),rgba(220,38,38,.16);color:#DC2626}
-html.liquid-glass .live-ctl:active,
-html.liquid-glass .live-gear:active{transform:scale(.9)}
 
 /* ---- when glass cannot or should not be drawn: solid, same shapes ----
-   No backdrop-filter at all (iOS 8 and older), Increase Contrast, or Reduce
+   No backdrop-filter at all (old browsers), Increase Contrast, or Reduce
    Transparency where a browser reports it (Safari does not yet). The doubled
    class outranks the dark-theme token blocks above. */
 @supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-  :root.liquid-glass.liquid-glass{--lg-fill:var(--card);--lg-fill-strong:var(--card);--glass:var(--card)}
+  :root.liquid-glass.liquid-glass{--lg-fill:var(--card);--lg-fill-strong:var(--card);--lg-fill-hover:var(--card);--glass:var(--card)}
 }
 @media (prefers-contrast: more){
-  :root.liquid-glass.liquid-glass{--lg-fill:var(--card);--lg-fill-strong:var(--card);--glass:var(--card);--lg-edge:var(--line-strong)}
+  :root.liquid-glass.liquid-glass{--lg-fill:var(--card);--lg-fill-strong:var(--card);--lg-fill-hover:var(--card);--glass:var(--card);--lg-edge:var(--line-strong)}
 }
 @media (prefers-reduced-transparency: reduce){
-  :root.liquid-glass.liquid-glass{--lg-fill:var(--card);--lg-fill-strong:var(--card);--glass:var(--card)}
+  :root.liquid-glass.liquid-glass{--lg-fill:var(--card);--lg-fill-strong:var(--card);--lg-fill-hover:var(--card);--glass:var(--card)}
 }
 @media (prefers-reduced-motion:reduce){
-  html.liquid-glass .menu-btn,html.liquid-glass .icon-btn,html.liquid-glass .live-ctl,html.liquid-glass .live-gear,
-  html.liquid-glass .pill .send,html.liquid-glass .pill-plus,html.liquid-glass .pill .mic,html.liquid-glass .to-bottom{transition:none}
+  html.liquid-glass .plus-menu.show,html.liquid-glass .acct-menu,html.liquid-glass .tier-menu,
+  html.liquid-glass .acct-submenu{animation:none}
+  html.liquid-glass .sidebar{transition:none}
 }
 
 </style>
@@ -2496,6 +2627,10 @@ html.liquid-glass .live-gear:active{transform:scale(.9)}
     </button>
     <button class="signin-btn hidden" id="signinBtn" style="display:none"><span id="signinLbl">Sign in</span></button>
   </div>
+  <!-- the glass design's compose button, as in iOS Notes (hidden when glass is off) -->
+  <button class="lg-compose" id="composeBtn" type="button" aria-label="New chat" title="New chat">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5H6.2A2.7 2.7 0 0 0 3.5 6.2v11.6a2.7 2.7 0 0 0 2.7 2.7h11.6a2.7 2.7 0 0 0 2.7-2.7V12"/><path d="M18.4 2.9a2.05 2.05 0 0 1 2.9 2.9l-8.6 8.6-3.9 1 1-3.9Z"/></svg>
+  </button>
 </header>
 
 <!-- ============ CHAT ============ -->
@@ -2739,7 +2874,8 @@ html.liquid-glass .live-gear:active{transform:scale(.9)}
     <span class="rail-mark"><span></span><span></span><span></span><span></span></span>
   </button>
   <button class="rail-btn" id="railNew" title="New chat" aria-label="New chat">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+    <svg class="flat-only" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+    <svg class="lg-only" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5H6.2A2.7 2.7 0 0 0 3.5 6.2v11.6a2.7 2.7 0 0 0 2.7 2.7h11.6a2.7 2.7 0 0 0 2.7-2.7V12"/><path d="M18.4 2.9a2.05 2.05 0 0 1 2.9 2.9l-8.6 8.6-3.9 1 1-3.9Z"/></svg>
   </button>
   <button class="rail-btn" id="railSearch" title="Search chats" aria-label="Search chats">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -2767,7 +2903,8 @@ html.liquid-glass .live-gear:active{transform:scale(.9)}
   </div>
   <div class="sb-scroll" id="sbScroll">
   <button class="sb-nav" id="sbNew">
-    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+    <svg class="flat-only" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+    <svg class="lg-only" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5H6.2A2.7 2.7 0 0 0 3.5 6.2v11.6a2.7 2.7 0 0 0 2.7 2.7h11.6a2.7 2.7 0 0 0 2.7-2.7V12"/><path d="M18.4 2.9a2.05 2.05 0 0 1 2.9 2.9l-8.6 8.6-3.9 1 1-3.9Z"/></svg>
     New Chat
   </button>
   <div class="sb-nav searching" id="sbSearchBtn">
@@ -4023,14 +4160,20 @@ function openChat(id, opts){
 document.getElementById('menuBtn').addEventListener('click', function(){ haptic('light'); openSidebar(); });
 document.getElementById('sbClose').addEventListener('click', function(){ haptic('light'); closeSidebar(); });
 document.getElementById('overlay').addEventListener('click', closeSidebar);
-document.getElementById('sbNew').addEventListener('click', function(){
+function startNewChat(closeDocked){
   haptic('tap');
   activeAgent = null; applyAgentUI();
-  newChat(); setActiveChatPointer(null); startFreshView(); closeSidebar(); renderSidebar();
+  newChat(); setActiveChatPointer(null); startFreshView();
+  if(closeDocked || !sidebarIsDocked()) closeSidebar();
+  renderSidebar();
   setChatUrl(null);
   renderMemoryChips();
   if(typeof personalizeHero === 'function') personalizeHero();
-});
+}
+document.getElementById('sbNew').addEventListener('click', function(){ startNewChat(true); });
+/* the glass design's compose button, iOS Notes style: a new chat, and a
+   sidebar docked open on a laptop stays where it is */
+document.getElementById('composeBtn').addEventListener('click', function(){ startNewChat(false); });
 /* mode + share handlers added below */
 
 /* ---------- photo attach (vision) ---------- */
@@ -12559,7 +12702,7 @@ function renderSettings(tab){
         '<div class="settings-row"><div class="settings-row-meta"><b>Theme</b><small>System, Light or Dark</small></div>' +
           '<div class="settings-row-val">' + esc(choice.charAt(0).toUpperCase() + choice.slice(1)) + '</div>' +
           '<button class="settings-row-btn" id="setCycleTheme" type="button">Change</button></div>' +
-        '<div class="settings-row"><div class="settings-row-meta"><b>Glass design</b><small>The Liquid Glass look — on by itself on iPhone and iPad</small></div>' +
+        '<div class="settings-row"><div class="settings-row-meta"><b>Glass design</b><small>The Liquid Glass look, on every screen. Off gives the plain flat design</small></div>' +
           '<div class="settings-row-val">' + (glassOn() ? 'On' : 'Off') + '</div>' +
           '<button class="settings-row-btn" id="setGlass" type="button">' + (glassOn() ? 'Turn off' : 'Turn on') + '</button></div>' +
         '<div class="settings-row"><div class="settings-row-meta"><b>Saved memory</b><small>Facts Pixel Pro remembers about you</small></div>' +
@@ -12962,7 +13105,7 @@ $chat.addEventListener('click', function(e){
 })();
 
 /* ================================================================
-   LIQUID GLASS LAYOUT — iPhone and iPad (see the head script and CSS)
+   LIQUID GLASS LAYOUT (see the head script and the CSS)
 
    Glass needs something behind it, so the chat scrolls UNDER the header
    and the composer. #main is pulled past both by exactly their height and
@@ -12970,7 +13113,7 @@ $chat.addEventListener('click', function(e){
    the last one still lands just above the composer. Those heights move --
    the textarea grows, the stop button appears, the agent bar opens, the
    phone rotates -- so they are measured as they change, never guessed.
-   On every other device none of this is installed.
+   With glass turned off none of this is installed.
    ================================================================ */
 function glassOn(){ return document.documentElement.classList.contains('liquid-glass'); }
 function setGlass(on){
@@ -13011,6 +13154,99 @@ function glassLayout(){
   window.addEventListener('orientationchange', function(){ setTimeout(glassSync, 250); });
 }
 glassLayout();
+
+/* ================================================================
+   GLASS THAT GIVES — the press and the spring back
+
+   Touch a glass control and it squashes a little and lights up where the
+   finger is; let go and it springs back past its size and settles, the way
+   iOS 26 controls do. How far it gives depends on how big it is: a round
+   button gives a lot, a chip less, a whole row only a touch -- a full-width
+   row shrinking like a button looks broken, not bouncy.
+
+   It runs on the `scale` property through the Web Animations API, so it
+   never fights the CSS: `scale` multiplies with an element's existing
+   transform (the jump-to-latest arrow is centred by one), and a script
+   animation leaves each element's own CSS animations alone (the source
+   chip's entrance would otherwise replay on every tap). Dragging off to
+   scroll cancels the press and springs back the same way. With reduced
+   motion on, the light still answers the touch but nothing moves.
+   ================================================================ */
+(function(){
+  var SEL = '.menu-btn,.lg-compose,.icon-btn,.pill-plus,.pill .mic,.pill .send,.pill-think,.live-ctl,.live-gear,' +
+            '.to-bottom,.suggest,.web-chip,.act-undo,.act-btn,.stop-btn,.sb-nav:not(.searching),.sb-item,' +
+            '.sb-section-label,.plus-item,.acct-item,.acct-subitem,.rail-btn,.rail-avatar,.sb-account,' +
+            '.settings-row-btn,.settings-rail-item,.feedback button,.confirm-actions button,.page-back,' +
+            '.agent-bar-exit,.imgchip .rm';
+  var canScale = !!(window.CSS && CSS.supports && CSS.supports('scale', '1')) &&
+                 typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function';
+  var still = false;
+  try{
+    var mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    still = mq.matches;
+    if(mq.addEventListener) mq.addEventListener('change', function(){ still = mq.matches; });
+  }catch(e){}
+  var held = null;
+
+  function give(el){
+    var r = el.getBoundingClientRect(), size = Math.max(r.width, r.height);
+    return size <= 64 ? 0.86 : size <= 200 ? 0.94 : 0.975;
+  }
+  function stopAnims(el){
+    (el._lgAnims || []).forEach(function(a){ try{ a.cancel(); }catch(e){} });
+    el._lgAnims = [];
+  }
+  function press(el, x, y){
+    var r = el.getBoundingClientRect();
+    if(r.width && r.height){
+      el.style.setProperty('--lg-x', ((x - r.left) / r.width * 100).toFixed(1) + '%');
+      el.style.setProperty('--lg-y', ((y - r.top) / r.height * 100).toFixed(1) + '%');
+    }
+    el.classList.add('lg-lit');
+    if(!canScale || still) return;
+    var k = give(el), from = parseFloat(getComputedStyle(el).scale) || 1;
+    stopAnims(el);
+    el._lgGive = k;
+    el._lgAnims.push(el.animate([{ scale: String(from) }, { scale: String(k) }],
+      { duration: 170, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'forwards' }));
+  }
+  function release(el){
+    el.classList.remove('lg-lit');
+    if(!canScale || still || !el._lgGive) return;
+    var k = el._lgGive, over = 1 + (1 - k) * 0.42, under = 1 - (1 - k) * 0.16;
+    var from = parseFloat(getComputedStyle(el).scale) || k;
+    var old = el._lgAnims || [];
+    el._lgAnims = [el.animate([
+      { scale: String(from), easing: 'cubic-bezier(.2,.75,.35,1)' },
+      { scale: String(over), offset: 0.38, easing: 'cubic-bezier(.45,0,.55,1)' },
+      { scale: String(under), offset: 0.7, easing: 'cubic-bezier(.45,0,.55,1)' },
+      { scale: '1' }
+    ], { duration: 560 })];
+    old.forEach(function(a){ try{ a.cancel(); }catch(e){} });
+    el._lgGive = 0;
+  }
+  document.addEventListener('pointerdown', function(e){
+    if(!glassOn() || (e.button && e.button !== 0)) return;
+    var el = e.target && e.target.closest ? e.target.closest(SEL) : null;
+    if(!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+    if(held && held !== el) release(held);
+    held = el;
+    press(el, e.clientX, e.clientY);
+  }, true);
+  function letGo(){ if(held){ var el = held; held = null; release(el); } }
+  document.addEventListener('pointerup', letGo, true);
+  document.addEventListener('pointercancel', letGo, true);
+  window.addEventListener('blur', letGo);
+  /* a key press on a focused control gives the same bounce */
+  document.addEventListener('keydown', function(e){
+    if(!glassOn() || e.repeat || (e.key !== 'Enter' && e.key !== ' ')) return;
+    var el = document.activeElement;
+    if(!el || !el.matches || !el.matches(SEL)) return;
+    var r = el.getBoundingClientRect();
+    press(el, r.left + r.width / 2, r.top + r.height / 2);
+    setTimeout(function(){ release(el); }, 120);
+  }, true);
+})();
 
 
 /* ================================================================

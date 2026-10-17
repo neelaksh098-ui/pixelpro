@@ -1,10 +1,12 @@
-"""The Liquid Glass design: on by itself on iPhone and iPad, nowhere else.
+"""The Liquid Glass design, on every device.
 
 Every check reads what the browser actually computed and drew -- the class on
 <html>, the backdrop-filter on the composer, where #main really starts and
-ends, which element really sits under the composer -- and the "nothing else
-changed" checks compare screenshots of this build against the committed one
-(or PP_BASELINE=<commit>), pixel by pixel, on Android and on a laptop.
+ends, which element really sits under the composer, the `scale` a button is
+at mid-bounce -- and the "glass off" checks compare screenshots of this build
+with glass turned off against the committed build (or PP_BASELINE=<commit>,
+e.g. the last flat-only build, 934c528), pixel by pixel, on Android and on a
+laptop.
 
     python3 tests/mockserver.py 8880 &
     python3 tests/glasstest.py            (screenshots go to $PP_SHOTS if set)
@@ -135,14 +137,18 @@ async def main():
         b = await pw.chromium.launch(executable_path=CHROME, args=[
             "--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
 
-        # ============ 1. who gets it ============
-        for label, init, want in [("iPhone Safari", IPHONE, True), ("iPhone Chrome", IPHONE_CHROME, True),
-                                  ("iPad (reports as a Mac)", IPAD, True), ("a real Mac", MAC, False),
-                                  ("Android", ANDROID, False), ("Windows", WINDOWS, False)]:
+        # ============ 1. who gets it: everyone ============
+        for label, init, apple in [("iPhone Safari", IPHONE, True), ("iPhone Chrome", IPHONE_CHROME, True),
+                                   ("iPad (reports as a Mac)", IPAD, True), ("a Mac", MAC, True),
+                                   ("Android", ANDROID, False), ("Windows", WINDOWS, False)]:
             ctx, pg, errs = await page(b, init)
             g = await pg.evaluate(GEOM)
-            chk(label + (" gets the glass design" if want else " keeps the normal design"),
-                g["glass"] == want, g["glass"])
+            chk(label + " gets the glass design", g["glass"], g["glass"])
+            font = await pg.evaluate("()=>[document.documentElement.classList.contains('apple-ui'), getComputedStyle(document.body).fontFamily]")
+            if apple:
+                chk(label + ": in Apple's own typeface", font[0] and font[1].startswith("-apple-system"), font)
+            else:
+                chk(label + ": keeps Inter", (not font[0]) and font[1].startswith("Inter"), font)
             chk(label + ": no page errors", not errs, errs)
             await ctx.close()
 
@@ -200,6 +206,78 @@ async def main():
         chk("the header buttons stay tappable over the chat", menu_hit)
         await save(pg, "glass-iphone-light-midscroll.png")
 
+        # ============ 2b. the compose button, iOS Notes style ============
+        cb = await pg.evaluate("""()=>{const b=document.getElementById('composeBtn'), c=getComputedStyle(b), r=b.getBoundingClientRect();
+            const ctl=document.querySelector('.top .controls').getBoundingClientRect();
+            return {shown:c.display!=='none', blur:c.backdropFilter||c.webkitBackdropFilter, round:c.borderTopLeftRadius,
+                    w:r.width, rightOfControls:r.left>=ctl.right-1, color:c.color};}""")
+        chk("a glass compose button sits at the top right, after the voice controls",
+            cb["shown"] and "blur(" in (cb["blur"] or "") and cb["rightOfControls"] and cb["w"] >= 40, cb)
+        chk("...big enough to hit with a thumb (44pt, Apple's minimum)", cb["w"] >= 44, cb)
+        await pg.click("#composeBtn")
+        await pg.wait_for_timeout(500)
+        fresh = await pg.evaluate("()=>({msgs:document.querySelectorAll('#chat .msg').length, hero:getComputedStyle(document.getElementById('hero')).display!=='none', empty:document.body.classList.contains('empty-state')})")
+        chk("tapping it starts a new chat", fresh["msgs"] == 0 and fresh["hero"], fresh)
+        icons = await pg.evaluate("()=>[...document.querySelectorAll('#sbNew svg')].map(s=>getComputedStyle(s).display)")
+        chk("the sidebar's New Chat shows the same square-and-pencil icon", icons == ["none", "block"], icons)
+
+        # ============ 2c. tapping: it gives, then springs back past and settles ============
+        await pg.evaluate(FILL)
+        await pg.wait_for_timeout(400)
+        SCALE = "(sel)=>{const e=document.querySelector(sel); const v=getComputedStyle(e).scale; return [v==='none'?1:parseFloat(v), e.classList.contains('lg-lit')];}"
+        async def press_and_track(sel):
+            box = await pg.locator(sel).first.bounding_box()
+            await pg.mouse.move(box["x"] + box["width"] * 0.3, box["y"] + box["height"] * 0.4)
+            await pg.mouse.down()
+            await pg.wait_for_timeout(260)
+            down = await pg.evaluate(SCALE, sel)
+            await pg.mouse.up()
+            peak, trail = 0, []
+            for _ in range(14):
+                await pg.wait_for_timeout(40)
+                v = (await pg.evaluate(SCALE, sel))[0]
+                trail.append(round(v, 3)); peak = max(peak, v)
+            await pg.wait_for_timeout(500)
+            rest = await pg.evaluate(SCALE, sel)
+            return down, peak, rest, trail
+        CLOSE_SB = "()=>{try{closeSidebar()}catch(e){}}"
+        down, peak, rest, trail = await press_and_track("#menuBtn")
+        await pg.evaluate(CLOSE_SB)          # the press was a real tap: it opened the sidebar
+        await pg.wait_for_timeout(600)
+        chk("pressing a round glass button squashes it", 0.84 <= down[0] <= 0.9, down)
+        chk("...and lights it where the finger is", down[1], down)
+        chk("letting go springs it back PAST full size", peak > 1.03, trail)
+        chk("...then it settles exactly at full size, unlit", rest[0] == 1 and not rest[1], (rest, trail))
+        down, peak, rest, trail = await press_and_track("#plusBtn")
+        chk("the composer's + button bounces too", down[0] < 0.92 and peak > 1.02 and rest[0] == 1, (down, trail, rest))
+        await pg.evaluate("()=>{document.getElementById('plusBtn').click();}")
+        await pg.evaluate("()=>{document.getElementById('menuBtn').click();}")
+        await pg.wait_for_timeout(600)
+        down, peak, rest, trail = await press_and_track("#secChannels")
+        await pg.evaluate("()=>document.getElementById('secChannels').click()")
+        chk("a whole row gives only a touch, not like a button", 0.96 <= down[0] < 1 and peak < 1.02 and rest[0] == 1, (down, trail))
+        await pg.evaluate("()=>{try{closeSidebar()}catch(e){}}")
+        await pg.wait_for_timeout(600)
+        await pg.evaluate("()=>{const m=document.getElementById('main'); m.style.scrollBehavior='auto'; m.scrollTop=0;}")
+        await pg.wait_for_timeout(300)
+        await pg.evaluate("()=>document.querySelector('.to-bottom').classList.add('show')")
+        await pg.wait_for_timeout(250)
+        tb = await pg.locator(".to-bottom").bounding_box()
+        await pg.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + tb["height"] / 2)
+        await pg.mouse.down()
+        await pg.wait_for_timeout(240)
+        tbs = await pg.evaluate("()=>{const e=document.querySelector('.to-bottom'), r=e.getBoundingClientRect(), c=getComputedStyle(e); return {scale:c.scale, cx:r.left+r.width/2, vw:innerWidth, tf:c.transform};}")
+        await pg.mouse.up()
+        chk("the jump-to-latest arrow bounces in place, still centred", tbs["scale"] not in ("none", "1") and abs(tbs["cx"] - tbs["vw"] / 2) <= 2, tbs)
+        await pg.wait_for_timeout(700)
+        await pg.emulate_media(reduced_motion="reduce")
+        await pg.wait_for_timeout(100)
+        down, peak, rest, trail = await press_and_track("#menuBtn")
+        await pg.evaluate(CLOSE_SB)
+        await pg.wait_for_timeout(600)
+        await pg.emulate_media(reduced_motion="no-preference")
+        chk("with Reduce Motion on, nothing moves -- but the light still answers", down[0] == 1 and down[1] and peak == 1, (down, trail))
+
         # ============ 3. heights move, the layout follows ============
         before = await pg.evaluate(GEOM)
         await pg.fill("#input", "line one\nline two\nline three\nline four")
@@ -249,10 +327,18 @@ async def main():
         await save(pg, "glass-iphone-dark-plusmenu.png")
         await pg.evaluate("()=>{document.getElementById('plusBtn').click(); applyThemeChoice('light');}")
         await pg.evaluate("()=>{document.getElementById('menuBtn').click();}")
-        await pg.wait_for_timeout(450)
+        await pg.wait_for_timeout(900)        # the spring takes ~0.5s to settle
         sb = await pg.evaluate("()=>{const c=getComputedStyle(document.getElementById('sidebar'));return c.backdropFilter||c.webkitBackdropFilter;}")
         chk("the chats sidebar is glass", "blur(" in (sb or ""), sb)
+        fl = await pg.evaluate("()=>{const e=document.getElementById('sidebar'), r=e.getBoundingClientRect(), c=getComputedStyle(e); return {left:r.left, top:r.top, radius:c.borderTopRightRadius};}")
+        chk("...a floating panel with rounded corners on a phone", abs(fl["left"] - 8) < 0.5 and fl["top"] >= 8 and fl["radius"] == "30px", fl)
         await save(pg, "glass-iphone-sidebar.png")
+        await pg.evaluate("()=>document.getElementById('sbAccount').click()")
+        await pg.wait_for_timeout(600)
+        am = await pg.evaluate("()=>{const c=getComputedStyle(document.getElementById('acctMenu'));return {shown:c.display, blur:c.backdropFilter||c.webkitBackdropFilter};}")
+        chk("the account menu is glass", am["shown"] != "none" and "blur(" in (am["blur"] or ""), am)
+        await save(pg, "glass-iphone-account-menu.png")
+        await pg.evaluate("()=>{try{closeAcctMenu()}catch(e){}}")
         await pg.keyboard.press("Escape")
         await pg.evaluate("()=>{try{closeSidebar()}catch(e){document.getElementById('sidebar').classList.remove('open')}}")
 
@@ -272,6 +358,7 @@ async def main():
         chk("...with the layout reinstalled", abs(g["padTop"] - g["topH"]) <= 1 and abs(g["mainTop"]) <= 1, g)
         await pg.evaluate("()=>{openSettingsPage(); renderSettings('general');}")
         await pg.wait_for_timeout(300)
+        await save(pg, "glass-iphone-settings.png")
         row = await pg.evaluate("()=>{const b=document.getElementById('setGlass'); return b?b.textContent:null;}")
         chk("Settings > General has a Glass design switch", row == "Turn off", row)
         await pg.evaluate("()=>document.getElementById('setGlass').click()")
@@ -279,31 +366,61 @@ async def main():
         chk("iPhone run: no page errors", not errs, errs)
         await ctx.close()
 
-        # ============ 6. the URL switch, and going back to automatic ============
-        ctx, pg, errs = await page(b, WINDOWS, 1280, 800, query="?glass=1")
-        chk("?glass=1 previews it on a laptop", await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
+        # ============ 6. Android and a laptop: the same design ============
+        ctx, pg, errs = await page(b, ANDROID)
+        g = await pg.evaluate(GEOM)
+        chk("Android: the composer is real glass over the chat", "blur(" in g["pillBlur"] and abs(g["mainTop"]) <= 1 and abs(g["padTop"] - g["topH"]) <= 1, g)
+        await pg.evaluate(FILL)
+        await pg.wait_for_timeout(400)
+        await pg.evaluate("()=>{const m=document.getElementById('main'); m.style.scrollBehavior='auto'; m.scrollTop=m.scrollHeight-m.clientHeight-260;}")
+        await pg.wait_for_timeout(250)
+        await save(pg, "glass-android-light.png")
+        await pg.evaluate("()=>applyThemeChoice('dark')")
+        await pg.wait_for_timeout(300)
+        await save(pg, "glass-android-dark.png")
+        chk("Android run: no page errors", not errs, errs)
+        await ctx.close()
+
+        ctx, pg, errs = await page(b, WINDOWS, 1280, 800)
+        chk("a Windows laptop gets it with no switch at all", await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
         await pg.evaluate(FILL)
         await pg.wait_for_timeout(400)
         await pg.evaluate("()=>{const m=document.getElementById('main'); m.style.scrollBehavior='auto'; m.scrollTop=m.scrollHeight-m.clientHeight-200;}")
         await pg.wait_for_timeout(200)
-        await save(pg, "glass-laptop-preview.png")
+        await save(pg, "glass-laptop.png")
+        await pg.evaluate("()=>{try{setDockedSidebar(true)}catch(e){}}")
+        await pg.wait_for_timeout(600)
+        docked = await pg.evaluate("()=>sidebarIsDocked()")
+        await save(pg, "glass-laptop-docked.png")
+        await pg.click("#composeBtn")
+        await pg.wait_for_timeout(500)
+        after = await pg.evaluate("()=>({docked:sidebarIsDocked(), msgs:document.querySelectorAll('#chat .msg').length})")
+        chk("laptop: the compose button starts a new chat and leaves a docked sidebar open",
+            docked and after["docked"] and after["msgs"] == 0, (docked, after))
+        await pg.evaluate("()=>applyThemeChoice('dark')")
+        await pg.wait_for_timeout(300)
+        await save(pg, "glass-laptop-docked-dark.png")
+        chk("laptop run: no page errors", not errs, errs)
+        await pg.goto(URL + "?glass=0", wait_until="domcontentloaded")
+        await pg.wait_for_timeout(900)
+        chk("?glass=0 turns it off", not await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
+        await pg.goto(URL, wait_until="domcontentloaded")
+        await pg.wait_for_timeout(900)
+        chk("...and it stays off", not await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
+        chk("...with no compose button in the flat design", await pg.evaluate("()=>getComputedStyle(document.getElementById('composeBtn')).display==='none'"))
         await pg.goto(URL + "?glass=auto", wait_until="domcontentloaded")
         await pg.wait_for_timeout(900)
-        chk("?glass=auto puts the laptop back to normal", not await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
-        chk("laptop run: no page errors", not errs, errs)
-        await ctx.close()
-        ctx, pg, errs = await page(b, IPHONE, query="?glass=0")
-        chk("?glass=0 turns it off on an iPhone", not await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
+        chk("?glass=auto turns it back on", await pg.evaluate("()=>document.documentElement.classList.contains('liquid-glass')"))
         await ctx.close()
 
-        # ============ 7. nobody else changed by a pixel ============
+        # ============ 7. glass off is exactly the flat design ============
         if OLD_HTML is None:
             chk("previous build available for the pixel comparison", False, "git show HEAD:index.html failed")
         else:
             for label, init, vw, vh in [("Android phone", ANDROID, 390, 844), ("Windows laptop", WINDOWS, 1280, 800)]:
                 imgs = []
                 for old in (True, False):
-                    ctx, pg, errs = await page(b, init, vw, vh, old=old)
+                    ctx, pg, errs = await page(b, init, vw, vh, old=old, query="?glass=0")
                     await pg.add_style_tag(content="*{animation:none!important;transition:none!important;caret-color:transparent!important}")
                     await pg.evaluate(FILL)
                     await pg.wait_for_timeout(500)
@@ -314,7 +431,7 @@ async def main():
                 ctx, pg, errs = await page(b, init, vw, vh)
                 d = await pg.evaluate(DIFF, imgs + [68 if vw >= 900 else 0])
                 await ctx.close()
-                chk(label + ": the chat looks exactly as before, pixel for pixel", d["diff"] == 0, d)
+                chk(label + ", glass off: exactly the flat design of " + BASELINE + ", pixel for pixel", d["diff"] == 0, d)
 
         await b.close()
     for n in P: print("  PASS", n)
