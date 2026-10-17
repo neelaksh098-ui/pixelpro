@@ -1,25 +1,22 @@
 /* Pixel Pro launch site: service worker
    Keeps the site on the visitor's device after the first visit, so repeat
-   visits open instantly and the scroll story never waits on the network.
+   visits open instantly.
 
-   - Pages, scripts and styles: network first (so a new upload shows up at
+   - The page and its stylesheet: network first (so a new upload shows up at
      once), falling back to the saved copy when offline or slow (2.5 s).
-   - Photos, the narration pack, Three.js and Google Fonts files: saved copy
-     first, refreshed in the background.
-   - Nothing else is touched (ElevenLabs calls, the Pixel Pro app, POSTs).
+   - The photo and the Google Fonts files: saved copy first, refreshed in the
+     background.
+   - Nothing else is touched (the Pixel Pro app, POSTs, other sites).
 
-   After changing the photos or the narration pack you do not need to do
-   anything: the saved copies refresh themselves on the next visit. */
-const CACHE = 'pixelpro-site-v1';
-const CORE = ['./', 'index.html', 'css/device.css', 'js/music.js', 'js/device.js', 'js/hero3d.js',
-  'media/rocket.jpg', 'media/espresso.jpg', 'media/cat.jpg', 'media/deep-field.jpg'];
-const THREE = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+   The cache name changed with the redesign (v1 held the old film's scripts,
+   music and photos); activating this version deletes it. */
+const CACHE = 'pixelpro-site-v2';
+const CORE = ['./', 'index.html', 'css/site.css', 'media/rocket.jpg'];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     await Promise.all(CORE.map(u => c.add(u).catch(() => {})));
-    try { await c.add(new Request(THREE, { mode: 'cors' })); } catch (err) {}
     await self.skipWaiting();
   })());
 });
@@ -59,8 +56,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   const same = url.origin === self.location.origin;
-  if (same && url.pathname.endsWith('/audio/manifest.json')) { e.respondWith(networkFirst(req)); return; }
   if (same && (req.mode === 'navigate' || /\.(html|js|css)$/.test(url.pathname) || url.pathname.endsWith('/'))) { e.respondWith(networkFirst(req)); return; }
-  if (same && /\.(jpe?g|png|webp|svg|mp3|wav|m4a|ogg|mp4|webm)$/.test(url.pathname)) { e.respondWith(cacheFirst(req)); return; }
-  if (req.url === THREE || url.hostname === 'fonts.gstatic.com' || url.hostname === 'fonts.googleapis.com') { e.respondWith(cacheFirst(req)); return; }
+  if (same && /\.(jpe?g|png|webp|svg)$/.test(url.pathname)) { e.respondWith(cacheFirst(req)); return; }
+  if (url.hostname === 'fonts.gstatic.com' || url.hostname === 'fonts.googleapis.com') { e.respondWith(cacheFirst(req)); return; }
 });

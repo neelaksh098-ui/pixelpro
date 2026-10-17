@@ -50,7 +50,7 @@ async def main():
         await settle(pg, 1200)
         chk("a first-time visitor to / lands on the launch site", path(pg).startswith("/welcome/"), path(pg))
         styled = await pg.evaluate("""()=>{const n=document.querySelector('.nav');
-            return {css:[...document.styleSheets].some(s=>(s.href||'').endsWith('/welcome/css/device.css')),
+            return {css:[...document.styleSheets].some(s=>(s.href||'').endsWith('/welcome/css/site.css')),
                     nav: !!n && getComputedStyle(n).position !== 'static'};}""")
         chk("...fully styled (its css/ resolves under /welcome/)", styled["css"] and styled["nav"], styled)
         app_drawn = await pg.evaluate("()=>!!document.getElementById('chat')")
@@ -62,9 +62,40 @@ async def main():
             links and all(l["href"] == "/?signin=1" for l in links), links)
         chk("...in the same tab, not a new one", links and all(l["target"] == "" for l in links), links)
 
+        # ============ 1b. a quiet page ============
+        # No intro to sit through, nothing that plays or narrates, nothing
+        # moving by itself, no ElevenLabs studio: what is asked for is a
+        # simple page that is just there.
+        quiet = await pg.evaluate("""()=>({
+            anims: document.getAnimations().length,
+            media: document.querySelectorAll('audio,video,canvas,iframe').length,
+            scripts: [...document.scripts].map(s=>s.src||'inline'),
+            h1: document.querySelectorAll('h1').length,
+            hscroll: document.documentElement.scrollWidth > innerWidth,
+            cover: (()=>{const e=document.elementFromPoint(innerWidth/2, innerHeight/2); return e?e.closest('.hero')!==null:false;})(),
+            fonts: getComputedStyle(document.querySelector('h1')).fontFamily + ' | ' + getComputedStyle(document.body).fontFamily})""")
+        chk("the launch page opens straight onto its content -- no intro screen in the way", quiet["cover"], quiet)
+        chk("...with nothing animating by itself", quiet["anims"] == 0, quiet["anims"])
+        chk("...nothing that plays sound or video", quiet["media"] == 0, quiet["media"])
+        chk("...only two small inline scripts (the /welcome fix and the offline cache)", quiet["scripts"] == ["inline", "inline"], quiet["scripts"])
+        chk("...one headline, set in Instrument Serif, reading text in Inter",
+            quiet["h1"] == 1 and quiet["fonts"].startswith('"Instrument Serif"') and '| Inter' in quiet["fonts"], quiet["fonts"])
+        chk("...and no sideways scrolling on a phone", not quiet["hscroll"])
+        site_files = []
+        for root, _, files in os.walk(os.path.join(ROOT, "welcome")):
+            site_files += [os.path.join(root, f) for f in files]
+        voice = [os.path.relpath(f, ROOT) for f in site_files
+                 if f.endswith((".html", ".js", ".css")) and
+                 any(w in open(f, encoding="utf-8").read().lower() for w in ("elevenlabs", "voice studio", "narrat", "speechsynthesis"))]
+        chk("no ElevenLabs, voice studio or narration left anywhere in the launch site", voice == [], voice)
+        sw = open(os.path.join(ROOT, "welcome", "sw.js"), encoding="utf-8").read()
+        import re as _re
+        core = _re.search(r"CORE\s*=\s*\[([^\]]*)\]", sw).group(1)
+        listed = [x.strip().strip("'\"") for x in core.split(",") if x.strip()]
+        missing = [x for x in listed if x not in ("./",) and not os.path.exists(os.path.join(ROOT, "welcome", x))]
+        chk("every file the launch site's offline cache lists really exists", listed and not missing, missing)
+
         # ============ 2. the button, clicked for real ============
-        await pg.click("#enterSilent")                      # past the intro titles
-        await pg.wait_for_timeout(1400)
         await pg.click(".nav [data-app]")
         await settle(pg, 1200)
         chk("'Try Pixel Pro' opens the app", path(pg).startswith("/?signin=1"), path(pg))
@@ -134,7 +165,7 @@ async def main():
         await settle(pg, 1200)
         chk("'/welcome' without the slash corrects itself to '/welcome/'",
             path(pg).startswith("/welcome/"), path(pg))
-        css = await pg.evaluate("()=>[...document.styleSheets].some(s=>(s.href||'').endsWith('/welcome/css/device.css'))")
+        css = await pg.evaluate("()=>[...document.styleSheets].some(s=>(s.href||'').endsWith('/welcome/css/site.css'))")
         chk("...and arrives styled", css)
         await ctx.close()
 

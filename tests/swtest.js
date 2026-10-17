@@ -51,7 +51,7 @@ async function fire(w, url, mode) {
   // ---- it stays out of the launch site's way ----
   let w = world();
   chk("does not handle the launch site's page", !(await fire(w, "/welcome/", "navigate")));
-  chk("does not handle the launch site's scripts", !(await fire(w, "/welcome/js/device.js")));
+  chk("does not handle the launch site's stylesheet", !(await fire(w, "/welcome/css/site.css")));
   chk("does not handle the launch site's photos", !(await fire(w, "/welcome/media/rocket.jpg")));
 
   // ---- only APP pages become the offline copy of the app ----
@@ -63,13 +63,13 @@ async function fire(w, url, mode) {
   }
 
   // ---- on update it clears only its own old caches ----
-  w = world(["pixelpro-v40", "pixelpro-v61", "pixelpro-site-v1", "some-other-cache"]);
+  w = world(["pixelpro-v40", "pixelpro-v61", "pixelpro-site-v2", "some-other-cache"]);
   let waited = null;
   w.listeners.activate({ waitUntil: (p) => (waited = p) });
   await waited;
   const left = [...w.stores.keys()].sort();
   chk("deletes its own old caches", !left.includes("pixelpro-v40") && !left.includes("pixelpro-v61"), left);
-  chk("keeps the launch site's cache", left.includes("pixelpro-site-v1"), left);
+  chk("keeps the launch site's cache", left.includes("pixelpro-site-v2"), left);
   chk("keeps caches that belong to anything else", left.includes("some-other-cache"), left);
 
   console.log(JSON.stringify({ file: path.relative(process.cwd(), file), pass: P.length, fail: F.length }));

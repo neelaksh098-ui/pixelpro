@@ -142,7 +142,7 @@ flat-only one).
 | Path | What it is |
 |---|---|
 | `/` | The Pixel Pro app (`index.html`). Unchanged location, so the Android app, `/c/<chat>` links and installed PWAs keep working. |
-| `/welcome/` | The launch site — the front door for anyone not signed in. Its own `css/`, `js/`, `media/` and service worker. |
+| `/welcome/` | The launch site — the front door for anyone not signed in. One simple page (`index.html` + `css/site.css`, one photo in `media/`, its own service worker). No intro, film, music, narration or ElevenLabs; nothing animates by itself. |
 
 How a visitor moves between them:
 
@@ -154,8 +154,8 @@ How a visitor moves between them:
 - **Signed in** → `/` opens straight into the app, every time.
 - **Signing out**, or a session that has expired → back to `/welcome/`.
 
-The launch site's button target is `CONFIG.appUrl` near the top of the
-script in `welcome/index.html`.
+Every "Try Pixel Pro" button on the launch site is a plain link to
+`/?signin=1` (marked `data-app`) in `welcome/index.html`.
 
 Two service workers share the origin: the app's (`/sw.js`, scope `/`) and
 the launch site's (`/welcome/sw.js`, scope `/welcome/`). The app's worker
